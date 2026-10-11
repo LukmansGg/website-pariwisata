@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
 	createDestinationAction,
 	createPartnerAction,
 	createPromotionAction,
 	createQrPointAction,
+	updateDestinationAction,
 	type WorkspaceActionState,
 } from "@/src/server/auth/actions";
 import { MediaUploadField } from "@/app/ruang-kelola/media-upload-field";
@@ -31,34 +32,42 @@ function SubmitButton({ pending, children }: { pending: boolean; children: strin
 	</button>;
 }
 
-export function DestinationForm() {
-	const [state, action, pending] = useActionState(createDestinationAction, initialState);
+type EditableDestination = { id: string; name: string; slug: string; category: string | null; address: string | null; description?: string; image_url?: string | null; latitude: number | null; longitude: number | null; tags?: string[]; is_featured: boolean; is_published: boolean };
+
+export function DestinationForm({ destination, onCancel }: { destination?: EditableDestination; onCancel?: () => void }) {
+	const formAction = destination ? updateDestinationAction : createDestinationAction;
+	const [state, action, pending] = useActionState(formAction, initialState);
+	const [slug, setSlug] = useState(destination?.slug ?? "");
+	const [slugEdited, setSlugEdited] = useState(false);
+	const slugify = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 100);
 	return <form action={action} className="space-y-5">
+		{destination && <input type="hidden" name="id" value={destination.id} />}
 		<div className="grid gap-4 sm:grid-cols-2">
-			<div><label className={labelClass} htmlFor="destination-name">Nama destinasi *</label><input className={inputClass} id="destination-name" name="name" required maxLength={160} placeholder="Monumen Kresek" /></div>
-			<div><label className={labelClass} htmlFor="destination-slug">Slug halaman *</label><input className={inputClass} id="destination-slug" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={100} placeholder="monumen-kresek" /><p className="mt-1 text-xs text-[#16587B]/55">Dipakai pada alamat halaman wisata.</p></div>
-			<div><label className={labelClass} htmlFor="destination-category">Kategori</label><select className={inputClass} id="destination-category" name="category" defaultValue=""><option value="">Pilih kategori</option><option>Sejarah &amp; Budaya</option><option>Alam</option><option>Kuliner</option><option>Rekreasi</option><option>Religi</option><option>Lainnya</option></select></div>
-			<div><label className={labelClass} htmlFor="destination-address">Alamat / kode lokasi</label><input className={inputClass} id="destination-address" name="address" maxLength={500} placeholder="Desa Kresek, Kecamatan Wungu, Kabupaten Madiun" /></div>
+			<div><label className={labelClass} htmlFor="destination-name">Nama tempat wisata *</label><input className={inputClass} id="destination-name" name="name" required maxLength={160} defaultValue={destination?.name} placeholder="Contoh: Waduk Bening Widas" onChange={(event) => { if (!slugEdited) setSlug(slugify(event.currentTarget.value)); }} /><p className="mt-1 text-xs text-[#16587B]/55">Nama yang paling dikenal pengunjung.</p></div>
+			<div><label className={labelClass} htmlFor="destination-slug">Link halaman *</label><div className="flex overflow-hidden rounded-xl border border-[#84B3CE]/40 bg-white focus-within:border-[#16587B] focus-within:ring-4 focus-within:ring-[#84B3CE]/20"><span className="shrink-0 self-center pl-3 text-xs text-[#16587B]/40">/wisata/</span><input className="min-w-0 flex-1 border-0 bg-transparent px-2 py-3 text-sm text-[#16587B] outline-none placeholder:text-[#16587B]/35" id="destination-slug" name="slug" value={slug} onChange={(event) => { setSlugEdited(true); setSlug(slugify(event.currentTarget.value)); }} required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={100} placeholder="waduk-bening-widas" /></div><p className="mt-1 text-xs text-[#16587B]/55">Otomatis dibuat dari nama. Tetap bisa kamu edit.</p></div>
+			<div><label className={labelClass} htmlFor="destination-category">Kategori</label><select className={inputClass} id="destination-category" name="category" defaultValue={destination?.category ?? ""}><option value="">Pilih kategori</option><option>Sejarah &amp; Budaya</option><option>Alam</option><option>Kuliner</option><option>Rekreasi</option><option>Religi</option><option>Lainnya</option></select></div>
+			<div><label className={labelClass} htmlFor="destination-address">Alamat / area</label><input className={inputClass} id="destination-address" name="address" maxLength={500} defaultValue={destination?.address ?? ""} placeholder="Desa Kresek, Kecamatan Wungu" /></div>
 		</div>
-		<div><label className={labelClass} htmlFor="destination-description">Deskripsi pariwisata</label><textarea className={inputClass} id="destination-description" name="description" rows={5} maxLength={10000} placeholder="Informasi faktual, sejarah, fasilitas, jam kunjung, dan tips." /><p className="mt-1 text-xs text-[#16587B]/55">Isi dengan informasi terverifikasi. Konten ini dapat menjadi bahan AI Chat nantinya.</p></div>
+		<div><label className={labelClass} htmlFor="destination-description">Ceritakan tempatnya</label><textarea className={inputClass} id="destination-description" name="description" rows={4} maxLength={10000} defaultValue={destination?.description ?? ""} placeholder="Apa yang bikin tempat ini menarik? Tulis cerita, fasilitas, jam kunjung, atau tips lokal." /><p className="mt-1 text-xs text-[#16587B]/55">Tulis fakta yang sudah terverifikasi. Cerita ini nantinya bisa jadi bekal AI Chat wisata.</p></div>
+		<div><MediaUploadField folder="destinations" name="image_url" label="Foto sampul · wajib agar wisata tayang" defaultUrl={destination?.image_url ?? ""} /></div>
 		<div className="grid gap-4 sm:grid-cols-2">
-			<div><label className={labelClass} htmlFor="destination-tags">Tag</label><input className={inputClass} id="destination-tags" name="tags" placeholder="sejarah, keluarga, edukasi" /><p className="mt-1 text-xs text-[#16587B]/55">Pisahkan dengan koma.</p></div>
+			<div><label className={labelClass} htmlFor="destination-tags">Tag</label><input className={inputClass} id="destination-tags" name="tags" defaultValue={destination?.tags?.join(", ") ?? ""} placeholder="sejarah, keluarga, edukasi" /><p className="mt-1 text-xs text-[#16587B]/55">Pisahkan dengan koma.</p></div>
 		</div>
-		<MediaUploadField folder="destinations" name="image_url" label="Foto sampul destinasi" />
 		<fieldset className="rounded-2xl border border-[#84B3CE]/25 bg-[#F5EEDD]/45 p-4">
-			<legend className="px-1 text-xs font-bold uppercase tracking-wide text-[#16587B]/75">Koordinat opsional</legend>
+			<legend className="px-1 text-xs font-bold uppercase tracking-wide text-[#16587B]/75">Pin koordinat · wajib agar wisata tayang</legend>
 			<div className="grid gap-4 sm:grid-cols-2">
-				<div><label className={labelClass} htmlFor="destination-latitude">Latitude</label><input className={inputClass} id="destination-latitude" name="latitude" type="number" min="-90" max="90" step="any" placeholder="-7.6…" /></div>
-				<div><label className={labelClass} htmlFor="destination-longitude">Longitude</label><input className={inputClass} id="destination-longitude" name="longitude" type="number" min="-180" max="180" step="any" placeholder="111.5…" /></div>
+				<div><label className={labelClass} htmlFor="destination-latitude">Latitude</label><input className={inputClass} id="destination-latitude" name="latitude" type="number" min="-90" max="90" step="any" defaultValue={destination?.latitude ?? ""} placeholder="-7.6…" /></div>
+				<div><label className={labelClass} htmlFor="destination-longitude">Longitude</label><input className={inputClass} id="destination-longitude" name="longitude" type="number" min="-180" max="180" step="any" defaultValue={destination?.longitude ?? ""} placeholder="111.5…" /></div>
 			</div>
-			<p className="mt-2 text-xs text-[#16587B]/55">Boleh dikosongkan sampai koordinat sudah terverifikasi.</p>
+			<p className="mt-2 text-xs text-[#16587B]/65">Isi latitude dan longitude sebagai pasangan koordinat yang valid. Wisata tanpa pin tidak akan tampil ke publik.</p>
 		</fieldset>
+		<div role="note" className="rounded-xl border border-[#84B3CE]/35 bg-[#F5EEDD] px-4 py-3 text-xs leading-5 text-[#16587B]"><strong>Pengecekan sebelum tayang:</strong> foto sampul dan pin koordinat wajib tersedia. Data yang belum lengkap tetap tersimpan sebagai draft sampai editor/admin melengkapinya.</div>
 		<div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#84B3CE]/20 pt-4">
-			<label className="flex items-center gap-2 text-sm font-semibold"><input className="h-4 w-4 accent-[#16587B]" type="checkbox" name="is_featured" /> Tampilkan sebagai unggulan</label>
-			<label className="flex items-center gap-2 text-sm font-semibold"><input className="h-4 w-4 accent-[#16587B]" type="checkbox" name="is_published" /> Terbitkan sekarang</label>
+			<label className="flex items-center gap-2 text-sm font-semibold"><input className="h-4 w-4 accent-[#16587B]" type="checkbox" name="is_featured" defaultChecked={destination?.is_featured} /> Tampilkan sebagai unggulan</label>
+			<label className="flex items-center gap-2 text-sm font-semibold"><input className="h-4 w-4 accent-[#16587B]" type="checkbox" name="is_published" defaultChecked={destination?.is_published} /> Terbitkan sekarang</label>
 		</div>
 		<ActionFeedback state={state} />
-		<div className="flex justify-end"><SubmitButton pending={pending}>Simpan destinasi</SubmitButton></div>
+		<div className="flex justify-end gap-2">{destination && <button type="button" onClick={onCancel} className="rounded-xl border border-[#84B3CE]/40 px-4 py-3 text-sm font-bold text-[#16587B]">Batal</button>}<SubmitButton pending={pending}>{destination ? "Simpan perubahan" : "Simpan destinasi"}</SubmitButton></div>
 	</form>;
 }
 

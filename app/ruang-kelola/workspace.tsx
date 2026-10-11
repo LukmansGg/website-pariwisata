@@ -7,7 +7,7 @@ import { DestinationForm, PartnerForm, PromotionForm, QrPointForm } from "./work
 
 type Destination = {
 	id: string; slug: string; name: string; category: string | null; address: string | null;
-	latitude: number | null; longitude: number | null; is_published: boolean; is_featured: boolean; created_at: string;
+	description: string; image_url: string | null; tags: string[]; latitude: number | null; longitude: number | null; is_published: boolean; is_featured: boolean; created_at: string;
 };
 type Partner = { id: string; business_name: string; slug: string; business_type: string; address: string | null; status: string; created_at: string };
 type QrPoint = { id: string; destination_id: string; destination_name: string; name: string; code: string; address: string | null; latitude: number | null; longitude: number | null; is_active: boolean; created_at: string };
@@ -32,7 +32,7 @@ export type WorkspaceData = {
 type Section = "overview" | "destinations" | "qr" | "partners" | "promotions" | "experiences" | "sessions" | "staff";
 const navigation: { id: Section; label: string; group: string; marker: string }[] = [
 	{ id: "overview", label: "Ringkasan", group: "WORKSPACE", marker: "01" },
-	{ id: "destinations", label: "Destinasi wisata", group: "KONTEN", marker: "02" },
+	{ id: "destinations", label: "Daftarkan wisata", group: "KONTEN", marker: "02" },
 	{ id: "qr", label: "Lokasi & titik QR", group: "KONTEN", marker: "03" },
 	{ id: "partners", label: "Mitra lokal", group: "KEMITRAAN", marker: "04" },
 	{ id: "promotions", label: "Kampanye promosi", group: "KEMITRAAN", marker: "05" },
@@ -76,7 +76,7 @@ function DestinationList({ items }: { items: Destination[] }) {
 }
 
 export function DashboardWorkspace({ data, logoutAction }: { data: WorkspaceData; logoutAction: () => Promise<void> }) {
-	const [section, setSection] = useState<Section>("overview");
+	const [section, setSection] = useState<Section>("destinations");
 	const copy = sectionCopy[section];
 	const nav = (item: (typeof navigation)[number], mobile = false) => <button key={item.id} type="button" onClick={() => setSection(item.id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${section === item.id ? "bg-[#16587B] text-white shadow-sm" : "text-[#16587B]/70 hover:bg-[#F5EEDD] hover:text-[#16587B]"} ${mobile ? "w-auto shrink-0" : ""}`}><span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[9px] font-black ${section === item.id ? "bg-white/15 text-white" : "bg-[#F5EEDD] text-[#16587B]/65"}`}>{item.marker}</span><span>{item.label}</span></button>;
 	const groups = [...new Set(navigation.map((item) => item.group))];
@@ -133,7 +133,18 @@ function Overview({ data, onNavigate }: { data: WorkspaceData; onNavigate: (sect
 }
 
 function DestinationsSection({ items }: { items: Destination[] }) {
-	return <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.95fr)]"><Panel><SectionTitle title="Tambah destinasi" description="Alamat dan koordinat boleh dilengkapi bertahap."/><DestinationForm/></Panel><Panel><SectionTitle title="Daftar destinasi" description={`${items.length} data tersimpan`}/><DestinationList items={items}/></Panel></div>;
+	const [editing, setEditing] = useState<Destination | undefined>();
+	const published = items.filter((item) => item.is_published && item.image_url && item.latitude !== null && item.longitude !== null).length;
+	const needsCompletion = items.filter((item) => !item.image_url || item.latitude === null || item.longitude === null);
+	return <div className="space-y-5">
+		<div className="relative overflow-hidden rounded-[2rem] bg-[#16587B] p-6 text-white shadow-[0_24px_60px_-36px_rgba(22,88,123,0.8)] sm:p-8">
+			<div aria-hidden="true" className="pointer-events-none absolute -right-8 -top-14 h-56 w-56 rounded-full border border-white/10 after:absolute after:inset-5 after:rounded-full after:border after:border-dashed after:border-white/15 before:absolute before:inset-12 before:rounded-full before:border before:border-white/10" />
+			<div className="relative flex flex-wrap items-end justify-between gap-5"><div className="max-w-xl"><p className="text-[10px] font-black tracking-[0.2em] text-[#84B3CE]">DESTINATION DROP · MADIUNTRIP</p><h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">Bawa wisata lokal ke peta digital.</h2><p className="mt-2 text-sm leading-6 text-white/70">Mulai dari nama dan cerita. Lokasi, foto, dan QR bisa kamu lengkapi setelahnya.</p></div><div className="flex gap-2"><div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3"><p className="text-2xl font-black">{items.length}</p><p className="text-[10px] font-bold uppercase tracking-wide text-white/60">terdaftar</p></div><div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3"><p className="text-2xl font-black">{published}</p><p className="text-[10px] font-bold uppercase tracking-wide text-white/60">tayang</p></div></div></div>
+			<div className="relative mt-6 flex flex-wrap items-center gap-2 text-[11px] font-bold text-white/75"><span className="rounded-full bg-white/15 px-3 py-1.5">01 · Ceritakan</span><span aria-hidden="true" className="text-[#84B3CE]">→</span><span className="rounded-full bg-white/10 px-3 py-1.5">02 · Pin lokasi</span><span aria-hidden="true" className="text-[#84B3CE]">→</span><span className="rounded-full bg-white/10 px-3 py-1.5">03 · Terbitkan</span></div>
+		</div>
+		{needsCompletion.length > 0 && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#84B3CE]/40 bg-[#F5EEDD] px-5 py-4 text-sm text-[#16587B]"><p><strong>{needsCompletion.length} wisata perlu dilengkapi.</strong> Foto sampul dan koordinat wajib agar bisa ditayangkan.</p><button type="button" onClick={() => setEditing(needsCompletion[0])} className="rounded-xl bg-[#16587B] px-4 py-2.5 text-xs font-bold text-white">Lengkapi yang pertama →</button></div>}
+		<div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]"><Panel><SectionTitle title={editing ? `Edit: ${editing.name}` : "Daftarkan wisata"} description={editing ? "Lengkapi data di sini. Simpan sebagai draft atau tayangkan setelah syaratnya terpenuhi." : "Isi yang sudah kamu tahu. Wisata tanpa foto dan koordinat akan tersimpan sebagai draft."}/><DestinationForm key={editing?.id ?? "new-destination"} destination={editing} onCancel={() => setEditing(undefined)}/></Panel><Panel><SectionTitle title="Peta wisata kamu" description={`${items.length} tempat · ${published} sudah tayang`}/>{items.length ? <div className="space-y-3">{items.map((item) => { const incomplete = !item.image_url || item.latitude === null || item.longitude === null; return <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl border border-[#84B3CE]/20 p-4"><div className="min-w-0"><p className="truncate font-bold">{item.name}</p><p className="mt-1 text-xs text-[#16587B]/55">{item.category || "Kategori belum diisi"} · /{item.slug}</p><p className="mt-2 text-[10px] font-black uppercase tracking-wide text-[#16587B]/65">{incomplete ? `Perlu dilengkapi · ${!item.image_url ? "foto" : ""}${!item.image_url && (item.latitude === null || item.longitude === null) ? " + " : ""}${item.latitude === null || item.longitude === null ? "koordinat" : ""}` : item.is_published ? "Tayang" : "Draft siap tayang"}</p></div><button type="button" onClick={() => setEditing(item)} className="shrink-0 rounded-xl border border-[#84B3CE]/40 px-3 py-2 text-xs font-bold text-[#16587B] hover:bg-[#F5EEDD]">Edit</button></div>; })}</div> : <EmptyRow>Belum ada wisata. Daftarkan tempat pertama lewat formulir.</EmptyRow>}</Panel></div>
+	</div>;
 }
 
 function QrSection({ destinations, points }: { destinations: Destination[]; points: QrPoint[] }) {

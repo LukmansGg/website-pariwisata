@@ -171,31 +171,84 @@ const IconX = () => (
 	</svg>
 );
 
+const IconEnvelope = () => (
+	<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+		<rect x="3" y="5" width="18" height="14" rx="3" />
+		<path d="m4 7 8 6 8-6" />
+	</svg>
+);
+
+const STAR_POSITIONS = [
+	[8, 18, 3], [18, 66, 2], [28, 32, 2], [39, 82, 3], [48, 13, 2], [57, 54, 2],
+	[68, 24, 3], [76, 74, 2], [86, 41, 2], [94, 16, 3], [12, 91, 2], [91, 88, 2],
+] as const;
+
+function StarParticles() {
+	return <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+		{STAR_POSITIONS.map(([left, top, size], index) => <span key={index} className="home-star" style={{ left: `${left}%`, top: `${top}%`, width: size, height: size, animationDelay: `${(index % 6) * 370}ms` }} />)}
+		<span className="absolute -left-28 top-[18%] h-72 w-72 rounded-full bg-[var(--home-accent)]/10 blur-3xl" />
+		<span className="absolute -right-32 top-[62%] h-80 w-80 rounded-full bg-[var(--home-primary)]/10 blur-3xl" />
+	</div>;
+}
+
 const GlobalStyles = () => (
 	<style
 		dangerouslySetInnerHTML={{
 			__html: `
-    :root {
-      --merino: #F5EEDD;
-      --venice: #16587B;
-      --rock: #84B3CE;
-    }
-
-    body {
-      background-color: var(--merino);
-      color: var(--venice);
-      font-family: system-ui, -apple-system, sans-serif;
-      margin: 0;
+    .home-page {
+      --home-canvas: #eaf7ff;
+      --home-ink: #082f49;
+      --home-primary: #0784bd;
+      --home-accent: #38bdf8;
+      --home-soft: #dff3ff;
+      --home-glass: rgba(255, 255, 255, 0.68);
+      --home-glass-border: rgba(255, 255, 255, 0.82);
+      --home-on-primary: #f8fcff;
+      --home-on-accent: #08344c;
+      --home-bloom: rgba(14, 165, 233, 0.28);
+      color: var(--home-ink);
+      background: var(--home-canvas);
+      isolation: isolate;
+      overflow-x: clip;
+      transition: background-color 350ms ease, color 350ms ease;
       -webkit-font-smoothing: antialiased;
     }
-
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 10px; }
-    ::-webkit-scrollbar-track { background: var(--merino); }
-    ::-webkit-scrollbar-thumb { background: var(--rock); border-radius: 5px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--venice); }
-
-    /* Animations */
+    @media (prefers-color-scheme: dark) {
+      .home-page {
+        --home-canvas: #07111f;
+        --home-ink: #e9f4ff;
+        --home-primary: #172943;
+        --home-accent: #b49aff;
+        --home-soft: #152039;
+        --home-glass: rgba(15, 23, 42, 0.7);
+        --home-glass-border: rgba(180, 154, 255, 0.2);
+        --home-on-primary: #ffffff;
+        --home-on-accent: #1e1834;
+        --home-bloom: rgba(151, 119, 255, 0.3);
+      }
+    }
+    .home-page .glass-panel {
+      background: var(--home-glass);
+      border: 1px solid var(--home-glass-border);
+      box-shadow: 0 12px 34px -24px var(--home-bloom);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 260ms ease, border-color 260ms ease;
+    }
+    .home-page .glass-panel:hover {
+      box-shadow: 0 18px 42px -24px var(--home-bloom);
+      border-color: color-mix(in srgb, var(--home-accent) 48%, transparent);
+    }
+    .home-page .home-star {
+      position: absolute;
+      border-radius: 999px;
+      background: var(--home-accent);
+      box-shadow: 0 0 12px var(--home-bloom);
+      animation: homeTwinkle 3.8s ease-in-out infinite;
+    }
+    .home-page .matrix-cell { animation: matrixPulse 1.8s ease-in-out infinite; }
+    .home-page .matrix-cell.is-fixed { animation: none; opacity: 1; }
+    .home-page .animate-envelope-float { animation: envelopeFloat 4.5s ease-in-out infinite; }
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(30px); }
       to { opacity: 1; transform: translateY(0); }
@@ -220,10 +273,20 @@ const GlobalStyles = () => (
     }
 
     @keyframes pulseGlow {
-      0% { box-shadow: 0 0 0 0 rgba(22, 88, 123, 0.4); }
-      70% { box-shadow: 0 0 0 20px rgba(22, 88, 123, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(22, 88, 123, 0); }
+      0% { box-shadow: 0 0 0 0 var(--home-bloom); }
+      70% { box-shadow: 0 0 0 16px transparent; }
+      100% { box-shadow: 0 0 0 0 transparent; }
     }
+    @keyframes homeTwinkle { 0%, 100% { opacity: 0.18; transform: scale(0.75); } 50% { opacity: 0.8; transform: scale(1); } }
+    @keyframes matrixPulse { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.9; filter: drop-shadow(0 0 5px var(--home-accent)); } }
+    @keyframes envelopeFloat { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-7px) rotate(4deg); } }
+
+    @keyframes mobileNavEnter {
+      from { opacity: 0; transform: translateY(7px); filter: blur(4px); }
+      to { opacity: 1; transform: translateY(0); filter: blur(0); }
+    }
+
+    .mobile-nav-enter { animation: mobileNavEnter 360ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 
     .animate-fade-up {
       animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -254,73 +317,109 @@ const GlobalStyles = () => (
     .delay-400 { animation-delay: 400ms; }
     .delay-500 { animation-delay: 500ms; }
 
+    @media (prefers-reduced-motion: reduce) {
+      .home-page *, .home-page *::before, .home-page *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 1ms !important; }
+    }
+
   `,
 		}}
 	/>
 );
 
-const Navbar = () => (
-	<nav className="fixed top-0 w-full z-50 transition-all duration-300 bg-[#F5EEDD]/90 backdrop-blur-md border-b border-[#16587B]/10">
-		<div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-			<div className="flex items-center gap-2 cursor-pointer group">
-				<div className="w-10 h-10 rounded-full bg-[#16587B] flex items-center justify-center text-[#F5EEDD] font-bold text-xl group-hover:scale-105 transition-transform">
-					M
+const HOME_SECTIONS = [
+	{ id: "beranda", label: "Beranda" },
+	{ id: "peta", label: "Jelajah peta" },
+	{ id: "kuliner", label: "Pilih suasana" },
+	{ id: "destinasi", label: "Destinasi" },
+	{ id: "promo", label: "Promo" },
+	{ id: "tentang", label: "Tentang" },
+] as const;
+
+function Navbar() {
+	const [activeSection, setActiveSection] = useState<string>(HOME_SECTIONS[0].id);
+
+	useEffect(() => {
+		let frame = 0;
+		const updateActiveSection = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(() => {
+				const scrollLine = window.innerHeight * 0.38;
+				let current: string = HOME_SECTIONS[0].id;
+				for (const section of HOME_SECTIONS) {
+					const element = document.getElementById(section.id);
+					if (element && element.getBoundingClientRect().top <= scrollLine) current = section.id;
+				}
+				if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8) {
+					current = "tentang";
+				}
+				setActiveSection(current);
+			});
+		};
+
+		updateActiveSection();
+		window.addEventListener("scroll", updateActiveSection, { passive: true });
+		window.addEventListener("resize", updateActiveSection);
+		return () => {
+			cancelAnimationFrame(frame);
+			window.removeEventListener("scroll", updateActiveSection);
+			window.removeEventListener("resize", updateActiveSection);
+		};
+	}, []);
+
+	const activeIndex = Math.max(0, HOME_SECTIONS.findIndex((section) => section.id === activeSection));
+	const current = HOME_SECTIONS[activeIndex];
+
+	return (
+		<nav className="glass-panel fixed top-0 z-50 w-full !border-x-0 !border-t-0 !rounded-none bg-[var(--home-glass)]/90 transition-all duration-300">
+			<div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+				<div className="flex items-center gap-2 cursor-pointer group">
+					<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--home-primary)] text-xl font-bold text-[var(--home-on-primary)] transition-transform group-hover:scale-105">M</div>
+					<span className="text-xl font-extrabold tracking-tight text-[var(--home-ink)]">MadiunTrip<span className="text-[var(--home-accent)]">.</span></span>
 				</div>
-				<span className="text-xl font-extrabold text-[#16587B] tracking-tight">
-					MadiunTrip<span className="text-[#84B3CE]">.</span>
-				</span>
+				<div className="hidden items-center gap-8 font-medium text-[var(--home-ink)] md:flex">
+					<a href="#destinasi" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Destinasi</a>
+					<a href="#kuliner" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Kuliner</a>
+					<a href="#promo" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Promo</a>
+					<Link href="/scan" className="transition-colors hover:text-[var(--home-accent)]">Scan QR</Link>
+				</div>
+				<div className="flex items-center gap-2 md:hidden" aria-label={`Bagian halaman: ${current.label}`} aria-live="polite">
+					<span className="relative flex h-2.5 w-2.5 shrink-0">
+						<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--home-accent)]/70" />
+						<span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--home-primary)]" />
+					</span>
+					<span key={`${current.id}-index`} className="mobile-nav-enter min-w-5 font-mono text-[10px] font-bold text-[var(--home-ink)]/45">{String(activeIndex + 1).padStart(2, "0")}</span>
+					<span className="h-4 w-px bg-[var(--home-primary)]/15" />
+					<span key={current.id} className="mobile-nav-enter max-w-[30vw] truncate text-xs font-bold text-[var(--home-ink)]">{current.label}</span>
+					<span className="ml-1 h-1 w-10 overflow-hidden rounded-full bg-[var(--home-accent)]/25"><span className="block h-full rounded-full bg-[var(--home-primary)] transition-[width] duration-500 ease-out" style={{ width: `${((activeIndex + 1) / HOME_SECTIONS.length) * 100}%` }} /></span>
+				</div>
+				<Link href="/login" className="hidden rounded-full bg-[var(--home-primary)] px-6 py-2.5 font-medium text-white shadow-sm transition-all hover:scale-105 hover:bg-[var(--home-accent)] hover:text-[var(--home-ink)] md:inline-flex">Masuk</Link>
 			</div>
-			<div className="hidden md:flex items-center gap-8 text-[#16587B] font-medium">
-				<a
-					href="#destinasi"
-					className="hover:text-[#84B3CE] transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[#84B3CE] hover:after:w-full after:transition-all">
-					Destinasi
-				</a>
-				<a
-					href="#kuliner"
-					className="hover:text-[#84B3CE] transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[#84B3CE] hover:after:w-full after:transition-all">
-					Kuliner
-				</a>
-				<a
-					href="#promo"
-					className="hover:text-[#84B3CE] transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[#84B3CE] hover:after:w-full after:transition-all">
-					Promo
-				</a>
-				<Link href="/scan" className="hover:text-[#84B3CE] transition-colors">
-					Scan QR
-				</Link>
-			</div>
-			<Link
-				href="/login"
-				className="bg-[#16587B] text-white px-6 py-2.5 rounded-full font-medium hover:bg-[#84B3CE] hover:text-[#16587B] transition-all transform hover:scale-105 shadow-sm">
-				Masuk
-			</Link>
-		</div>
-	</nav>
-);
+		</nav>
+	);
+}
 
 const HeroSection = () => {
 	return (
-		<section className="relative pt-32 pb-20 px-6 overflow-hidden min-h-[90vh] flex flex-col items-center justify-center">
+		<section id="beranda" className="relative pt-32 pb-20 px-6 overflow-hidden min-h-[90vh] flex flex-col items-center justify-center">
 			{/* Decorative Background Elements */}
-			<div className="absolute top-40 left-10 w-32 h-32 bg-[#84B3CE]/20 rounded-full blur-3xl animate-float"></div>
-			<div className="absolute bottom-20 right-10 w-64 h-64 bg-[#84B3CE]/20 rounded-full blur-3xl animate-float delay-300"></div>
+			<div className="absolute top-40 left-10 w-32 h-32 bg-[var(--home-accent)]/20 rounded-full blur-3xl animate-float"></div>
+			<div className="absolute bottom-20 right-10 w-64 h-64 bg-[var(--home-accent)]/20 rounded-full blur-3xl animate-float delay-300"></div>
 
 			{/* Tiny Map Coordinates / Decor */}
-			<div className="absolute top-32 right-20 text-[#16587B]/40 text-xs font-mono hidden lg:block animate-fade">
+			<div className="absolute top-32 right-20 text-[var(--home-ink)]/40 text-xs font-mono hidden lg:block animate-fade">
 				7°37&apos;48.0&apos;S 111°31&apos;24.0&quot;E
 			</div>
 
 			<div className="max-w-4xl mx-auto w-full flex flex-col items-center text-center z-10">
 				{/* Main Headline */}
-				<h1 className="text-5xl md:text-7xl font-black text-[#16587B] leading-[1.1] tracking-tight mb-6 animate-fade-up delay-100">
+				<h1 className="text-5xl md:text-7xl font-black text-[var(--home-ink)] leading-[1.1] tracking-tight mb-6 animate-fade-up delay-100">
 					Liburanmu, <br className="md:hidden" />
 					<span className="relative inline-block">
-						<span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-[#16587B] to-[#84B3CE]">
+						<span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-[var(--home-primary)] to-[var(--home-accent)]">
 							Cerita Barumu.
 						</span>
 						<svg
-							className="absolute -bottom-2 w-full h-4 text-[#84B3CE]/40 -z-10"
+							className="absolute -bottom-2 w-full h-4 text-[var(--home-accent)]/40 -z-10"
 							viewBox="0 0 200 20"
 							preserveAspectRatio="none">
 							<path
@@ -334,41 +433,41 @@ const HeroSection = () => {
 					</span>
 				</h1>
 
-				<p className="text-lg md:text-xl text-[#16587B]/80 max-w-2xl mb-12 animate-fade-up delay-200">
+				<p className="text-lg md:text-xl text-[var(--home-ink)]/80 max-w-2xl mb-12 animate-fade-up delay-200">
 					Temukan spot rahasia, kuliner legendaris, dan petualangan epik di
 					Kabupaten Madiun.
 				</p>
 
 				{/* The Main Feature: Interactive QR Scanner Concept */}
 				<div className="w-full max-w-lg animate-fade-up delay-300 group">
-					<div className="flex flex-col items-center justify-center p-8 bg-white/60 backdrop-blur-xl rounded-[2.5rem] border border-white/50 shadow-[0_20px_60px_-15px_rgba(22,88,123,0.1)] relative overflow-hidden transition-transform duration-500 hover:shadow-[0_30px_70px_-15px_rgba(132,179,206,0.3)] hover:-translate-y-2">
+					<div className="glass-panel flex flex-col items-center justify-center p-8 rounded-[2.5rem] relative overflow-hidden transition-transform duration-500 hover:-translate-y-2 shadow-[0_20px_60px_-15px_var(--home-bloom)]">
 						{/* Scanner Corner Brackets (Game UI feel) */}
-						<div className="absolute top-6 left-6 w-8 h-8 border-t-4 border-l-4 border-[#16587B] rounded-tl-xl transition-all group-hover:border-[#84B3CE] group-hover:scale-110"></div>
-						<div className="absolute top-6 right-6 w-8 h-8 border-t-4 border-r-4 border-[#16587B] rounded-tr-xl transition-all group-hover:border-[#84B3CE] group-hover:scale-110"></div>
-						<div className="absolute bottom-6 left-6 w-8 h-8 border-b-4 border-l-4 border-[#16587B] rounded-bl-xl transition-all group-hover:border-[#84B3CE] group-hover:scale-110"></div>
-						<div className="absolute bottom-6 right-6 w-8 h-8 border-b-4 border-r-4 border-[#16587B] rounded-br-xl transition-all group-hover:border-[#84B3CE] group-hover:scale-110"></div>
+						<div className="absolute top-6 left-6 w-8 h-8 border-t-4 border-l-4 border-[var(--home-ink)] rounded-tl-xl transition-all group-hover:border-[var(--home-accent)] group-hover:scale-110"></div>
+						<div className="absolute top-6 right-6 w-8 h-8 border-t-4 border-r-4 border-[var(--home-ink)] rounded-tr-xl transition-all group-hover:border-[var(--home-accent)] group-hover:scale-110"></div>
+						<div className="absolute bottom-6 left-6 w-8 h-8 border-b-4 border-l-4 border-[var(--home-ink)] rounded-bl-xl transition-all group-hover:border-[var(--home-accent)] group-hover:scale-110"></div>
+						<div className="absolute bottom-6 right-6 w-8 h-8 border-b-4 border-r-4 border-[var(--home-ink)] rounded-br-xl transition-all group-hover:border-[var(--home-accent)] group-hover:scale-110"></div>
 
 						{/* Eyebrow Label */}
-						<span className="bg-[#F5EEDD] text-[#16587B] text-xs font-bold px-4 py-1.5 rounded-full tracking-wider mb-6 border border-[#16587B]/10 z-10">
+						<span className="bg-[var(--home-soft)] text-[var(--home-ink)] text-xs font-bold px-4 py-1.5 rounded-full tracking-wider mb-6 border border-[var(--home-ink)]/10 z-10">
 							PETUALANGANMU DIMULAI DI SINI
 						</span>
 
 						{/* Scanner Graphic Area */}
-						<div className="relative w-48 h-48 mb-8 rounded-2xl bg-[#F5EEDD]/50 border border-[#84B3CE]/30 flex items-center justify-center overflow-hidden">
+						<div className="relative w-48 h-48 mb-8 rounded-2xl bg-[var(--home-soft)]/50 border border-[var(--home-accent)]/30 flex items-center justify-center overflow-hidden">
 							<IconCamera />
 							{/* Animated Scan Line */}
-							<div className="absolute left-0 right-0 h-1 bg-[#84B3CE] shadow-[0_0_15px_3px_#84B3CE] animate-scan-line"></div>
+						<div className="absolute left-0 right-0 h-1 bg-[var(--home-accent)] shadow-[0_0_15px_3px_var(--home-bloom)] animate-scan-line"></div>
 							{/* Subtle Grid Pattern in background */}
 							<div
 								className="absolute inset-0 opacity-10"
 								style={{
 									backgroundImage:
-										"radial-gradient(#16587B 2px, transparent 2px)",
+										"radial-gradient(var(--home-ink) 2px, transparent 2px)",
 									backgroundSize: "16px 16px",
 								}}></div>
 						</div>
 
-						<p className="text-sm text-[#16587B]/70 mb-8 max-w-xs text-center z-10">
+						<p className="text-sm text-[var(--home-ink)]/70 mb-8 max-w-xs text-center z-10">
 							Scan QR Code di destinasi wisata untuk membuka cerita lokal,
 							mini-games, dan kejutan eksklusif.
 						</p>
@@ -376,11 +475,11 @@ const HeroSection = () => {
 						{/* Main CTA */}
 						<Link
 							href="/scan"
-							className="w-full relative z-10 flex items-center justify-center gap-3 bg-[#16587B] text-white py-4 px-8 rounded-2xl font-bold text-lg overflow-hidden group/btn shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02] btn-pulse active:scale-95">
+							className="w-full relative z-10 flex items-center justify-center gap-3 bg-[var(--home-primary)] text-white py-4 px-8 rounded-2xl font-bold text-lg overflow-hidden group/btn shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02] btn-pulse active:scale-95">
 							<span className="relative z-10">Mulai Scan QR</span>
 							<IconArrowRight />
 							{/* Button hover effect */}
-							<div className="absolute inset-0 bg-gradient-to-r from-[#16587B] to-[#84B3CE] opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300"></div>
+							<div className="absolute inset-0 bg-gradient-to-r from-[var(--home-primary)] to-[var(--home-accent)] opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300"></div>
 						</Link>
 					</div>
 				</div>
@@ -403,14 +502,14 @@ const DiscoveryMap = ({
 			<div className="animate-fade-up delay-400">
 				{/* Floating Search Capsule */}
 				<div className="absolute -top-8 left-1/2 -translate-x-1/2 w-full max-w-2xl z-30 px-4">
-					<div className="bg-white p-2 rounded-full shadow-[0_10px_40px_-10px_rgba(22,88,123,0.2)] flex items-center border border-[#F5EEDD]">
-						<div className="pl-4 text-[#84B3CE]">
+					<div className="glass-panel p-2 rounded-full shadow-[0_10px_40px_-10px_var(--home-bloom)] flex items-center">
+						<div className="pl-4 text-[var(--home-accent)]">
 							<IconSearch />
 						</div>
 						<input
 							type="text"
 							placeholder="Cari hidden gem, kuliner, atau wisata alam..."
-							className="w-full bg-transparent border-none outline-none px-4 py-3 text-[#16587B] placeholder-[#16587B]/40 font-medium"
+							className="w-full bg-transparent border-none outline-none px-4 py-3 text-[var(--home-ink)] placeholder-[var(--home-ink)]/40 font-medium"
 							value={searchQuery}
 							onChange={(e) => onSearchChange(e.target.value)}
 						/>
@@ -421,20 +520,20 @@ const DiscoveryMap = ({
 									.getElementById("destinasi")
 									?.scrollIntoView({ behavior: "smooth" })
 							}
-							className="bg-[#84B3CE] text-[#16587B] px-6 py-3 rounded-full font-bold hover:bg-[#16587B] hover:text-white transition-colors shadow-sm">
+							className="bg-[var(--home-accent)] text-[var(--home-on-accent)] px-6 py-3 rounded-full font-bold hover:bg-[var(--home-primary)] hover:text-white transition-colors shadow-sm">
 							Cari
 						</button>
 					</div>
 				</div>
 
 				{/* Map Container */}
-				<div className="bg-white rounded-[2rem] p-4 shadow-xl border border-[#F5EEDD] pt-16 map-container relative overflow-hidden group">
+				<div className="glass-panel rounded-[2rem] p-4 pt-16 map-container relative overflow-hidden group">
 					{/* Decorative map corner */}
-					<div className="absolute top-0 right-0 bg-[#F5EEDD] text-[#16587B] text-xs font-bold px-4 py-2 rounded-bl-2xl rounded-tr-xl border-b border-l border-[#16587B]/10 z-10">
+					<div className="absolute top-0 right-0 bg-[var(--home-soft)] text-[var(--home-ink)] text-xs font-bold px-4 py-2 rounded-bl-2xl rounded-tr-xl border-b border-l border-[var(--home-ink)]/10 z-10">
 						Jelajah Peta Digital
 					</div>
 
-					<div className="w-full h-[400px] rounded-2xl overflow-hidden bg-[#F5EEDD] relative">
+					<div className="w-full h-[400px] rounded-2xl overflow-hidden bg-[var(--home-soft)] relative">
 						<iframe
 							width="100%"
 							height="100%"
@@ -446,7 +545,7 @@ const DiscoveryMap = ({
 							title="Peta Madiun"
 							className="w-full h-full object-cover"></iframe>
 						{/* Overlay interaction hint */}
-						<div className="absolute inset-0 bg-[#16587B]/5 pointer-events-none group-hover:bg-transparent transition-colors duration-500"></div>
+						<div className="absolute inset-0 bg-[var(--home-primary)]/5 pointer-events-none group-hover:bg-transparent transition-colors duration-500"></div>
 					</div>
 				</div>
 			</div>
@@ -463,10 +562,10 @@ const MoodCategories = ({
 }) => (
 	<section id="kuliner" className="py-20 px-6 max-w-7xl mx-auto">
 		<div className="text-center mb-12 animate-fade-up">
-			<h2 className="text-3xl font-extrabold text-[#16587B] mb-4">
+			<h2 className="text-3xl font-extrabold text-[var(--home-ink)] mb-4">
 				Jelajahi Sesuai Mood
 			</h2>
-			<p className="text-[#16587B]/70">
+			<p className="text-[var(--home-ink)]/70">
 				Pilih suasana hati dan temukan destinasi yang pas buat kamu.
 			</p>
 		</div>
@@ -478,11 +577,11 @@ const MoodCategories = ({
 					type="button"
 					aria-pressed={selectedMood === mood.id}
 					onClick={() => onSelect(selectedMood === mood.id ? null : mood.id)}
-					className={`flex items-center gap-3 px-6 py-4 rounded-2xl border shadow-sm hover:shadow-md hover:border-[#84B3CE] hover:-translate-y-1 transition-all group ${selectedMood === mood.id ? "bg-[#84B3CE]/30 border-[#84B3CE]" : "bg-white border-[#16587B]/10"}`}>
+					className={`glass-panel flex items-center gap-3 px-6 py-4 rounded-2xl shadow-sm hover:shadow-md hover:border-[var(--home-accent)] hover:-translate-y-1 transition-all group ${selectedMood === mood.id ? "!bg-[var(--home-accent)]/20 !border-[var(--home-accent)]" : ""}`}>
 					<span className="text-2xl group-hover:scale-110 transition-transform">
 						{mood.icon}
 					</span>
-					<span className="font-bold text-[#16587B]">{mood.name}</span>
+					<span className="font-bold text-[var(--home-ink)]">{mood.name}</span>
 				</button>
 			))}
 		</div>
@@ -503,41 +602,41 @@ const Highlights = ({
 	<section id="destinasi" className="py-20 px-6 max-w-7xl mx-auto">
 		<div className="flex justify-between items-end mb-12 animate-fade-up">
 			<div>
-				<h2 className="text-3xl font-extrabold text-[#16587B] mb-2">
+				<h2 className="text-3xl font-extrabold text-[var(--home-ink)] mb-2">
 					Highlight Hari Ini
 				</h2>
-				<p className="text-[#16587B]/70">
+				<p className="text-[var(--home-ink)]/70">
 					Pilihan terbaik yang wajib kamu kunjungi.
 				</p>
 			</div>
 			{destinations.length > 0 && (
-				<p className="hidden md:block text-sm text-[#16587B]/60">
+				<p className="hidden md:block text-sm text-[var(--home-ink)]/60">
 					{destinations.length} destinasi
 				</p>
 			)}
 		</div>
 
 		{loading ? (
-			<p className="rounded-2xl bg-white p-8 text-center text-[#16587B]/70">
+			<p className="rounded-2xl bg-[var(--home-glass)] p-8 text-center text-[var(--home-ink)]/70">
 				Memuat destinasi wisata…
 			</p>
 		) : null}
 		{error ? (
 			<p
 				role="alert"
-				className="rounded-2xl border border-[#84B3CE]/40 bg-[#84B3CE]/10 p-6 text-[#16587B]">
+				className="rounded-2xl border border-[var(--home-accent)]/40 bg-[var(--home-accent)]/10 p-6 text-[var(--home-ink)]">
 				{error}
 			</p>
 		) : null}
 		{!loading && !error && destinations.length === 0 ? (
-			<div className="rounded-2xl bg-white p-8 text-center">
-				<p className="font-bold text-[#16587B]">
+			<div className="rounded-2xl bg-[var(--home-glass)] p-8 text-center">
+				<p className="font-bold text-[var(--home-ink)]">
 					Belum ada destinasi terbit atau hasil yang cocok.
 				</p>
 				<button
 					type="button"
 					onClick={onClearFilters}
-					className="mt-3 font-semibold text-[#16587B] underline decoration-[#84B3CE] underline-offset-4">
+					className="mt-3 font-semibold text-[var(--home-ink)] underline decoration-[var(--home-accent)] underline-offset-4">
 					Hapus pencarian dan filter
 				</button>
 			</div>
@@ -549,8 +648,8 @@ const Highlights = ({
 						href={`/wisata/${encodeURIComponent(dest.slug)}`}
 						key={dest.id}
 						style={{ animationDelay: `${Math.min((i + 1) * 100, 500)}ms` }}
-						className="group bg-white rounded-[2rem] p-3 shadow-sm hover:shadow-xl transition-all duration-300 border border-[#F5EEDD] animate-fade-up">
-						<div className="relative w-full h-48 rounded-[1.5rem] overflow-hidden mb-4 bg-gradient-to-br from-[#F5EEDD] to-[#84B3CE]/50">
+						className="glass-panel group rounded-[2rem] p-3 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 animate-fade-up">
+						<div className="relative w-full h-48 rounded-[1.5rem] overflow-hidden mb-4 bg-gradient-to-br from-[var(--home-soft)] to-[var(--home-accent)]/50">
 							{dest.image ? (
 								<Image
 									src={dest.image}
@@ -560,24 +659,24 @@ const Highlights = ({
 									className="object-cover transform group-hover:scale-105 transition-transform duration-500"
 								/>
 							) : (
-								<div className="flex h-full items-center justify-center text-[#16587B]">
+								<div className="flex h-full items-center justify-center text-[var(--home-ink)]">
 									<IconMapPin />
 								</div>
 							)}
 						</div>
 						<div className="px-3 pb-3">
-							<h3 className="text-lg font-bold text-[#16587B] mb-2 line-clamp-1 group-hover:text-[#84B3CE] transition-colors">
+							<h3 className="text-lg font-bold text-[var(--home-ink)] mb-2 line-clamp-1 group-hover:text-[var(--home-accent)] transition-colors">
 								{dest.title}
 							</h3>
-							<p className="min-h-10 text-sm text-[#16587B]/70 line-clamp-2">
+							<p className="min-h-10 text-sm text-[var(--home-ink)]/70 line-clamp-2">
 								{dest.description || "Lihat informasi destinasi wisata ini."}
 							</p>
 							{dest.rating !== undefined && (
-								<div className="mt-3 flex items-center gap-1 text-[#16587B] text-sm font-medium">
+								<div className="mt-3 flex items-center gap-1 text-[var(--home-ink)] text-sm font-medium">
 									<IconStar filled />
 									<span>{dest.rating.toFixed(1)}</span>
 									{dest.reviews !== undefined && (
-										<span className="text-[#16587B]/50">
+										<span className="text-[var(--home-ink)]/50">
 											({dest.reviews} ulasan)
 										</span>
 									)}
@@ -588,7 +687,7 @@ const Highlights = ({
 									{dest.tags.map((tag) => (
 										<span
 											key={tag}
-											className="bg-[#F5EEDD] text-[#16587B] text-xs px-2 py-1 rounded-md">
+											className="bg-[var(--home-soft)] text-[var(--home-ink)] text-xs px-2 py-1 rounded-md">
 											{tag}
 										</span>
 									))}
@@ -602,7 +701,7 @@ const Highlights = ({
 
 		<Link
 			href="/scan"
-			className="md:hidden w-full mt-8 flex items-center justify-center gap-2 text-[#16587B] font-bold py-4 rounded-xl border-2 border-[#16587B]/10 hover:bg-[#16587B]/5 transition-colors">
+			className="md:hidden w-full mt-8 flex items-center justify-center gap-2 text-[var(--home-ink)] font-bold py-4 rounded-xl border-2 border-[var(--home-ink)]/10 hover:bg-[var(--home-primary)]/5 transition-colors">
 			Scan QR Destinasi <IconArrowRight />
 		</Link>
 	</section>
@@ -610,14 +709,14 @@ const Highlights = ({
 
 const PromotionalSection = () => (
 	<section id="promo" className="py-20 px-6 max-w-6xl mx-auto">
-		<div className="bg-[#16587B] rounded-[3rem] p-8 md:p-16 relative overflow-hidden shadow-2xl animate-fade-up">
+		<div className="bg-[var(--home-primary)] rounded-[3rem] p-8 md:p-16 relative overflow-hidden shadow-2xl animate-fade-up">
 			{/* Decorative Graphics */}
-			<div className="absolute top-0 right-0 w-64 h-64 bg-[#84B3CE] rounded-full blur-[80px] opacity-50 -translate-y-1/2 translate-x-1/4"></div>
-			<div className="absolute bottom-0 left-0 w-64 h-64 bg-[#84B3CE] rounded-full blur-[80px] opacity-40 translate-y-1/4 -translate-x-1/4"></div>
+			<div className="absolute top-0 right-0 w-64 h-64 bg-[var(--home-accent)] rounded-full blur-[80px] opacity-50 -translate-y-1/2 translate-x-1/4"></div>
+			<div className="absolute bottom-0 left-0 w-64 h-64 bg-[var(--home-accent)] rounded-full blur-[80px] opacity-40 translate-y-1/4 -translate-x-1/4"></div>
 
 			<div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
 				<div className="text-white max-w-lg text-center md:text-left">
-					<span className="inline-block bg-white/20 backdrop-blur-sm text-white text-sm font-bold px-4 py-2 rounded-full mb-6">
+					<span className="inline-block bg-[var(--home-glass)]/20 backdrop-blur-sm text-white text-sm font-bold px-4 py-2 rounded-full mb-6">
 						PANDUAN WISATA
 					</span>
 					<h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">
@@ -630,31 +729,33 @@ const PromotionalSection = () => (
 					</p>
 					<Link
 						href="/scan"
-						className="inline-flex items-center gap-3 bg-white text-[#16587B] px-8 py-4 rounded-2xl font-bold hover:bg-[#84B3CE] transition-all transform hover:scale-105">
+						className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-8 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-105">
 						Buka QR Scanner <IconArrowRight />
 					</Link>
 				</div>
 
 				{/* Mockup / Graphic area */}
 				<div className="w-full max-w-sm relative group cursor-pointer">
-					<div className="absolute inset-0 bg-[#84B3CE] rounded-[2rem] rotate-6 group-hover:rotate-12 transition-transform duration-500"></div>
-					<div className="relative bg-white rounded-[2rem] p-6 shadow-xl border-4 border-white transform group-hover:-translate-y-2 group-hover:-rotate-3 transition-transform duration-500">
-						<div className="h-40 bg-[#F5EEDD] rounded-xl mb-4 overflow-hidden relative flex items-center justify-center">
+					<div className="absolute inset-0 bg-[var(--home-accent)] rounded-[2rem] rotate-6 group-hover:rotate-12 transition-transform duration-500"></div>
+					<div className="absolute -right-4 -top-5 z-20 flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-accent)] shadow-[0_0_24px_var(--home-bloom)] animate-envelope-float"><IconEnvelope /></div>
+					<div className="relative bg-[var(--home-glass)] rounded-[2rem] p-6 shadow-xl border-4 border-[var(--home-glass-border)] transform group-hover:-translate-y-2 group-hover:-rotate-3 transition-transform duration-500">
+						<div className="h-40 bg-[var(--home-soft)] rounded-xl mb-4 overflow-hidden relative flex items-center justify-center">
 							<div
-								className="grid h-28 w-28 grid-cols-5 gap-1 rounded-xl bg-white p-2"
+								className="grid h-28 w-28 grid-cols-5 gap-1 rounded-xl bg-[var(--home-glass)] p-2"
 								aria-hidden="true">
 								{Array.from({ length: 25 }, (_, index) => (
 									<span
 										key={index}
-										className={`rounded-sm ${[0, 1, 3, 5, 7, 12, 16, 18, 20, 21, 23, 24].includes(index) ? "bg-[#16587B]" : "bg-[#84B3CE]/40"}`}
+										className={`matrix-cell rounded-sm ${[0, 1, 3, 5, 7, 12, 16, 18, 20, 21, 23, 24].includes(index) ? "is-fixed bg-[var(--home-primary)]" : "bg-[var(--home-accent)]/40"}`}
+										style={{ animationDelay: `${(index % 5) * 180}ms` }}
 									/>
 								))}
 							</div>
 						</div>
-						<div className="font-bold text-[#16587B] text-xl mb-1">
+						<div className="font-bold text-[var(--home-ink)] text-xl mb-1">
 							Cerita lokal Madiun
 						</div>
-						<div className="text-[#84B3CE] font-bold">Scan QR di destinasi</div>
+						<div className="text-[var(--home-accent)] font-bold">Scan QR di destinasi</div>
 					</div>
 				</div>
 			</div>
@@ -686,10 +787,10 @@ const AssistantTirta = ({
 		<div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
 			{/* Chat Bubble */}
 			{isOpen && (
-				<div className="bg-white rounded-3xl rounded-br-none shadow-2xl border border-[#F5EEDD] w-80 mb-4 overflow-hidden animate-fade-up origin-bottom-right transition-all">
-					<div className="bg-[#16587B] p-4 text-white flex justify-between items-center">
+				<div className="bg-[var(--home-glass)] rounded-3xl rounded-br-none shadow-2xl border border-[var(--home-glass-border)] w-80 mb-4 overflow-hidden animate-fade-up origin-bottom-right transition-all">
+					<div className="bg-[var(--home-primary)] p-4 text-white flex justify-between items-center">
 						<div className="flex items-center gap-3">
-							<div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-xl">
+							<div className="w-10 h-10 bg-[var(--home-glass)]/20 rounded-full flex items-center justify-center text-xl">
 								💧
 							</div>
 							<div>
@@ -699,12 +800,12 @@ const AssistantTirta = ({
 						</div>
 						<button
 							onClick={() => setIsOpen(false)}
-							className="hover:bg-white/20 p-2 rounded-full transition-colors">
+							className="hover:bg-[var(--home-glass)]/20 p-2 rounded-full transition-colors">
 							<IconX />
 						</button>
 					</div>
-					<div className="p-6 h-64 bg-[#F5EEDD]/30 flex flex-col justify-end">
-						<div className="bg-[#F5EEDD] text-[#16587B] p-3 rounded-2xl rounded-tl-none inline-block max-w-[85%] text-sm mb-4 shadow-sm border border-[#16587B]/5">
+					<div className="p-6 h-64 bg-[var(--home-soft)]/30 flex flex-col justify-end">
+						<div className="bg-[var(--home-soft)] text-[var(--home-ink)] p-3 rounded-2xl rounded-tl-none inline-block max-w-[85%] text-sm mb-4 shadow-sm border border-[var(--home-ink)]/5">
 							Halo! Aku Tirta. Sebut nama tempat, kuliner, atau suasana yang
 							ingin kamu cari.
 						</div>
@@ -714,12 +815,12 @@ const AssistantTirta = ({
 								value={query}
 								onChange={(event) => setQuery(event.target.value)}
 								placeholder="Cari destinasi..."
-								className="min-w-0 flex-1 bg-white border border-[#16587B]/20 rounded-full px-4 py-2 text-sm outline-none focus:border-[#84B3CE]"
+								className="min-w-0 flex-1 bg-[var(--home-glass)] border border-[var(--home-ink)]/20 rounded-full px-4 py-2 text-sm outline-none focus:border-[var(--home-accent)]"
 							/>
 							<button
 								type="submit"
 								aria-label="Cari destinasi"
-								className="bg-[#16587B] text-white p-2 w-10 h-10 rounded-full flex items-center justify-center hover:bg-[#84B3CE] hover:text-[#16587B] transition-colors">
+								className="bg-[var(--home-primary)] text-white p-2 w-10 h-10 rounded-full flex items-center justify-center hover:bg-[var(--home-accent)] hover:text-[var(--home-ink)] transition-colors">
 								<IconArrowRight />
 							</button>
 						</form>
@@ -730,7 +831,7 @@ const AssistantTirta = ({
 			{/* Floating Action Button */}
 			<button
 				onClick={() => setIsOpen(!isOpen)}
-				className="w-16 h-16 bg-[#16587B] text-white rounded-full shadow-[0_10px_25px_-5px_rgba(22,88,123,0.5)] flex items-center justify-center hover:scale-110 hover:bg-[#84B3CE] transition-all duration-300">
+				className="w-16 h-16 bg-[var(--home-primary)] text-white rounded-full shadow-[0_10px_25px_-5px_var(--home-bloom)] flex items-center justify-center hover:scale-110 hover:bg-[var(--home-accent)] transition-all duration-300">
 				{isOpen ? <IconX /> : <IconMessage />}
 			</button>
 		</div>
@@ -738,71 +839,71 @@ const AssistantTirta = ({
 };
 
 const Footer = () => (
-	<footer className="bg-white pt-20 pb-10 px-6 border-t border-[#F5EEDD]">
+	<footer id="tentang" className="bg-[var(--home-glass)] pt-20 pb-10 px-6 border-t border-[var(--home-glass-border)]">
 		<div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
 			<div className="md:col-span-2">
 				<div className="flex items-center gap-2 mb-6">
-					<div className="w-10 h-10 rounded-full bg-[#16587B] flex items-center justify-center text-white font-bold text-xl">
+					<div className="w-10 h-10 rounded-full bg-[var(--home-primary)] flex items-center justify-center text-white font-bold text-xl">
 						M
 					</div>
-					<span className="text-2xl font-extrabold text-[#16587B] tracking-tight">
-						MadiunTrip<span className="text-[#84B3CE]">.</span>
+					<span className="text-2xl font-extrabold text-[var(--home-ink)] tracking-tight">
+						MadiunTrip<span className="text-[var(--home-accent)]">.</span>
 					</span>
 				</div>
-				<p className="text-[#16587B]/70 max-w-sm mb-6 leading-relaxed">
+				<p className="text-[var(--home-ink)]/70 max-w-sm mb-6 leading-relaxed">
 					Platform penemuan wisata premium untuk mengeksplorasi keindahan alam,
 					budaya, dan kuliner Kabupaten Madiun.
 				</p>
 			</div>
 			<div>
-				<h4 className="font-bold text-[#16587B] mb-6 text-lg">Eksplorasi</h4>
-				<ul className="space-y-4 text-[#16587B]/70">
+				<h4 className="font-bold text-[var(--home-ink)] mb-6 text-lg">Eksplorasi</h4>
+				<ul className="space-y-4 text-[var(--home-ink)]/70">
 					<li>
 						<a
 							href="#destinasi"
-							className="hover:text-[#84B3CE] transition-colors">
+							className="hover:text-[var(--home-accent)] transition-colors">
 							Semua Destinasi
 						</a>
 					</li>
 					<li>
-						<a href="#peta" className="hover:text-[#84B3CE] transition-colors">
+						<a href="#peta" className="hover:text-[var(--home-accent)] transition-colors">
 							Peta Wisata
 						</a>
 					</li>
 					<li>
 						<Link
 							href="/scan"
-							className="hover:text-[#84B3CE] transition-colors">
+							className="hover:text-[var(--home-accent)] transition-colors">
 							Scan QR Code
 						</Link>
 					</li>
 				</ul>
 			</div>
 			<div>
-				<h4 className="font-bold text-[#16587B] mb-6 text-lg">Dukungan</h4>
-				<ul className="space-y-4 text-[#16587B]/70">
+				<h4 className="font-bold text-[var(--home-ink)] mb-6 text-lg">Dukungan</h4>
+				<ul className="space-y-4 text-[var(--home-ink)]/70">
 					<li>
 						<Link
 							href="/login"
-							className="hover:text-[#84B3CE] transition-colors">
+							className="hover:text-[var(--home-accent)] transition-colors">
 							Ruang Petugas
 						</Link>
 					</li>
 					<li>
 						<Link
 							href="/scan"
-							className="hover:text-[#84B3CE] transition-colors">
+							className="hover:text-[var(--home-accent)] transition-colors">
 							Panduan QR
 						</Link>
 					</li>
 				</ul>
 			</div>
 		</div>
-		<div className="max-w-7xl mx-auto pt-8 border-t border-[#F5EEDD] text-center md:text-left text-[#16587B]/50 text-sm flex flex-col md:flex-row justify-between items-center gap-4">
+		<div className="max-w-7xl mx-auto pt-8 border-t border-[var(--home-glass-border)] text-center md:text-left text-[var(--home-ink)]/50 text-sm flex flex-col md:flex-row justify-between items-center gap-4">
 			<p>&copy; MadiunTrip. Hak Cipta Dilindungi.</p>
 			<Link
 				href="/scan"
-				className="font-semibold text-[#16587B] hover:text-[#84B3CE]">
+				className="font-semibold text-[var(--home-ink)] hover:text-[var(--home-accent)]">
 				Jelajahi dengan QR <IconArrowRight />
 			</Link>
 		</div>
@@ -826,6 +927,9 @@ export default function MadiunTripApp() {
 					.from("destinations")
 					.select("*")
 					.eq("is_published", true)
+					.not("image_url", "is", null)
+					.not("latitude", "is", null)
+					.not("longitude", "is", null)
 					.limit(12);
 
 				if (cancelled) return;
@@ -880,10 +984,11 @@ export default function MadiunTripApp() {
 	return (
 		<>
 			<GlobalStyles />
-			<div className="min-h-screen relative selection:bg-[#84B3CE] selection:text-white">
+			<div className="home-page min-h-screen relative selection:bg-[var(--home-accent)] selection:text-white">
+				<StarParticles />
 				<Navbar />
 
-				<main>
+				<main className="relative z-10">
 					<HeroSection />
 					<DiscoveryMap
 						searchQuery={searchQuery}

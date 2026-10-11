@@ -44,6 +44,9 @@ export async function POST(request: Request) {
 			.select("id")
 			.eq("slug", destinationSlug)
 			.eq("is_published", true)
+			.not("image_url", "is", null)
+			.not("latitude", "is", null)
+			.not("longitude", "is", null)
 			.maybeSingle();
 
 		if (destinationError) {

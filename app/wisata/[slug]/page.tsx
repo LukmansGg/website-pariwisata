@@ -32,6 +32,9 @@ async function DestinationContent({ params }: PageProps) {
 		.select("id, slug, name, description")
 		.eq("slug", slug)
 		.eq("is_published", true)
+		.not("image_url", "is", null)
+		.not("latitude", "is", null)
+		.not("longitude", "is", null)
 		.maybeSingle();
 
 	if (error) {

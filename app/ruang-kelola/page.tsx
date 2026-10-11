@@ -27,7 +27,7 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	if (roleError || !staff || !["admin", "editor"].includes(staff.role)) redirect("/login");
 
 	const [destinationsResult, partnersResult, qrPointsResult, promotionsResult, driveResult] = await Promise.all([
-		supabase.from("destinations").select("id, slug, name, category, address, latitude, longitude, is_published, is_featured, created_at").order("created_at", { ascending: false }),
+		supabase.from("destinations").select("id, slug, name, description, category, address, latitude, longitude, image_url, tags, is_published, is_featured, created_at").order("created_at", { ascending: false }),
 		supabase.from("tourism_partners").select("id, business_name, slug, business_type, address, status, created_at").order("created_at", { ascending: false }),
 		supabase.from("qr_points").select("id, destination_id, name, code, address, latitude, longitude, is_active, created_at").order("created_at", { ascending: false }),
 		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, status, starts_at, ends_at, created_at").order("created_at", { ascending: false }),
@@ -75,6 +75,12 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 function databaseIssue(error: { code?: string; message: string }) {
 	if (error.code === "42P01" || error.code === "PGRST205") return "tabel belum ditemukan. Jalankan migration admin workspace di Supabase SQL Editor.";
 	if (error.code === "42501" || error.code === "PGRST301") return "akses ditolak oleh privilege/RLS. Periksa policy dan role akun petugas di Supabase.";
+	if (error.code === "42703") {
+		const missingColumn = error.message.match(/column [\"']?([\w.]+)[\"']? does not exist/i)?.[1];
+		return missingColumn
+			? `kolom ${missingColumn} belum ada. Jalankan migration admin workspace; jika masih muncul, tambahkan kolom itu sesuai skema. (42703)`
+			: "kolom yang diminta belum ada. Jalankan migration admin workspace dan periksa skema tabel destinations. (42703)";
+	}
 	return `query gagal (${error.code ?? "tanpa kode"}). Periksa skema dan policy Supabase.`;
 }
 

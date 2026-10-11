@@ -5,8 +5,8 @@ import { DRIVE_IMAGE_TYPES, MAX_DRIVE_IMAGE_BYTES } from "@/src/shared/google-dr
 
 const inputClass = "w-full rounded-xl border border-[#84B3CE]/40 bg-white px-4 py-3 text-sm text-[#16587B] outline-none transition placeholder:text-[#16587B]/35 focus:border-[#16587B] focus:ring-4 focus:ring-[#84B3CE]/20";
 
-export function MediaUploadField({ folder, name, label }: { folder: "destinations" | "partners" | "campaigns"; name: string; label: string }) {
-	const [url, setUrl] = useState("");
+export function MediaUploadField({ folder, name, label, defaultUrl = "" }: { folder: "destinations" | "partners" | "campaigns"; name: string; label: string; defaultUrl?: string }) {
+	const [url, setUrl] = useState(defaultUrl);
 	const [status, setStatus] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [progress, setProgress] = useState(0);

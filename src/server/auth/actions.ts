@@ -178,14 +178,17 @@ export async function createDestinationAction(
 	const imageUrlRaw = value(formData, "image_url", 2048);
 	const imageUrl = optionalUrl(imageUrlRaw);
 	const coordinates = parseCoordinates(formData);
+	const hasCoordinateInput = Boolean(value(formData, "latitude", 32) || value(formData, "longitude", 32));
+	const hasValidCoordinates = coordinates !== null && coordinates.latitude !== null && coordinates.longitude !== null;
 	const tags = value(formData, "tags", 500)
 		.split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 15);
-	const isPublished = formData.get("is_published") === "on";
+	const wantsPublication = formData.get("is_published") === "on";
+	const isPublished = wantsPublication && hasValidCoordinates && Boolean(imageUrl);
 
 	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
 		return { error: "Slug gunakan huruf kecil, angka, dan tanda hubung." };
 	}
-	if (!name || !coordinates || (imageUrlRaw && !imageUrl)) {
+	if (!name || (hasCoordinateInput && coordinates === null) || (imageUrlRaw && !imageUrl)) {
 		return { error: "Periksa nama, URL foto, serta pasangan koordinat yang dimasukkan." };
 	}
 
@@ -211,7 +214,41 @@ export async function createDestinationAction(
 	}
 
 	refreshWorkspace();
-	return { success: isPublished ? "Destinasi berhasil disimpan dan diterbitkan." : "Destinasi berhasil disimpan sebagai draft." };
+	return { success: isPublished ? "Destinasi berhasil disimpan dan diterbitkan." : wantsPublication ? "Tersimpan sebagai draft. Belum tayang: lengkapi foto sampul dan koordinat yang valid." : "Destinasi berhasil disimpan sebagai draft." };
+}
+
+export async function updateDestinationAction(
+	_previousState: WorkspaceActionState,
+	formData: FormData,
+): Promise<WorkspaceActionState> {
+	const id = value(formData, "id", 64);
+	const slug = value(formData, "slug", 100).toLowerCase();
+	const name = value(formData, "name", 160);
+	const description = value(formData, "description", 10000);
+	const category = value(formData, "category", 80);
+	const address = value(formData, "address", 500);
+	const imageUrlRaw = value(formData, "image_url", 2048);
+	const imageUrl = optionalUrl(imageUrlRaw);
+	const coordinates = parseCoordinates(formData);
+	const hasCoordinateInput = Boolean(value(formData, "latitude", 32) || value(formData, "longitude", 32));
+	const hasValidCoordinates = coordinates !== null && coordinates.latitude !== null && coordinates.longitude !== null;
+	const tags = value(formData, "tags", 500).split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 15);
+	const wantsPublication = formData.get("is_published") === "on";
+	const isPublished = wantsPublication && hasValidCoordinates && Boolean(imageUrl);
+	if (!id || !name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (hasCoordinateInput && coordinates === null) || (imageUrlRaw && !imageUrl)) {
+		return { error: "Periksa nama, link, URL foto, serta pasangan koordinat yang dimasukkan." };
+	}
+	const staff = await requireStaff();
+	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengedit data wisata." };
+	const { error } = await staff.supabase.from("destinations").update({
+		slug, name, description, category: category || null, address: address || null,
+		latitude: coordinates?.latitude ?? null, longitude: coordinates?.longitude ?? null,
+		image_url: imageUrl, tags, is_featured: formData.get("is_featured") === "on",
+		is_published: isPublished, updated_by: staff.userId,
+	}).eq("id", id);
+	if (error) return { error: error.code === "23505" ? "Link tersebut sudah dipakai destinasi lain." : "Perubahan belum tersimpan. Periksa akses dan migrasi database." };
+	refreshWorkspace();
+	return { success: isPublished ? "Wisata diperbarui dan ditayangkan." : wantsPublication ? "Perubahan tersimpan sebagai draft. Belum tayang: lengkapi foto sampul dan koordinat yang valid." : "Perubahan wisata tersimpan sebagai draft." };
 }
 
 export async function createQrPointAction(

@@ -105,6 +105,7 @@ function Spinner() {
 export default function ScanPage() {
 	const router = useRouter();
 	const videoRef = useRef<HTMLVideoElement>(null);
+	const streamRef = useRef<MediaStream | null>(null);
 	const controlsRef = useRef<IScannerControls | null>(null);
 	const startedRef = useRef(false);
 	const handledResultRef = useRef(false);
@@ -129,6 +130,8 @@ export default function ScanPage() {
 			mountedRef.current = false;
 			controlsRef.current?.stop();
 			controlsRef.current = null;
+			streamRef.current?.getTracks().forEach((track) => track.stop());
+			streamRef.current = null;
 			startedRef.current = false;
 		};
 	}, []);
@@ -136,6 +139,9 @@ export default function ScanPage() {
 	const stopCamera = useCallback(() => {
 		controlsRef.current?.stop();
 		controlsRef.current = null;
+		streamRef.current?.getTracks().forEach((track) => track.stop());
+		streamRef.current = null;
+		if (videoRef.current) videoRef.current.srcObject = null;
 		startedRef.current = false;
 		setTorchSupported(false);
 		setTorchOn(false);
@@ -167,6 +173,9 @@ export default function ScanPage() {
 				.select("*")
 				.eq("slug", slug)
 				.eq("is_published", true)
+				.not("image_url", "is", null)
+				.not("latitude", "is", null)
+				.not("longitude", "is", null)
 				.maybeSingle();
 
 			if (queryError) throw queryError;
@@ -221,9 +230,25 @@ export default function ScanPage() {
 		try {
 			controlsRef.current?.stop();
 			controlsRef.current = null;
+			streamRef.current?.getTracks().forEach((track) => track.stop());
+			streamRef.current = null;
+			// Call getUserMedia directly from the button gesture so mobile browsers
+			// can show their native permission prompt reliably.
+			const stream = await navigator.mediaDevices.getUserMedia({
+				audio: false,
+				video: deviceId
+					? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+					: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+			});
+			if (!mountedRef.current) {
+				stream.getTracks().forEach((track) => track.stop());
+				return;
+			}
+			streamRef.current = stream;
+			if (videoRef.current) videoRef.current.srcObject = stream;
 			const reader = new BrowserQRCodeReader();
-			const controls = await reader.decodeFromVideoDevice(
-				deviceId || undefined,
+			const controls = await reader.decodeFromStream(
+				stream,
 				videoRef.current,
 				(result, _decodeError, callbackControls) => {
 					if (result) handleDecodedText(result.getText(), callbackControls);
@@ -239,19 +264,26 @@ export default function ScanPage() {
 				return;
 			}
 			controlsRef.current = controls;
-			const stream = videoRef.current?.srcObject as MediaStream | null;
-			const track = stream?.getVideoTracks()[0];
+			const activeStream = videoRef.current?.srcObject as MediaStream | null;
+			const track = activeStream?.getVideoTracks()[0];
 			const currentId = track?.getSettings().deviceId ?? deviceId ?? "";
 			setActiveDeviceId(currentId);
 			setStatus("scanning");
 
-			const availableDevices = await BrowserQRCodeReader.listVideoInputDevices();
-			if (mountedRef.current) setDevices(availableDevices);
+			try {
+				const availableDevices = await BrowserQRCodeReader.listVideoInputDevices();
+				if (mountedRef.current) setDevices(availableDevices);
+			} catch {
+				// Keep the active scan usable if device enumeration is restricted.
+			}
 			window.setTimeout(checkTorch, 400);
 		} catch (cameraError) {
 			startedRef.current = false;
 			controlsRef.current?.stop();
 			controlsRef.current = null;
+			streamRef.current?.getTracks().forEach((track) => track.stop());
+			streamRef.current = null;
+			if (videoRef.current) videoRef.current.srcObject = null;
 			if (!mountedRef.current) return;
 			const name = cameraError instanceof DOMException ? cameraError.name : "";
 			const message = name === "NotAllowedError" || name === "SecurityError"
@@ -322,14 +354,10 @@ export default function ScanPage() {
 	}
 
 	const modalOpen = Boolean(scannedSlug || previewError);
-	const isCameraView = status !== "idle";
-
 	return (
-		<main className={`relative flex min-h-dvh flex-col items-center overflow-hidden text-[#16587B] ${isCameraView ? "fixed inset-0 z-40 justify-center bg-[#16587B] px-0 py-0 text-[#F5EEDD]" : "bg-[#F5EEDD] px-4 py-6 sm:px-6 sm:py-8"}`}>
-			<div aria-hidden="true" className={`pointer-events-none absolute -left-28 top-24 h-72 w-72 rounded-full bg-[#84B3CE]/20 blur-3xl ${isCameraView ? "hidden" : ""}`} />
-			<div aria-hidden="true" className={`pointer-events-none absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-[#84B3CE]/20 blur-3xl ${isCameraView ? "hidden" : ""}`} />
+		<main className="fixed inset-0 z-40 flex h-[100dvh] min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[#16587B] px-0 py-0 text-[#F5EEDD]">
 
-			<header className={`z-30 flex w-full items-center justify-between ${isCameraView ? "absolute left-0 right-0 top-0 px-4 py-4 sm:px-7 sm:py-6" : "relative max-w-6xl"}`}>
+			<header className="absolute left-0 right-0 top-0 z-30 flex w-full items-center justify-between px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-7 sm:pb-6">
 				<Link href="/" className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2.5 text-sm font-bold text-[#16587B] shadow-sm backdrop-blur transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B]">
 					<span aria-hidden="true">←</span> Beranda
 				</Link>
@@ -339,23 +367,15 @@ export default function ScanPage() {
 				</div>
 			</header>
 
-			<section className={`relative z-10 w-full ${isCameraView ? "absolute inset-0 m-0 max-w-none" : "mt-8 max-w-6xl sm:mt-10"}`}>
-				<div className={`mx-auto mb-6 max-w-2xl text-center sm:mb-8 ${isCameraView ? "hidden" : ""}`}>
-					<p className="text-xs font-black uppercase tracking-[0.24em] text-[#16587B]/60">MadiunTrip · Jelajah langsung</p>
-					<h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Temukan cerita di balik QR</h1>
-					<p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-[#16587B]/70 sm:text-base">
-						Arahkan kamera ke kode destinasi. Kami akan menampilkan informasi wisata sebelum kamu melanjutkan.
-					</p>
-				</div>
-
-				<div className={`${isCameraView ? "absolute inset-0 overflow-hidden bg-[#16587B]" : "overflow-hidden rounded-[2rem] border border-[#84B3CE]/35 bg-white p-2 shadow-[0_24px_70px_-24px_rgba(22,88,123,0.35)] sm:rounded-[2.5rem] sm:p-3"}`}>
-					<div className={`relative isolate overflow-hidden bg-[#16587B] ${isCameraView ? "absolute inset-0 min-h-dvh" : "aspect-[4/3] min-h-[340px] rounded-[1.5rem] sm:aspect-[16/9] sm:min-h-[430px] sm:rounded-[2rem] lg:min-h-[500px]"}`}>
-						<video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline aria-label="Tampilan kamera untuk memindai QR" />
+			<section className="absolute inset-0 z-10 m-0 w-full max-w-none">
+				<div className="absolute inset-0 overflow-hidden bg-[#16587B]">
+					<div className="relative isolate h-full w-full overflow-hidden bg-[#16587B]">
+						<video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline autoPlay aria-label="Tampilan kamera untuk memindai QR" />
 
 						{status !== "idle" && status !== "error" ? (
 							<div aria-hidden="true" className="pointer-events-none absolute inset-0">
 								<div className="absolute inset-0 bg-[#16587B]/15" />
-								<div className="absolute left-1/2 top-1/2 aspect-square w-[min(70vw,340px)] -translate-x-1/2 -translate-y-1/2 rounded-[1.75rem] border border-white/35 shadow-[0_0_0_999px_rgba(22,88,123,0.34)] sm:w-[min(38vw,380px)]">
+								<div className="absolute left-1/2 top-1/2 aspect-square w-[min(72vw,56svh,390px)] -translate-x-1/2 -translate-y-1/2 rounded-[1.75rem] border border-white/35 shadow-[0_0_0_999px_rgba(22,88,123,0.34)] sm:w-[min(42vw,62svh,440px)]">
 									<div className="absolute -left-1 -top-1 h-12 w-12 rounded-tl-2xl border-l-[5px] border-t-[5px] border-[#F5EEDD]" />
 									<div className="absolute -right-1 -top-1 h-12 w-12 rounded-tr-2xl border-r-[5px] border-t-[5px] border-[#F5EEDD]" />
 									<div className="absolute -bottom-1 -left-1 h-12 w-12 rounded-bl-2xl border-b-[5px] border-l-[5px] border-[#F5EEDD]" />
@@ -366,14 +386,17 @@ export default function ScanPage() {
 						) : null}
 
 						{status === "idle" ? (
-							<div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#F5EEDD] via-white to-[#84B3CE]/35 p-6 text-center sm:p-10">
-								<div className="mb-5 flex h-20 w-20 items-center justify-center rounded-[1.75rem] bg-[#16587B] text-[#F5EEDD] shadow-lg shadow-[#16587B]/20"><CameraIcon className="h-9 w-9" /></div>
-								<h2 className="text-xl font-black sm:text-2xl">Siap untuk memindai?</h2>
-								<p className="mt-2 max-w-md text-sm leading-6 text-[#16587B]/70">Kamera hanya digunakan untuk membaca kode QR. MadiunTrip tidak meminta akses lokasi.</p>
-								<button type="button" onClick={() => void startCamera()} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#16587B] px-7 py-3 font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#16587B]/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#84B3CE]/60">
-									<CameraIcon /> Aktifkan kamera
-								</button>
-								<p className="mt-3 text-xs text-[#16587B]/55">Browser akan meminta izin kamera setelah tombol ditekan.</p>
+							<div className="absolute inset-0 flex items-center justify-center bg-[#16587B]/30 px-4 py-20 text-center backdrop-blur-[2px] landscape:py-12">
+								<div className="w-full max-w-sm rounded-[2rem] border border-white/35 bg-[#F5EEDD]/95 p-5 text-[#16587B] shadow-[0_24px_90px_-22px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:p-8 landscape:rounded-2xl landscape:p-3">
+									<div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-[#16587B] text-[#F5EEDD] shadow-lg shadow-[#16587B]/25 landscape:mb-1 landscape:h-9 landscape:w-9"><CameraIcon className="h-7 w-7 landscape:h-5 landscape:w-5" /></div>
+									<p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#16587B]/55">MadiunTrip · QR Scanner</p>
+									<h2 className="mt-2 text-xl font-black sm:text-2xl landscape:mt-1 landscape:text-lg">Siap untuk menjelajah?</h2>
+									<p className="mt-2 text-sm leading-6 text-[#16587B]/70 landscape:mt-1 landscape:text-xs landscape:leading-4">Izinkan kamera untuk mengenali QR dan menampilkan informasi wisata. Kamera hanya aktif saat halaman scanner dibuka.</p>
+									<button type="button" onClick={() => void startCamera()} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#16587B] px-6 py-3 font-bold text-white shadow-lg shadow-[#16587B]/20 transition hover:-translate-y-0.5 hover:bg-[#16587B]/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#84B3CE]/60 landscape:mt-2 landscape:min-h-10 landscape:py-2">
+										<CameraIcon /> Izinkan & aktifkan kamera
+									</button>
+									<p className="mt-2 text-xs text-[#16587B]/55 landscape:mt-1 landscape:text-[10px]">Dialog izin dari browser akan muncul setelah tombol ditekan.</p>
+								</div>
 							</div>
 						) : null}
 
@@ -398,7 +421,7 @@ export default function ScanPage() {
 						) : null}
 					</div>
 
-					<div className={`${isCameraView ? "absolute bottom-7 left-1/2 z-20 flex -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white/90 p-3 text-[#16587B] shadow-xl backdrop-blur sm:bottom-9 sm:gap-4 sm:p-4" : "flex flex-wrap items-center justify-center gap-3 px-2 py-4 sm:gap-4 sm:py-5"}`}>
+					{status === "scanning" ? <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-20 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/25 bg-[#F5EEDD]/95 p-2.5 text-[#16587B] shadow-xl backdrop-blur-xl sm:bottom-9 sm:gap-3 sm:p-3">
 						{status === "scanning" && devices.length > 1 ? (
 							<button type="button" onClick={() => void switchCamera()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#84B3CE]/50 bg-[#F5EEDD] px-4 py-2.5 text-sm font-bold transition hover:bg-[#84B3CE]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B]" aria-label="Putar kamera"><FlipIcon /> Putar</button>
 						) : null}
@@ -408,18 +431,18 @@ export default function ScanPage() {
 						{status === "scanning" ? (
 							<button type="button" onClick={() => { stopCamera(); setStatus("idle"); }} className="min-h-11 rounded-xl border border-[#84B3CE]/50 bg-white px-4 py-2.5 text-sm font-bold transition hover:bg-[#F5EEDD] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B]">Selesai</button>
 						) : null}
-					</div>
+					</div> : null}
 				</div>
 
-				<div className={`${isCameraView ? "absolute bottom-24 left-0 right-0 z-20 px-4 text-center text-xs text-white/85 sm:bottom-28" : "mt-5 flex flex-col items-center justify-between gap-3 text-center text-xs text-[#16587B]/65 sm:flex-row sm:text-left"}`}>
+				{status === "scanning" ? <div className="absolute bottom-[calc(5.75rem+env(safe-area-inset-bottom))] left-0 right-0 z-20 px-4 text-center text-xs text-white/90 sm:bottom-28">
 					<p>Arahkan QR ke dalam frame. Pastikan gambar cukup terang dan tidak buram.</p>
-					<p className={isCameraView ? "mt-1 font-semibold" : "rounded-full bg-white/70 px-4 py-2 font-semibold"}>Privat · Tanpa pelacakan lokasi</p>
-				</div>
+					<p className="mt-1 font-semibold">Privat · Tanpa pelacakan lokasi</p>
+				</div> : null}
 			</section>
 
 			{modalOpen ? (
 				<div className="fixed inset-0 z-50 flex items-end justify-center bg-[#16587B]/45 p-3 backdrop-blur-sm sm:items-center sm:p-6" role="presentation">
-					<section role="dialog" aria-modal="true" aria-labelledby="destination-preview-title" className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white shadow-[0_30px_90px_-25px_rgba(22,88,123,0.5)]">
+					<section role="dialog" aria-modal="true" aria-labelledby="destination-preview-title" className="relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-white shadow-[0_30px_90px_-25px_rgba(22,88,123,0.5)]">
 						<button type="button" onClick={resumeScanning} disabled={isExploring} className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[#16587B] shadow transition hover:bg-[#F5EEDD] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B] disabled:opacity-50" aria-label="Tutup dan pindai lagi"><CloseIcon /></button>
 						{loadingPreview ? (
 							<div className="flex min-h-72 flex-col items-center justify-center p-10 text-center"><Spinner /><p className="mt-4 font-bold">Mencari destinasi…</p></div>
