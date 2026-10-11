@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import { logoutAction } from "@/src/server/auth/actions";
-import { isGoogleDriveConfigured } from "@/src/server/storage/google-drive";
+import { googleDriveOwnerEmail, isGoogleDriveConfigured } from "@/src/server/storage/google-drive";
 import { DashboardWorkspace, type WorkspaceData } from "./workspace";
 
 type DashboardProps = { searchParams: Promise<{ [key: string]: string | string[] | undefined }> };
@@ -31,7 +31,7 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 		supabase.from("tourism_partners").select("id, business_name, slug, business_type, address, status, created_at").order("created_at", { ascending: false }),
 		supabase.from("qr_points").select("id, destination_id, name, code, address, latitude, longitude, is_active, created_at").order("created_at", { ascending: false }),
 		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, status, starts_at, ends_at, created_at").order("created_at", { ascending: false }),
-		supabase.from("google_drive_connections").select("id, updated_at").eq("id", "primary").maybeSingle(),
+		supabase.from("google_drive_connections").select("id, connected_email, updated_at").eq("id", "primary").maybeSingle(),
 	]);
 
 	const destinations = destinationsResult.data ?? [];
@@ -42,6 +42,12 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 		destination_name: destinationById.get(point.destination_id) ?? "Destinasi tidak diketahui",
 	}));
 	const qrById = new Map(qrPoints.map((point) => [point.id, point]));
+	const dataIssues = [
+		destinationsResult.error ? `destinations: ${databaseIssue(destinationsResult.error)}` : null,
+		partnersResult.error ? `tourism_partners: ${databaseIssue(partnersResult.error)}` : null,
+		qrPointsResult.error ? `qr_points: ${databaseIssue(qrPointsResult.error)}` : null,
+		promotionsResult.error ? `promotion_campaigns: ${databaseIssue(promotionsResult.error)}` : null,
+	].filter((issue): issue is string => issue !== null);
 
 	const data: WorkspaceData = {
 		role: staff.role as "admin" | "editor",
@@ -55,14 +61,21 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 			qr_label: qrById.get(campaign.qr_point_id)?.name ?? "Titik QR tidak diketahui",
 		})),
 		driveConnected: Boolean(driveResult.data?.id),
+		driveConnectedEmail: driveResult.data?.connected_email ?? undefined,
+		driveOwnerEmail: googleDriveOwnerEmail(),
 		driveConfigured: isGoogleDriveConfigured(),
 		driveNotice: driveNotice(driveStatus),
-		dataWarning: [destinationsResult, partnersResult, qrPointsResult, promotionsResult, driveResult].some((result) => result.error)
-			? "Sebagian tabel belum tersedia. Jalankan migration admin workspace di Supabase sebelum menyimpan data."
-			: undefined,
+		dataIssues,
+		driveIssue: driveResult.error ? `google_drive_connections: ${databaseIssue(driveResult.error)}` : undefined,
 	};
 
 	return <DashboardWorkspace data={data} logoutAction={logoutAction} />;
+}
+
+function databaseIssue(error: { code?: string; message: string }) {
+	if (error.code === "42P01" || error.code === "PGRST205") return "tabel belum ditemukan. Jalankan migration admin workspace di Supabase SQL Editor.";
+	if (error.code === "42501" || error.code === "PGRST301") return "akses ditolak oleh privilege/RLS. Periksa policy dan role akun petugas di Supabase.";
+	return `query gagal (${error.code ?? "tanpa kode"}). Periksa skema dan policy Supabase.`;
 }
 
 function driveNotice(status?: string) {
@@ -78,7 +91,10 @@ function driveNotice(status?: string) {
 		"consent-denied": "Izin Google Drive belum diberikan. Setujui izin drive.file agar dashboard dapat menyimpan media.",
 		reauthorize: "Google tidak mengirim refresh token. Admin perlu cabut izin MadiunTrip di akun Google lalu hubungkan ulang.",
 		"migration-required": "Koneksi Google berhasil, tetapi tabel integrasi belum tersedia. Jalankan migration Google Drive di Supabase lalu hubungkan ulang.",
-		"not-configured": "Isi variabel OAuth Google Drive di .env.local dan restart server sebelum menghubungkan akun.",
+		"not-configured": "Isi variabel OAuth, kunci enkripsi, APP_ORIGIN, dan GOOGLE_DRIVE_OWNER_EMAIL di konfigurasi server sebelum menghubungkan akun.",
+		"owner-not-configured": "Pemilik Drive belum ditentukan. Isi GOOGLE_DRIVE_OWNER_EMAIL di konfigurasi server dengan akun Google milik aplikasi sebelum menghubungkan.",
+		"owner-mismatch": "Akun Google yang dipilih bukan akun pemilik aplikasi. Tidak ada folder atau token yang disimpan; login dengan email yang ditetapkan pada GOOGLE_DRIVE_OWNER_EMAIL.",
+		"account-unverified": "Google tidak mengembalikan email terverifikasi, jadi akun Drive tidak disambungkan.",
 		"admin-required": "Hanya akun admin yang dapat menghubungkan Google Drive.",
 	};
 	return status ? notices[status] : undefined;

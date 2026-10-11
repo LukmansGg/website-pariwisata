@@ -6,6 +6,8 @@ import {
 	createDriveAssetsFolder,
 	exchangeGoogleDriveCode,
 	encryptDriveConnection,
+	getGoogleAccountEmail,
+	googleDriveOwnerEmail,
 } from "@/src/server/storage/google-drive";
 
 function dashboardUrl(status: string) {
@@ -48,6 +50,25 @@ export async function GET(request: Request) {
 		return fail("oauth-failed");
 	}
 	if (!tokens.refresh_token) return fail("reauthorize");
+	let connectedEmail: string;
+	try {
+		connectedEmail = await getGoogleAccountEmail(tokens.access_token!);
+	} catch (error) {
+		console.error("[google-drive] Google account verification failed:", error instanceof Error ? error.message : "Unknown error");
+		return fail("account-unverified");
+	}
+	const expectedOwner = googleDriveOwnerEmail();
+	if (!expectedOwner) return fail("owner-not-configured");
+	if (connectedEmail !== expectedOwner) return fail("owner-mismatch");
+
+	let encryptedCredentials: string;
+	try {
+		// Validate the encryption key before creating anything in the owner's Drive.
+		encryptedCredentials = encryptDriveConnection({ refreshToken: tokens.refresh_token, folderId: "pending" });
+	} catch (error) {
+		console.error("[google-drive] Credential encryption failed:", error instanceof Error ? error.message : "Unknown error");
+		return fail("drive-config-failed");
+	}
 
 	let folderId: string;
 	try {
@@ -57,7 +78,6 @@ export async function GET(request: Request) {
 		return fail("drive-api-failed");
 	}
 
-	let encryptedCredentials: string;
 	try {
 		encryptedCredentials = encryptDriveConnection({ refreshToken: tokens.refresh_token, folderId });
 	} catch (error) {
@@ -68,6 +88,7 @@ export async function GET(request: Request) {
 	const { error: saveError } = await supabase.from("google_drive_connections").upsert({
 		id: "primary",
 		encrypted_credentials: encryptedCredentials,
+		connected_email: connectedEmail,
 		connected_by: userId,
 		updated_at: new Date().toISOString(),
 	}, { onConflict: "id" });

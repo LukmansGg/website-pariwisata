@@ -10,7 +10,7 @@ import {
 
 export { DRIVE_ASSET_FOLDERS, DRIVE_IMAGE_TYPES, DRIVE_UPLOAD_CHUNK_BYTES, MAX_DRIVE_IMAGE_BYTES };
 export const DRIVE_REDIRECT_PATH = "/api/google-drive/callback";
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_SCOPE = "openid email https://www.googleapis.com/auth/drive.file";
 
 export type DriveConnection = { refreshToken: string; folderId: string };
 export type DriveUploadSession = {
@@ -27,8 +27,13 @@ export function isGoogleDriveConfigured() {
 		process.env.GOOGLE_DRIVE_CLIENT_ID &&
 		process.env.GOOGLE_DRIVE_CLIENT_SECRET &&
 		process.env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY &&
+		process.env.GOOGLE_DRIVE_OWNER_EMAIL &&
 		process.env.APP_ORIGIN,
 	);
+}
+
+export function googleDriveOwnerEmail() {
+	return process.env.GOOGLE_DRIVE_OWNER_EMAIL?.trim().toLowerCase() ?? "";
 }
 
 export function googleDriveRedirectUri() {
@@ -52,7 +57,7 @@ export function googleDriveAuthorizationUrl(state: string) {
 		redirect_uri: googleDriveRedirectUri(),
 		response_type: "code",
 		access_type: "offline",
-		prompt: "consent",
+		prompt: "consent select_account",
 		scope: DRIVE_SCOPE,
 		state,
 	}).toString();
@@ -77,6 +82,18 @@ export async function exchangeGoogleDriveCode(code: string) {
 		throw new Error(result.error || "Google gagal menyelesaikan proses OAuth.");
 	}
 	return result;
+}
+
+export async function getGoogleAccountEmail(accessToken: string) {
+	const response = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+		cache: "no-store",
+		headers: { Authorization: `Bearer ${accessToken}` },
+	});
+	const result = await response.json() as { email?: string; email_verified?: boolean };
+	if (!response.ok || !result.email || result.email_verified !== true) {
+		throw new Error("Google tidak mengembalikan email akun terverifikasi.");
+	}
+	return result.email.trim().toLowerCase();
 }
 
 function encryptionKey() {

@@ -7,6 +7,7 @@ import {
 	DRIVE_ASSET_FOLDERS,
 	DRIVE_IMAGE_TYPES,
 	MAX_DRIVE_IMAGE_BYTES,
+	googleDriveOwnerEmail,
 	refreshDriveAccessToken,
 	startDriveResumableUpload,
 } from "@/src/server/storage/google-drive";
@@ -50,11 +51,14 @@ export async function POST(request: Request) {
 
 	const { data: connection, error: connectionError } = await supabase
 		.from("google_drive_connections")
-		.select("encrypted_credentials")
+		.select("encrypted_credentials, connected_email")
 		.eq("id", "primary")
 		.maybeSingle();
 	if (connectionError || !connection?.encrypted_credentials) {
 		return NextResponse.json({ error: "Google Drive belum dihubungkan admin. Buka tab Petugas & akses." }, { status: 503 });
+	}
+	if (!googleDriveOwnerEmail() || connection.connected_email?.toLowerCase() !== googleDriveOwnerEmail()) {
+		return NextResponse.json({ error: "Akun Drive belum cocok dengan pemilik yang ditetapkan. Admin harus menghubungkan ulang akun pemilik aplikasi." }, { status: 503 });
 	}
 
 	try {
