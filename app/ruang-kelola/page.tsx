@@ -69,6 +69,12 @@ function driveNotice(status?: string) {
 	const notices: Record<string, string> = {
 		connected: "Akun Google Drive berhasil dihubungkan. Upload foto sudah tersedia untuk admin dan editor.",
 		"connect-failed": "Koneksi Google Drive gagal. Periksa callback OAuth, akun petugas admin, lalu coba sambungkan ulang.",
+		"state-invalid": "Pemeriksaan keamanan OAuth gagal. Mulai ulang koneksi dari tab yang sama dan gunakan hostname yang sama (localhost atau 127.0.0.1).",
+		"session-missing": "Sesi admin tidak terbawa kembali dari Google. Login ulang di dashboard lalu hubungkan Drive lagi.",
+		"code-missing": "Google tidak mengirim kode otorisasi. Mulai ulang koneksi Drive.",
+		"oauth-failed": "Kode Google diterima, tetapi gagal ditukar menjadi token. Periksa Client ID, Client Secret, dan redirect URI di Google Cloud; lihat terminal Next.js untuk detail aman.",
+		"drive-api-failed": "OAuth berhasil, tetapi Google Drive API gagal membuat folder aset. Pastikan Google Drive API aktif di project Google Cloud; lihat terminal Next.js untuk detail.",
+		"drive-config-failed": "Token Google diterima tetapi gagal dienkripsi. Pastikan GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY berisi 32 byte (base64 atau 64 karakter hex).",
 		"consent-denied": "Izin Google Drive belum diberikan. Setujui izin drive.file agar dashboard dapat menyimpan media.",
 		reauthorize: "Google tidak mengirim refresh token. Admin perlu cabut izin MadiunTrip di akun Google lalu hubungkan ulang.",
 		"migration-required": "Koneksi Google berhasil, tetapi tabel integrasi belum tersedia. Jalankan migration Google Drive di Supabase lalu hubungkan ulang.",

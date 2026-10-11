@@ -21,9 +21,9 @@ export async function GET(request: Request) {
 	const supabase = await createClient();
 	const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
 	const userId = claimsData?.claims.sub;
-	const { data: staff } = userId
+	const { data: staff, error: roleError } = userId
 		? await supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle()
-		: { data: null };
+		: { data: null, error: null };
 	const response = NextResponse.redirect(dashboardUrl("connect-failed"));
 	response.cookies.set("google_drive_oauth_state", "", {
 		httpOnly: true,
@@ -32,25 +32,48 @@ export async function GET(request: Request) {
 		path: "/api/google-drive/callback",
 		maxAge: 0,
 	});
-	if (!stateMatches || claimsError || !userId || staff?.role !== "admin") return response;
-	if (url.searchParams.has("error")) return NextResponse.redirect(dashboardUrl("consent-denied"), { headers: response.headers });
+	const fail = (status: string) => NextResponse.redirect(dashboardUrl(status), { headers: response.headers });
+	if (!stateMatches) return fail("state-invalid");
+	if (claimsError || !userId) return fail("session-missing");
+	if (roleError || staff?.role !== "admin") return fail("admin-required");
+	if (url.searchParams.has("error")) return fail("consent-denied");
 	const code = url.searchParams.get("code");
-	if (!code) return response;
+	if (!code) return fail("code-missing");
 
+	let tokens: Awaited<ReturnType<typeof exchangeGoogleDriveCode>>;
 	try {
-		const tokens = await exchangeGoogleDriveCode(code);
-		if (!tokens.refresh_token) return NextResponse.redirect(dashboardUrl("reauthorize"), { headers: response.headers });
-		const folderId = await createDriveAssetsFolder(tokens.access_token!);
-		const encryptedCredentials = encryptDriveConnection({ refreshToken: tokens.refresh_token, folderId });
-		const { error } = await supabase.from("google_drive_connections").upsert({
-			id: "primary",
-			encrypted_credentials: encryptedCredentials,
-			connected_by: userId,
-			updated_at: new Date().toISOString(),
-		}, { onConflict: "id" });
-		if (error) return NextResponse.redirect(dashboardUrl("migration-required"), { headers: response.headers });
-		return NextResponse.redirect(dashboardUrl("connected"), { headers: response.headers });
-	} catch {
-		return response;
+		tokens = await exchangeGoogleDriveCode(code);
+	} catch (error) {
+		console.error("[google-drive] OAuth token exchange failed:", error instanceof Error ? error.message : "Unknown error");
+		return fail("oauth-failed");
 	}
+	if (!tokens.refresh_token) return fail("reauthorize");
+
+	let folderId: string;
+	try {
+		folderId = await createDriveAssetsFolder(tokens.access_token!);
+	} catch (error) {
+		console.error("[google-drive] Drive API folder setup failed:", error instanceof Error ? error.message : "Unknown error");
+		return fail("drive-api-failed");
+	}
+
+	let encryptedCredentials: string;
+	try {
+		encryptedCredentials = encryptDriveConnection({ refreshToken: tokens.refresh_token, folderId });
+	} catch (error) {
+		console.error("[google-drive] Credential encryption failed:", error instanceof Error ? error.message : "Unknown error");
+		return fail("drive-config-failed");
+	}
+
+	const { error: saveError } = await supabase.from("google_drive_connections").upsert({
+		id: "primary",
+		encrypted_credentials: encryptedCredentials,
+		connected_by: userId,
+		updated_at: new Date().toISOString(),
+	}, { onConflict: "id" });
+	if (saveError) {
+		console.error("[google-drive] Encrypted connection save failed:", saveError.message);
+		return fail("migration-required");
+	}
+	return fail("connected");
 }
