@@ -196,36 +196,25 @@ const GlobalStyles = () => (
 		dangerouslySetInnerHTML={{
 			__html: `
     .home-page {
-      --home-canvas: #eaf7ff;
-      --home-ink: #082f49;
-      --home-primary: #0784bd;
-      --home-accent: #38bdf8;
-      --home-soft: #dff3ff;
-      --home-glass: rgba(255, 255, 255, 0.68);
-      --home-glass-border: rgba(255, 255, 255, 0.82);
-      --home-on-primary: #f8fcff;
-      --home-on-accent: #08344c;
-      --home-bloom: rgba(14, 165, 233, 0.28);
+      --home-canvas: #f6fbff;
+      --home-ink: #103b56;
+      --home-primary: #287fa8;
+      --home-accent: #83c9e8;
+      --home-soft: #e8f6fd;
+      --home-glass: rgba(255, 255, 255, 0.86);
+      --home-glass-border: rgba(190, 229, 246, 0.82);
+      --home-on-primary: #ffffff;
+      --home-on-accent: #103b56;
+      --home-bloom: rgba(99, 190, 230, 0.25);
+      color-scheme: only light;
+      forced-color-adjust: none;
       color: var(--home-ink);
-      background: var(--home-canvas);
+      background: var(--home-canvas) !important;
+      background-color: #f6fbff !important;
       isolation: isolate;
       overflow-x: clip;
       transition: background-color 350ms ease, color 350ms ease;
       -webkit-font-smoothing: antialiased;
-    }
-    @media (prefers-color-scheme: dark) {
-      .home-page {
-        --home-canvas: #07111f;
-        --home-ink: #e9f4ff;
-        --home-primary: #172943;
-        --home-accent: #b49aff;
-        --home-soft: #152039;
-        --home-glass: rgba(15, 23, 42, 0.7);
-        --home-glass-border: rgba(180, 154, 255, 0.2);
-        --home-on-primary: #ffffff;
-        --home-on-accent: #1e1834;
-        --home-bloom: rgba(151, 119, 255, 0.3);
-      }
     }
     .home-page .glass-panel {
       background: var(--home-glass);
