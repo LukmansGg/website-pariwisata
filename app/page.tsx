@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { createClient } from "@/src/infrastructure/supabase/client";
+import { useTheme } from "@/src/components/theme-provider";
 
 const MOODS = [
 	{ id: 1, name: "Healing Alam", icon: "🍃" },
@@ -143,20 +143,6 @@ const IconSparkle = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
 		<path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-2-5.8L4 11l6-2.2L12 3Z" />
 		<path d="m19 14 1 2.5 2.5 1-2.5 1L19 21l-1-2.5-2.5-1 2.5-1L19 14Z" />
-	</svg>
-);
-const IconStar = ({ filled }: { filled?: boolean }) => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		width="16"
-		height="16"
-		viewBox="0 0 24 24"
-		fill={filled ? "currentColor" : "none"}
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round">
-		<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
 	</svg>
 );
 const IconMessage = () => (
@@ -541,6 +527,15 @@ const DiscoveryMap = ({
 	searchQuery: string;
 	onSearchChange: (value: string) => void;
 }) => {
+	const [area, setArea] = useState<"kabupaten" | "kota">("kabupaten");
+	const mapAreas = {
+		kabupaten: { label: "Kabupaten Madiun", bbox: "111.20,-7.88,111.86,-7.35", marker: "-7.62,111.55" },
+		kota: { label: "Kota Madiun", bbox: "111.48,-7.68,111.56,-7.59", marker: "-7.63,111.53" },
+	} as const;
+	const selectedArea = mapAreas[area];
+	const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(selectedArea.bbox)}&layer=mapnik&marker=${encodeURIComponent(selectedArea.marker)}`;
+	const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedArea.label)}`;
+
 	return (
 		<section
 			id="peta"
@@ -576,7 +571,7 @@ const DiscoveryMap = ({
 				<div className="glass-panel rounded-[2rem] p-4 pt-16 map-container relative overflow-hidden group">
 					{/* Decorative map corner */}
 					<div className="absolute top-0 right-0 bg-[var(--home-soft)] text-[var(--home-ink)] text-xs font-bold px-4 py-2 rounded-bl-2xl rounded-tr-xl border-b border-l border-[var(--home-ink)]/10 z-10">
-						Jelajah Peta Digital
+						Peta · {selectedArea.label}
 					</div>
 
 					<div className="w-full h-[400px] rounded-2xl overflow-hidden bg-[var(--home-soft)] relative">
@@ -584,14 +579,22 @@ const DiscoveryMap = ({
 							width="100%"
 							height="100%"
 							frameBorder="0"
-							scrolling="no"
+							scrolling="yes"
 							marginHeight={0}
 							marginWidth={0}
-							src="https://www.openstreetmap.org/export/embed.html?bbox=111.45%2C-7.75%2C111.75%2C-7.45&layer=mapnik"
-							title="Peta Madiun"
+							loading="lazy"
+							src={mapEmbedUrl}
+							title={`Peta interaktif ${selectedArea.label}`}
 							className="w-full h-full object-cover"></iframe>
 						{/* Overlay interaction hint */}
 						<div className="absolute inset-0 bg-[var(--home-primary)]/5 pointer-events-none group-hover:bg-transparent transition-colors duration-500"></div>
+					</div>
+					<div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+						<div className="inline-flex rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-1" aria-label="Pilih area peta">
+							<button type="button" aria-pressed={area === "kabupaten"} onClick={() => setArea("kabupaten")} className={`rounded-full px-4 py-2 text-sm font-bold transition ${area === "kabupaten" ? "bg-[var(--home-primary)] text-white" : "text-[var(--home-ink)] hover:bg-[var(--home-soft)]"}`}>Kabupaten</button>
+							<button type="button" aria-pressed={area === "kota"} onClick={() => setArea("kota")} className={`rounded-full px-4 py-2 text-sm font-bold transition ${area === "kota" ? "bg-[var(--home-primary)] text-white" : "text-[var(--home-ink)] hover:bg-[var(--home-soft)]"}`}>Kota Madiun</button>
+						</div>
+						<a href={googleMapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-[var(--home-ink)] transition hover:bg-[var(--home-soft)]">Buka di Google Maps <IconArrowRight /></a>
 					</div>
 				</div>
 			</div>
@@ -653,11 +656,12 @@ const Highlights = ({
 	<section id="destinasi" className="py-20 px-6 max-w-7xl mx-auto">
 		<div className="flex justify-between items-end mb-12 animate-fade-up">
 			<div>
+				<p className="mb-3 text-xs font-black uppercase tracking-[.22em] text-[var(--home-primary)]">Curated for your next story</p>
 				<h2 className="text-3xl font-extrabold text-[var(--home-ink)] mb-2">
-					Highlight Hari Ini
+					Spot pilihan
 				</h2>
 				<p className="text-[var(--home-ink)]/70">
-					Pilihan terbaik yang wajib kamu kunjungi.
+					Tempat seru di Kabupaten dan Kota Madiun.
 				</p>
 			</div>
 			{destinations.length > 0 && (
@@ -699,14 +703,14 @@ const Highlights = ({
 		) : null}
 		{!loading && !error && incompleteCount > 0 ? <p role="status" className="mb-5 rounded-xl border border-amber-400/40 bg-amber-300/15 px-4 py-3 text-sm text-[var(--home-ink)]">{incompleteCount} destinasi disembunyikan karena foto atau koordinat belum lengkap. <Link href="/login" className="font-bold underline underline-offset-2">Petugas, lengkapi di ruang kelola.</Link></p> : null}
 		{!loading && !error && destinations.length > 0 ? (
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+			<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
 				{destinations.map((dest, i) => (
 					<Link
 						href={`/wisata/${encodeURIComponent(dest.slug)}`}
 						key={dest.id}
 						style={{ animationDelay: `${Math.min((i + 1) * 100, 500)}ms` }}
-						className="glass-panel group rounded-[2rem] p-3 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 animate-fade-up">
-						<div className="relative w-full h-48 rounded-[1.5rem] overflow-hidden mb-4 bg-gradient-to-br from-[var(--home-soft)] to-[var(--home-accent)]/50">
+						className="glass-panel group rounded-[1.75rem] p-3 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 animate-fade-up">
+						<div className="relative w-full h-56 rounded-[1.25rem] overflow-hidden mb-4 bg-gradient-to-br from-[var(--home-soft)] to-[var(--home-accent)]/50">
 							{dest.image ? (
 								<Image
 									src={dest.image}
@@ -720,36 +724,17 @@ const Highlights = ({
 									<IconMapPin />
 								</div>
 							)}
+							<div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-transparent pointer-events-none" />
+							<span className="absolute bottom-3 left-3 rounded-full border border-white/35 bg-white/85 px-3 py-1.5 text-xs font-bold text-slate-900 shadow-sm backdrop-blur-md">{dest.category}</span>
 						</div>
 						<div className="px-3 pb-3">
-							<h3 className="text-lg font-bold text-[var(--home-ink)] mb-2 line-clamp-1 group-hover:text-[var(--home-accent)] transition-colors">
+							<h3 className="text-lg font-bold text-[var(--home-ink)] mb-2 line-clamp-1 group-hover:text-[var(--home-primary)] transition-colors">
 								{dest.title}
 							</h3>
-							<p className="min-h-10 text-sm text-[var(--home-ink)]/70 line-clamp-2">
+							<p className="min-h-10 text-sm leading-relaxed text-[var(--home-ink)]/70 line-clamp-2">
 								{dest.description || "Lihat informasi destinasi wisata ini."}
 							</p>
-							{dest.rating !== undefined && (
-								<div className="mt-3 flex items-center gap-1 text-[var(--home-ink)] text-sm font-medium">
-									<IconStar filled />
-									<span>{dest.rating.toFixed(1)}</span>
-									{dest.reviews !== undefined && (
-										<span className="text-[var(--home-ink)]/50">
-											({dest.reviews} ulasan)
-										</span>
-									)}
-								</div>
-							)}
-							{dest.tags.length > 0 && (
-								<div className="mt-3 flex flex-wrap gap-2">
-									{dest.tags.map((tag) => (
-										<span
-											key={tag}
-											className="bg-[var(--home-soft)] text-[var(--home-ink)] text-xs px-2 py-1 rounded-md">
-											{tag}
-										</span>
-									))}
-								</div>
-							)}
+							<div className="mt-4 flex items-center justify-between border-t border-[var(--home-glass-border)] pt-3 text-sm font-bold text-[var(--home-primary)]"><span>Kenali spot ini</span><span className="transition-transform group-hover:translate-x-1"><IconArrowRight /></span></div>
 						</div>
 					</Link>
 				))}
@@ -971,7 +956,7 @@ const Footer = () => {
 };
 
 export default function MadiunTripApp() {
-	const [isDark, setIsDark] = useState(false);
+	const { isDark, toggleTheme } = useTheme();
 	const [destinations, setDestinations] = useState<DestinationCard[]>([]);
 	const [loadingDestinations, setLoadingDestinations] = useState(true);
 	const [destinationError, setDestinationError] = useState("");
@@ -980,39 +965,22 @@ export default function MadiunTripApp() {
 	const [selectedMood, setSelectedMood] = useState<number | null>(null);
 
 	useEffect(() => {
-		setIsDark(window.localStorage.getItem("madiuntrip-home-theme") === "dark");
-	}, []);
-
-	function toggleTheme() {
-		setIsDark((current) => {
-			const next = !current;
-			window.localStorage.setItem("madiuntrip-home-theme", next ? "dark" : "light");
-			return next;
-		});
-	}
-
-	useEffect(() => {
 		let cancelled = false;
 
 		async function loadDestinations() {
 			try {
-				const supabase = createClient();
-				const { data, error } = await supabase
-					.from("destinations")
-					.select("*")
-					.eq("is_published", true)
-					.order("created_at", { ascending: false })
-					.limit(1000);
+				const response = await fetch("/api/public-destinations");
 
 				if (cancelled) return;
-				if (error) {
+				if (!response.ok) {
 					setDestinationError(
-						"Destinasi belum dapat dimuat. Periksa koneksi Supabase dan kebijakan akses publik.",
+						"Destinasi belum dapat dimuat. Periksa koneksi lalu coba lagi.",
 					);
 					return;
 				}
 
-				const rows = (data ?? []) as unknown as DestinationRow[];
+				const payload = (await response.json()) as { data?: DestinationRow[] };
+				const rows = Array.isArray(payload.data) ? payload.data : [];
 				const identifiedRows = rows.filter((row) => typeof row.id === "string" && typeof row.slug === "string" && typeof row.name === "string");
 				const readyRows = identifiedRows.filter(destinationHasRequiredMediaAndLocation);
 				setIncompleteDestinationCount(identifiedRows.length - readyRows.length);

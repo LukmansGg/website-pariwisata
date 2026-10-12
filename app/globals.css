@@ -21,3 +21,42 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #070c18;
+  --foreground: #eaf2ff;
+}
+
+html[data-theme="dark"] body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Keep the existing Venice Blue / Merino utility palette in sync on every route. */
+html[data-theme="dark"] [class~="bg-white"],
+html[data-theme="dark"] [class*="bg-white/"],
+html[data-theme="dark"] [class*="bg-[#F5EEDD]"] {
+  background-color: #101b31 !important;
+}
+
+html[data-theme="dark"] [class*="bg-[#16587B]"],
+html[data-theme="dark"] [class*="bg-[#104866]"] {
+  background-color: #17446b !important;
+}
+
+html[data-theme="dark"] [class*="bg-[#84B3CE]"] {
+  background-color: #244a68 !important;
+}
+
+html[data-theme="dark"] [class*="text-[#16587B]"],
+html[data-theme="dark"] [class*="text-[#104866]"],
+html[data-theme="dark"] [class*="text-[#84B3CE]"] {
+  color: #d8eaff !important;
+}
+
+html[data-theme="dark"] [class*="border-[#84B3CE]"],
+html[data-theme="dark"] [class*="border-[#16587B]"],
+html[data-theme="dark"] [class*="border-[#F5EEDD]"] {
+  border-color: rgba(125, 183, 224, .24) !important;
+}

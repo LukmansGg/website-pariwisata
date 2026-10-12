@@ -1,7 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import { checkLoginLimit } from "@/src/server/auth/rate-limit";
@@ -160,10 +160,11 @@ function parseCoordinates(formData: FormData) {
 	return { latitude, longitude };
 }
 
-function refreshWorkspace() {
+function refreshWorkspace(options: { destinations?: boolean } = {}) {
 	revalidatePath("/ruang-kelola");
 	revalidatePath("/");
 	revalidatePath("/scan");
+	if (options.destinations) revalidateTag("public-destinations", { expire: 0 });
 }
 
 export async function createDestinationAction(
@@ -213,7 +214,7 @@ export async function createDestinationAction(
 		return { error: error.code === "23505" ? "Slug tersebut sudah dipakai destinasi lain." : "Destinasi belum tersimpan. Periksa migrasi database dan coba lagi." };
 	}
 
-	refreshWorkspace();
+	refreshWorkspace({ destinations: true });
 	return { success: isPublished ? "Destinasi berhasil disimpan dan diterbitkan." : wantsPublication ? "Tersimpan sebagai draft. Belum tayang: lengkapi foto sampul dan koordinat yang valid." : "Destinasi berhasil disimpan sebagai draft." };
 }
 
@@ -247,7 +248,7 @@ export async function updateDestinationAction(
 		is_published: isPublished, updated_by: staff.userId,
 	}).eq("id", id);
 	if (error) return { error: error.code === "23505" ? "Link tersebut sudah dipakai destinasi lain." : "Perubahan belum tersimpan. Periksa akses dan migrasi database." };
-	refreshWorkspace();
+	refreshWorkspace({ destinations: true });
 	return { success: isPublished ? "Wisata diperbarui dan ditayangkan." : wantsPublication ? "Perubahan tersimpan sebagai draft. Belum tayang: lengkapi foto sampul dan koordinat yang valid." : "Perubahan wisata tersimpan sebagai draft." };
 }
 

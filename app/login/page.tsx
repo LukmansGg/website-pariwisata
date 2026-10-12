@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from 'react';
 import { loginAction, type LoginState } from '@/src/server/auth/actions';
+import { useTheme } from '@/src/components/theme-provider';
 
 const initialState: LoginState = {};
 const MAX_ATTEMPTS = 3;
@@ -56,14 +57,49 @@ const IconCheckCircle = () => (
   </svg>
 );
 
+const IconSun = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className} aria-hidden="true"><circle cx="12" cy="12" r="4"/><path strokeLinecap="round" d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>;
+const IconMoon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z"/></svg>;
+const SoftCloud = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true"><path d="M19 13.5A4.5 4.5 0 0 0 14.5 9a4.5 4.5 0 0 0-8.8 1.5A3.5 3.5 0 0 0 6.5 17.5h12A4.5 4.5 0 0 0 19 13.5z"/></svg>;
+
 const GlobalStyles = () => (
   <style dangerouslySetInnerHTML={{__html: `
-    :root {
-      --white: #FFFFFF;
-      --merino: #F5EEDD;
-      --rock-blue: #84B3CE;
-      --venice-blue: #16587B;
+    .login-page {
+      --bg-app: radial-gradient(circle at 15% 0%, #f0f9ff 0%, #e0f2fe 34%, #d9f1fd 72%, #f6fbff 100%);
+      --venice-blue: #16587b; --rock-blue: #84b3ce;
+      --bg-card: rgba(255,255,255,.76); --bg-stub: rgba(240,249,255,.78);
+      --text-primary: #103b56; --text-secondary: #16587b; --text-muted: #287fa8;
+      --border-main: rgba(255,255,255,.9); --border-dashed: rgba(40,127,168,.28);
+      --shadow-card: 0 40px 80px -20px rgba(2,132,199,.22), 0 10px 30px -10px rgba(56,189,248,.2), inset 0 2px 4px rgba(255,255,255,.9);
+      --ambient-1: rgba(255,255,255,.85); --ambient-2: rgba(186,230,253,.72);
+      --input-bg: rgba(255,255,255,.78); --input-border: rgba(186,230,253,.9); --input-focus-bg: #fff; --barcode-base: rgba(186,230,253,.5);
+      --badge-bg: rgba(255,255,255,.8); --badge-border: rgba(186,230,253,.85); --barcode-blend: multiply;
+      --lock-overlay: rgba(224,242,254,.92); --stars-opacity: 0; --cloud-opacity: 1; --day-sparkle-opacity: 1; --cutout-color: #d9f1fd;
+      min-height: 100dvh; color: var(--text-primary); background: var(--bg-app); transition: color .7s ease, background .7s ease;
     }
+    .login-page.theme-dark {
+      --bg-app: radial-gradient(circle at 10% 20%, #101b35 0%, #070c18 55%, #030611 100%);
+      --venice-blue: #17446b; --rock-blue: #7dc3ed;
+      --bg-card: rgba(15,23,42,.74); --bg-stub: rgba(2,6,23,.68);
+      --text-primary: #f0f7ff; --text-secondary: #c7d9ee; --text-muted: #8fbbdf;
+      --border-main: rgba(125,183,224,.2); --border-dashed: rgba(125,183,224,.32);
+      --shadow-card: 0 40px 80px -20px rgba(0,0,0,.8), 0 0 50px -10px rgba(56,189,248,.16), inset 0 1px 2px rgba(56,189,248,.24);
+      --ambient-1: rgba(2,132,199,.2); --ambient-2: rgba(91,61,176,.2);
+      --input-bg: rgba(2,6,23,.62); --input-border: rgba(125,183,224,.3); --input-focus-bg: rgba(15,23,42,.92); --barcode-base: rgba(2,6,23,.55);
+      --badge-bg: rgba(15,23,42,.8); --badge-border: rgba(125,183,224,.28); --barcode-blend: screen;
+      --lock-overlay: rgba(2,6,23,.96); --stars-opacity: 1; --cloud-opacity: 0; --day-sparkle-opacity: 0; --cutout-color: #070c18;
+    }
+
+    .login-page .theme-transition { transition: all .75s cubic-bezier(.2,.8,.2,1); }
+    .login-page .star-anim { position:absolute; border-radius:50%; background:#fff; box-shadow:0 0 8px rgba(147,197,253,.9); animation:loginTwinkle 3.2s ease-in-out infinite; }
+    .login-page .shooting-star-anim { position:absolute; width:140px; height:2px; border-radius:99px; transform-origin:right; background:linear-gradient(90deg,transparent,#fff); animation:loginShoot 10s linear infinite; }
+    .login-page .shooting-star-anim::after { content:""; position:absolute; right:0; top:50%; width:6px; height:6px; border-radius:50%; transform:translateY(-50%); background:#fff; box-shadow:0 0 14px 4px #7dd3fc; }
+    .login-page .css-barcode { background:var(--barcode-base,rgba(186,230,253,.5)); position:relative; }
+    .login-page .css-barcode::after { content:""; position:absolute; inset:0; background:repeating-linear-gradient(90deg,#38bdf8 0,#38bdf8 2px,transparent 2px,transparent 6px,#38bdf8 6px,#38bdf8 12px,transparent 12px,transparent 16px); mix-blend-mode:var(--barcode-blend); opacity:.7; }
+    .login-page .ambient-glow { animation:loginAmbient 15s ease-in-out infinite; }
+    @keyframes loginTwinkle { 0%,100%{opacity:.2;transform:scale(.55)} 50%{opacity:1;transform:scale(1.15)} }
+    @keyframes loginShoot { 0%{transform:translate(0,0) rotate(-45deg) scaleX(0);opacity:0} 8%{opacity:1} 45%,100%{transform:translate(-48vw,48vh) rotate(-45deg) scaleX(1);opacity:0} }
+    @keyframes loginAmbient { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(2%,4%) scale(1.05)} }
+    @keyframes drift-cloud { 0%{transform:translateX(-25vw)} 100%{transform:translateX(125vw)} }
 
     /* CSS Barcode Generator */
     .css-barcode {
@@ -173,10 +209,12 @@ const GlobalStyles = () => (
     .input-smooth {
       transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
+    @media (prefers-reduced-motion: reduce) { .login-page *, .login-page *::before, .login-page *::after { animation-duration:1ms !important; animation-iteration-count:1 !important; transition-duration:1ms !important; scroll-behavior:auto !important; } }
   `}} />
 );
 
 export default function StaffLoginPage() {
+  const { isDark, toggleTheme } = useTheme();
   const [state, formAction, isPending] = useActionState(loginAction, initialState);
   const [showPassword, setShowPassword] = useState(false);
   const [currentDate, setCurrentDate] = useState('');
@@ -271,15 +309,31 @@ export default function StaffLoginPage() {
     <>
       <GlobalStyles />
       {/* Background Utama (White) */}
-      <div className="min-h-dvh bg-white flex items-center justify-center p-4 sm:p-6 md:p-8 relative overflow-x-hidden overflow-y-auto font-sans selection:bg-[#84B3CE] selection:text-white" style={{ perspective: '1200px' }}>
+      <div className={`login-page theme-transition min-h-dvh flex items-center justify-center p-4 sm:p-6 md:p-8 relative overflow-hidden overflow-y-auto font-sans selection:bg-[var(--rock-blue)] selection:text-white${isDark ? ' theme-dark' : ' theme-light'}`} style={{ background: 'var(--bg-app)', perspective: '1200px' }}>
         
+        <div className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000" style={{ opacity: 'var(--stars-opacity)' }} aria-hidden="true">
+          {Array.from({ length: 42 }, (_, index) => <span key={`star-${index}`} className="star-anim" style={{ left: `${(index * 37 + 13) % 100}%`, top: `${(index * 61 + 7) % 100}%`, width: `${index % 3 + 1}px`, height: `${index % 3 + 1}px`, animationDelay: `${index % 11 * 230}ms` }} />)}
+          {[0, 1, 2].map((index) => <span key={`shoot-${index}`} className="shooting-star-anim" style={{ left: `${78 - index * 19}%`, top: `${12 + index * 18}%`, animationDelay: `${index * 3.7}s` }} />)}
+        </div>
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden transition-opacity duration-1000" style={{ opacity: 'var(--cloud-opacity)' }} aria-hidden="true">
+          {[12, 32, 54, 75].map((top, index) => <span key={`cloud-${top}`} className="absolute text-white/70" style={{ top: `${top}%`, left: 0, animation: `drift-cloud ${100 + index * 13}s linear ${-index * 21}s infinite`, opacity: .35 + (index % 2) * .15 }}><SoftCloud className="h-auto w-44 sm:w-64 drop-shadow-xl" /></span>)}
+        </div>
+        <div className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000" style={{ opacity: 'var(--day-sparkle-opacity)' }} aria-hidden="true">
+          <IconSparkle className="absolute top-[10%] left-[8%] h-7 w-7 text-white drop-shadow-[0_0_10px_rgba(255,255,255,1)] animate-sparkle-1" />
+          <IconSparkle className="absolute bottom-[20%] right-[10%] h-9 w-9 text-sky-100 drop-shadow-[0_0_15px_rgba(255,255,255,.8)] animate-sparkle-2" />
+          <IconSparkle className="absolute top-[25%] right-[15%] h-5 w-5 text-white drop-shadow-md animate-sparkle-3" />
+          <IconSparkle className="absolute bottom-[35%] left-[12%] h-10 w-10 text-white drop-shadow-[0_0_20px_rgba(255,255,255,1)] animate-sparkle-1" />
+        </div>
+        <div className="ambient-glow absolute -right-[10%] -top-[5%] z-0 h-[60vw] w-[60vw] rounded-full bg-[var(--ambient-1)] blur-[100px] pointer-events-none" />
+        <div className="ambient-glow absolute -bottom-[5%] -left-[10%] z-0 h-[50vw] w-[50vw] rounded-full bg-[var(--ambient-2)] blur-[90px] pointer-events-none" style={{ animationDelay: '-5s' }} />
+
         {/* Dekorasi Bintang/Sparkle (Aksen Rock Blue & Venice Blue) */}
-        <IconSparkle className="absolute top-[15%] left-[20%] w-6 h-6 text-[#84B3CE] opacity-0 animate-sparkle-1 pointer-events-none" />
-        <IconSparkle className="absolute bottom-[20%] right-[15%] w-8 h-8 text-[#16587B] opacity-0 animate-sparkle-2 pointer-events-none" />
-        <IconSparkle className="absolute top-[30%] right-[25%] w-4 h-4 text-[#84B3CE] opacity-0 animate-sparkle-3 pointer-events-none" />
+        <IconSparkle className="absolute top-[15%] left-[20%] w-6 h-6 text-[var(--rock-blue)] opacity-0 animate-sparkle-1 pointer-events-none" />
+        <IconSparkle className="absolute bottom-[20%] right-[15%] w-8 h-8 text-[var(--text-primary)] opacity-0 animate-sparkle-2 pointer-events-none" />
+        <IconSparkle className="absolute top-[30%] right-[25%] w-4 h-4 text-[var(--rock-blue)] opacity-0 animate-sparkle-3 pointer-events-none" />
 
         {/* CONTAINER UTAMA: TIKET BOARDING PASS (Merino) */}
-        <main className="w-full max-w-5xl flex flex-col md:flex-row bg-[#F5EEDD] rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_24px_80px_-15px_rgba(22,88,123,0.12)] relative z-10 animate-entrance-card border border-[#84B3CE]/20 transition-all duration-500">
+        <main className="theme-transition w-full max-w-5xl flex flex-col md:flex-row bg-[var(--bg-card)] backdrop-blur-2xl rounded-[2rem] sm:rounded-[2.5rem] shadow-[var(--shadow-card)] relative z-10 animate-entrance-card border border-[var(--border-main)] transition-all duration-500">
           
           {/* BAGIAN KIRI: Form Login */}
           <section className="flex-1 p-8 sm:p-10 md:p-12 lg:p-16 flex flex-col relative z-20">
@@ -287,25 +341,31 @@ export default function StaffLoginPage() {
             {/* Header / Identitas */}
             <header className="flex items-center justify-between mb-10 md:mb-12 animate-entrance-stagger-1">
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="text-[#16587B]">
+                <div className="text-[var(--text-primary)]">
                   <IconDroplet />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-black text-[#16587B] tracking-tight">
-                  MadiunTrip<span className="text-[#84B3CE]">.</span>
+                <h1 className="text-xl sm:text-2xl font-black text-[var(--text-primary)] tracking-tight">
+                  MadiunTrip<span className="text-[var(--rock-blue)]">.</span>
                 </h1>
               </div>
-              <div className="bg-white/80 backdrop-blur-md border border-[#84B3CE]/30 px-3 sm:px-4 py-1.5 rounded-full shadow-sm flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#16587B] animate-pulse"></span>
-                <span className="text-[10px] sm:text-xs font-bold text-[#16587B] tracking-widest uppercase">Staff Access</span>
+              <div className="flex items-center gap-2 sm:gap-3">
+              <button type="button" onClick={toggleTheme} aria-label={isDark ? 'Aktifkan tema terang' : 'Aktifkan tema gelap'} title={isDark ? 'Tema terang' : 'Tema gelap'} className="theme-transition relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--badge-border)] bg-[var(--badge-bg)] text-[var(--text-secondary)] shadow-sm btn-smooth-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400">
+                <IconSun className={`absolute h-5 w-5 transition-all duration-500 ${isDark ? 'rotate-90 scale-50 opacity-0' : 'rotate-0 scale-100 opacity-100'}`} />
+                <IconMoon className={`absolute h-5 w-5 transition-all duration-500 ${isDark ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-50 opacity-0'}`} />
+              </button>
+              <div className="theme-transition bg-[var(--badge-bg)] backdrop-blur-md border border-[var(--badge-border)] px-3 sm:px-4 py-1.5 rounded-full shadow-sm flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[var(--venice-blue)] animate-pulse"></span>
+                <span className="text-[10px] sm:text-xs font-bold text-[var(--text-primary)] tracking-widest uppercase">Staff Access</span>
+              </div>
               </div>
             </header>
 
             {/* Judul & Deskripsi */}
             <div className="mb-8 sm:mb-10 animate-entrance-stagger-2">
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-[#16587B] mb-3 leading-[1.1] tracking-tight">
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-black text-[var(--text-primary)] mb-3 leading-[1.1] tracking-tight">
                 Destination:<br/>Workspace
               </h2>
-              <p className="text-[#16587B]/70 font-medium max-w-sm text-sm sm:text-base leading-relaxed">
+              <p className="text-[var(--text-primary)]/70 font-medium max-w-sm text-sm sm:text-base leading-relaxed">
                 Akses sistem pengelolaan destinasi wisata. Harap verifikasi boarding pass Anda.
               </p>
             </div>
@@ -313,7 +373,7 @@ export default function StaffLoginPage() {
             {/* Form Autentikasi */}
             <form action={formAction} className="flex flex-col gap-5 max-w-md relative animate-entrance-stagger-3">
               <div className="group relative">
-                <label htmlFor="email" className="block text-[10px] sm:text-xs font-bold text-[#16587B] uppercase tracking-wide mb-1.5 ml-1">Kode Staf / Email</label>
+                <label htmlFor="email" className="block text-[10px] sm:text-xs font-bold text-[var(--text-primary)] uppercase tracking-wide mb-1.5 ml-1">Kode Staf / Email</label>
                 <input
                   type="email"
                   id="email"
@@ -325,12 +385,12 @@ export default function StaffLoginPage() {
                   spellCheck={false}
                   disabled={isPending || isLocked || popup.type === 'success'}
                   placeholder="petugas@contoh.id"
-                  className="w-full bg-white/70 backdrop-blur-sm border-2 border-white focus:border-[#84B3CE] rounded-xl px-4 py-3.5 text-[#16587B] placeholder-[#16587B]/30 font-medium outline-none input-smooth shadow-sm focus:shadow-md disabled:opacity-60 disabled:cursor-not-allowed hover:bg-white"
+                  className="w-full bg-[var(--input-bg)] backdrop-blur-sm border border-[var(--input-border)] focus:border-sky-400 rounded-xl px-4 py-3.5 text-[var(--text-primary)] placeholder-[var(--text-primary)]/35 font-medium outline-none input-smooth shadow-sm focus:shadow-md disabled:opacity-60 disabled:cursor-not-allowed hover:bg-[var(--input-focus-bg)]"
                 />
               </div>
 
               <div className="group relative">
-                <label htmlFor="password" className="block text-[10px] sm:text-xs font-bold text-[#16587B] uppercase tracking-wide mb-1.5 ml-1">Kata Sandi</label>
+                <label htmlFor="password" className="block text-[10px] sm:text-xs font-bold text-[var(--text-primary)] uppercase tracking-wide mb-1.5 ml-1">Kata Sandi</label>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
@@ -342,13 +402,13 @@ export default function StaffLoginPage() {
                     autoCorrect="off"
                     disabled={isPending || isLocked || popup.type === 'success'}
                     placeholder="••••••••"
-                    className="w-full bg-white/70 backdrop-blur-sm border-2 border-white focus:border-[#84B3CE] rounded-xl pl-4 pr-12 py-3.5 text-[#16587B] placeholder-[#16587B]/30 font-medium outline-none input-smooth shadow-sm focus:shadow-md disabled:opacity-60 disabled:cursor-not-allowed hover:bg-white"
+                    className="w-full bg-[var(--input-bg)] backdrop-blur-sm border border-[var(--input-border)] focus:border-sky-400 rounded-xl pl-4 pr-12 py-3.5 text-[var(--text-primary)] placeholder-[var(--text-primary)]/35 font-medium outline-none input-smooth shadow-sm focus:shadow-md disabled:opacity-60 disabled:cursor-not-allowed hover:bg-[var(--input-focus-bg)]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     disabled={isPending || isLocked || popup.type === 'success'}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[#84B3CE] hover:text-[#16587B] rounded-lg transition-colors focus:outline-none disabled:opacity-50"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[var(--rock-blue)] hover:text-[var(--text-primary)] rounded-lg transition-colors focus:outline-none disabled:opacity-50"
                     aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
                   >
                     {showPassword ? <IconEyeSlash /> : <IconEye />}
@@ -359,7 +419,7 @@ export default function StaffLoginPage() {
               <button
                 type="submit"
                 disabled={isPending || isLocked || popup.type === 'success'}
-                className="mt-2 w-full bg-[#16587B] text-white font-bold py-4 px-6 rounded-xl shadow-[0_8px_20px_-6px_rgba(22,88,123,0.5)] hover:shadow-[0_12px_25px_-6px_rgba(22,88,123,0.6)] btn-smooth-hover flex items-center justify-center gap-2 group disabled:opacity-70 disabled:pointer-events-none relative overflow-hidden"
+                className="mt-2 w-full bg-[var(--venice-blue)] text-white font-bold py-4 px-6 rounded-xl shadow-[0_8px_20px_-6px_rgba(22,88,123,0.5)] hover:shadow-[0_12px_25px_-6px_rgba(22,88,123,0.6)] btn-smooth-hover flex items-center justify-center gap-2 group disabled:opacity-70 disabled:pointer-events-none relative overflow-hidden"
               >
                 <span className="relative z-10 flex items-center gap-2">
                   {isPending ? (
@@ -381,7 +441,7 @@ export default function StaffLoginPage() {
               </button>
             </form>
 
-            <footer className="mt-12 sm:mt-auto pt-8 text-[10px] sm:text-xs font-medium text-[#16587B]/40 flex flex-wrap items-center gap-2 animate-entrance-stagger-3">
+            <footer className="mt-12 sm:mt-auto pt-8 text-[10px] sm:text-xs font-medium text-[var(--text-primary)]/40 flex flex-wrap items-center gap-2 animate-entrance-stagger-3">
                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" /></svg>
                Enkripsi Terverifikasi • Akses Khusus Petugas
             </footer>
@@ -390,73 +450,71 @@ export default function StaffLoginPage() {
           {/* PEMISAH TIKET (Perforasi) */}
           <div className="relative flex flex-row md:flex-col items-center justify-center pointer-events-none z-30">
              {/* Desktop Vertical */}
-             <div className="hidden md:block w-[2px] h-full border-l-[3px] border-dashed border-[#84B3CE]/20"></div>
+             <div className="hidden md:block w-[2px] h-full border-l-[3px] border-dashed border-[var(--border-main)]"></div>
              {/* Desktop Cutouts */}
-             <div className="hidden md:block absolute -top-4 w-8 h-8 rounded-full bg-white border-b border-[#84B3CE]/10 shadow-inner"></div>
-             <div className="hidden md:block absolute -bottom-4 w-8 h-8 rounded-full bg-white border-t border-[#84B3CE]/10 shadow-inner"></div>
+             <div className="hidden md:block absolute -top-4 w-8 h-8 rounded-full bg-[var(--bg-card)] border-b border-[var(--border-main)] shadow-inner"></div>
+             <div className="hidden md:block absolute -bottom-4 w-8 h-8 rounded-full bg-[var(--bg-card)] border-t border-[var(--border-main)] shadow-inner"></div>
 
              {/* Mobile Horizontal */}
-             <div className="block md:hidden w-full h-[2px] border-t-[3px] border-dashed border-[#84B3CE]/20 my-2"></div>
+             <div className="block md:hidden w-full h-[2px] border-t-[3px] border-dashed border-[var(--border-main)] my-2"></div>
              {/* Mobile Cutouts */}
-             <div className="block md:hidden absolute -left-4 w-8 h-8 rounded-full bg-white border-r border-[#84B3CE]/10 shadow-inner"></div>
-             <div className="block md:hidden absolute -right-4 w-8 h-8 rounded-full bg-white border-l border-[#84B3CE]/10 shadow-inner"></div>
+             <div className="block md:hidden absolute -left-4 w-8 h-8 rounded-full bg-[var(--bg-card)] border-r border-[var(--border-main)] shadow-inner"></div>
+             <div className="block md:hidden absolute -right-4 w-8 h-8 rounded-full bg-[var(--bg-card)] border-l border-[var(--border-main)] shadow-inner"></div>
           </div>
 
           {/* BAGIAN KANAN: Tiket Stub (Detail Boarding Pass) */}
-          <aside className="w-full md:w-[320px] lg:w-[360px] bg-[#F5EEDD] rounded-b-[2rem] sm:rounded-b-[2.5rem] md:rounded-bl-none md:rounded-r-[2.5rem] p-8 sm:p-10 flex flex-col justify-between relative z-20 animate-entrance-stagger-3">
+          <aside className="w-full md:w-[320px] lg:w-[360px] bg-[var(--bg-stub)] rounded-b-[2rem] sm:rounded-b-[2.5rem] md:rounded-bl-none md:rounded-r-[2.5rem] p-8 sm:p-10 flex flex-col justify-between relative z-20 animate-entrance-stagger-3">
 
             <div className="space-y-6 mt-2 md:mt-4">
               <div>
-                <h3 className="text-[10px] font-bold text-[#16587B]/50 uppercase tracking-[0.2em] mb-1">Boarding Pass</h3>
-                <p className="text-xl sm:text-2xl font-black text-[#16587B] tracking-tight">MDN-TRP-001</p>
+                <h3 className="text-[10px] font-bold text-[var(--text-primary)]/50 uppercase tracking-[0.2em] mb-1">Boarding Pass</h3>
+                <p className="text-xl sm:text-2xl font-black text-[var(--text-primary)] tracking-tight">MDN-TRP-001</p>
               </div>
 
               <div className="grid grid-cols-2 gap-y-6 gap-x-4">
                 <div>
-                  <h4 className="text-[10px] font-bold text-[#16587B]/50 uppercase tracking-widest mb-1">Date</h4>
-                  <p className="text-sm sm:text-base font-bold text-[#16587B]">
+                  <h4 className="text-[10px] font-bold text-[var(--text-primary)]/50 uppercase tracking-widest mb-1">Date</h4>
+                  <p className="text-sm sm:text-base font-bold text-[var(--text-primary)]">
                     {currentDate || 'Memuat...'}
                   </p>
                 </div>
                 <div>
-                  <h4 className="text-[10px] font-bold text-[#16587B]/50 uppercase tracking-widest mb-1">Time</h4>
-                  <p className="text-sm sm:text-base font-bold text-[#16587B]">
+                  <h4 className="text-[10px] font-bold text-[var(--text-primary)]/50 uppercase tracking-widest mb-1">Time</h4>
+                  <p className="text-sm sm:text-base font-bold text-[var(--text-primary)]">
                     {currentTime || 'Memuat...'}
                   </p>
                 </div>
                 <div>
-                  <h4 className="text-[10px] font-bold text-[#16587B]/50 uppercase tracking-widest mb-1">Terminal</h4>
-                  <p className="text-sm sm:text-base font-bold text-[#16587B]">ADMIN</p>
+                  <h4 className="text-[10px] font-bold text-[var(--text-primary)]/50 uppercase tracking-widest mb-1">Terminal</h4>
+                  <p className="text-sm sm:text-base font-bold text-[var(--text-primary)]">ADMIN</p>
                 </div>
                 <div>
-                  <h4 className="text-[10px] font-bold text-[#16587B]/50 uppercase tracking-widest mb-1">Class</h4>
-                  <p className="text-sm sm:text-base font-bold text-[#16587B]">PREMIUM</p>
+                  <h4 className="text-[10px] font-bold text-[var(--text-primary)]/50 uppercase tracking-widest mb-1">Class</h4>
+                  <p className="text-sm sm:text-base font-bold text-[var(--text-primary)]">PREMIUM</p>
                 </div>
               </div>
             </div>
 
             {/* Area Barcode */}
-            <div className="mt-10 md:mt-16 pt-8 border-t border-[#84B3CE]/20">
-              <div className="w-full h-16 sm:h-20 css-barcode relative overflow-hidden opacity-80 mix-blend-multiply rounded-sm">
+            <div className="mt-10 md:mt-16 pt-8 border-t border-[var(--border-main)]">
+              <div className="w-full h-16 sm:h-20 css-barcode relative overflow-hidden rounded-sm">
                  {/* Animasi Scanner pada idle */}
                  <div className="scanline-bar"></div>
               </div>
-              <p className="text-center mt-4 text-[9px] sm:text-[10px] font-bold text-[#16587B]/50 tracking-[0.3em] uppercase">
+              <p className="text-center mt-4 text-[9px] sm:text-[10px] font-bold text-[var(--text-primary)]/50 tracking-[0.3em] uppercase">
                 Scan to Authenticate
               </p>
             </div>
           </aside>
         </main>
-      </div>
 
-      {}
       {/* 1. Pop-up Modal (Success & Error) */}
       {popup.isVisible && !isLocked && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-white/20 backdrop-blur-sm transition-opacity duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 backdrop-blur-sm transition-opacity duration-300">
           <div 
             className={`
-              w-full max-w-sm bg-white rounded-[2rem] p-8 shadow-[0_20px_60px_-15px_rgba(22,88,123,0.3)]
-              border border-[#84B3CE]/20 relative
+              w-full max-w-sm bg-[var(--bg-card)] rounded-[2rem] p-8 shadow-[0_20px_60px_-15px_rgba(22,88,123,0.3)]
+              border border-[var(--border-main)] relative
               ${popup.isVisible ? 'modal-enter' : 'modal-exit'}
               ${popup.shouldShake ? 'modal-shake' : ''}
             `}
@@ -465,21 +523,21 @@ export default function StaffLoginPage() {
               {/* Ikon Dinamis */}
               <div className={`
                 w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-inner
-                ${popup.type === 'success' ? 'bg-[#84B3CE] text-white' : 'bg-[#16587B] text-white'}
+                ${popup.type === 'success' ? 'bg-[var(--rock-blue)] text-white' : 'bg-[var(--venice-blue)] text-white'}
               `}>
                 {popup.type === 'success' ? <IconCheckCircle /> : <IconShieldAlert />}
               </div>
               
-              <h3 className="text-2xl font-black text-[#16587B] mb-2">{popup.title}</h3>
-              <p className="text-[#16587B]/70 font-medium text-sm mb-8 leading-relaxed">
+              <h3 className="text-2xl font-black text-[var(--text-primary)] mb-2">{popup.title}</h3>
+              <p className="text-[var(--text-primary)]/70 font-medium text-sm mb-8 leading-relaxed">
                 {popup.message}
               </p>
               
               {/* Informasi Sisa Percobaan (Khusus Error) */}
               {popup.type === 'error' && (
-                <div className="mb-8 w-full bg-[#F5EEDD] rounded-xl py-3 px-4 border border-[#84B3CE]/30 flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#16587B] uppercase tracking-wider">Sisa Percobaan</span>
-                  <span className="text-lg font-black text-[#16587B]">{Math.max(0, MAX_ATTEMPTS - attempts)}</span>
+                <div className="mb-8 w-full bg-[var(--bg-stub)] rounded-xl py-3 px-4 border border-[var(--border-dashed)] flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">Sisa Percobaan</span>
+                  <span className="text-lg font-black text-[var(--text-primary)]">{Math.max(0, MAX_ATTEMPTS - attempts)}</span>
                 </div>
               )}
 
@@ -487,12 +545,12 @@ export default function StaffLoginPage() {
               {popup.type === 'error' ? (
                 <button 
                   onClick={closePopup}
-                  className="w-full bg-[#16587B] text-white font-bold py-3.5 px-6 rounded-xl btn-smooth-hover shadow-md"
+                  className="w-full bg-[var(--venice-blue)] text-white font-bold py-3.5 px-6 rounded-xl btn-smooth-hover shadow-md"
                 >
                   Coba Lagi
                 </button>
               ) : (
-                <div className="w-full bg-[#F5EEDD] text-[#16587B] font-bold py-3.5 px-6 rounded-xl border border-[#84B3CE]/20 flex justify-center">
+                <div className="w-full bg-[var(--bg-stub)] text-[var(--text-primary)] font-bold py-3.5 px-6 rounded-xl border border-[var(--border-main)] flex justify-center">
                   <span className="animate-pulse">Memuat...</span>
                 </div>
               )}
@@ -503,18 +561,18 @@ export default function StaffLoginPage() {
 
       {/* 2. Lock Screen Overlay (Setelah 3x gagal) */}
       {isLocked && (
-        <div className="fixed inset-0 z-[100] bg-[#16587B]/95 flex items-center justify-center p-6 lock-overlay-enter">
+        <div className="fixed inset-0 z-[100] bg-[var(--venice-blue)]/95 flex items-center justify-center p-6 lock-overlay-enter">
           
           {/* Background Ambient Animasi di Lock Screen */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
-            <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#84B3CE] rounded-full mix-blend-screen filter blur-[100px] animate-pulse"></div>
-            <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-white rounded-full mix-blend-screen filter blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
+            <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[var(--rock-blue)] rounded-full mix-blend-screen filter blur-[100px] animate-pulse"></div>
+            <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-[var(--bg-card)] rounded-full mix-blend-screen filter blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
           </div>
 
           <div className="relative z-10 max-w-md w-full flex flex-col items-center text-center lock-content-enter">
             
-            <div className="w-32 h-32 rounded-full border-4 border-dashed border-[#84B3CE]/50 flex items-center justify-center mb-8 relative">
-              <div className="absolute inset-0 rounded-full border-4 border-[#84B3CE] border-t-transparent animate-spin" style={{ animationDuration: '3s' }}></div>
+            <div className="w-32 h-32 rounded-full border-4 border-dashed border-[var(--border-dashed)] flex items-center justify-center mb-8 relative">
+                <div className="absolute inset-0 rounded-full border-4 border-[var(--rock-blue)] border-t-transparent animate-spin" style={{ animationDuration: '3s' }}></div>
               <div className="text-white">
                 <IconLock />
               </div>
@@ -526,18 +584,19 @@ export default function StaffLoginPage() {
             
             <h1 className="text-4xl sm:text-5xl font-black text-white mb-4 tracking-tight">Terminal Locked</h1>
             
-            <p className="text-[#84B3CE] font-medium text-base sm:text-lg mb-8 leading-relaxed">
+            <p className="text-[var(--rock-blue)] font-medium text-base sm:text-lg mb-8 leading-relaxed">
               Batas {MAX_ATTEMPTS} percobaan login tercapai. Form login dikunci sementara untuk melindungi akun. Coba kembali setelah penghitung waktu berakhir.
             </p>
 
-            <div className="w-full bg-[#16587B] border border-[#84B3CE]/30 p-6 rounded-2xl">
+            <div className="w-full bg-[var(--venice-blue)] border border-[var(--border-dashed)] p-6 rounded-2xl">
               <p className="text-white/60 text-xs font-medium uppercase tracking-widest mb-1">Silakan Hubungi</p>
               <p className="text-white font-bold text-lg">System Administrator</p>
-              <p className="mt-2 text-sm font-semibold text-[#84B3CE]">{lockRemaining ? `Coba lagi dalam ${lockRemaining}` : 'Penguncian sementara'}</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--rock-blue)]">{lockRemaining ? `Coba lagi dalam ${lockRemaining}` : 'Penguncian sementara'}</p>
             </div>
           </div>
         </div>
       )}
+      </div>
     </>
   );
 }
