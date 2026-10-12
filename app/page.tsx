@@ -171,6 +171,10 @@ const IconX = () => (
 	</svg>
 );
 
+const IconSun = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2m-3.66 5.66 1.41 1.41M6.34 6.34 4.93 4.93"/></svg>;
+const IconMoon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z"/></svg>;
+const IconMenu = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>;
+const IconMail = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>;
 const IconEnvelope = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
 		<rect x="3" y="5" width="18" height="14" rx="3" />
@@ -183,9 +187,14 @@ const STAR_POSITIONS = [
 	[68, 24, 3], [76, 74, 2], [86, 41, 2], [94, 16, 3], [12, 91, 2], [91, 88, 2],
 ] as const;
 
-function StarParticles() {
+const LIGHT_SPARKLES = [[9, 20], [27, 46], [84, 18], [72, 68], [15, 84], [93, 76], [48, 12], [55, 91]] as const;
+
+function StarParticles({ isDark }: { isDark: boolean }) {
 	return <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-		{STAR_POSITIONS.map(([left, top, size], index) => <span key={index} className="home-star" style={{ left: `${left}%`, top: `${top}%`, width: size, height: size, animationDelay: `${(index % 6) * 370}ms` }} />)}
+		{(isDark ? STAR_POSITIONS : []).map(([left, top, size], index) => <span key={`star-${index}`} className="home-star" style={{ left: `${left}%`, top: `${top}%`, width: size, height: size, animationDelay: `${(index % 6) * 370}ms` }} />)}
+		{(isDark ? [[71, 18], [94, 39]] as const : LIGHT_SPARKLES).map(([left, top], index) => isDark
+			? <span key={`shooting-${index}`} className="shooting-star" style={{ left: `${left}%`, top: `${top}%`, animationDelay: `${index * 3.8}s` }} />
+			: <span key={`sparkle-${index}`} className="ambient-sparkle" style={{ left: `${left}%`, top: `${top}%`, animationDelay: `${index * 430}ms` }}><IconSparkle /></span>)}
 		<span className="absolute -left-28 top-[18%] h-72 w-72 rounded-full bg-[var(--home-accent)]/10 blur-3xl" />
 		<span className="absolute -right-32 top-[62%] h-80 w-80 rounded-full bg-[var(--home-primary)]/10 blur-3xl" />
 	</div>;
@@ -216,6 +225,23 @@ const GlobalStyles = () => (
       transition: background-color 350ms ease, color 350ms ease;
       -webkit-font-smoothing: antialiased;
     }
+    .home-page.dark {
+      --home-canvas: #070c18;
+      --home-ink: #eaf2ff;
+      --home-primary: #15233d;
+      --home-accent: #b99aff;
+      --home-soft: #111b31;
+      --home-glass: rgba(15, 24, 43, 0.78);
+      --home-glass-border: rgba(185, 154, 255, 0.24);
+      --home-on-primary: #ffffff;
+      --home-on-accent: #211638;
+      --home-bloom: rgba(156, 123, 255, 0.32);
+      color-scheme: dark;
+      color: var(--home-ink);
+      background: linear-gradient(135deg, #050914 0%, #0a1427 55%, #11152a 100%) !important;
+      background-color: #070c18 !important;
+    }
+    .home-page:not(.dark) { background-image: linear-gradient(135deg, #e0f2fe 0%, #f5fbff 50%, #c9edff 100%); }
     .home-page .glass-panel {
       background: var(--home-glass);
       border: 1px solid var(--home-glass-border);
@@ -237,6 +263,8 @@ const GlobalStyles = () => (
     }
     .home-page .matrix-cell { animation: matrixPulse 1.8s ease-in-out infinite; }
     .home-page .matrix-cell.is-fixed { animation: none; opacity: 1; }
+    .home-page .matrix-qr-stage::after { content: ""; position: absolute; left: 8%; right: 8%; top: 10%; height: 2px; background: var(--home-accent); box-shadow: 0 0 14px var(--home-accent); opacity: .8; animation: qrScan 3.4s ease-in-out infinite; pointer-events: none; }
+    .home-page .mood-float { animation: moodFloat 4.6s ease-in-out infinite; }
     .home-page .animate-envelope-float { animation: envelopeFloat 4.5s ease-in-out infinite; }
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(30px); }
@@ -268,7 +296,13 @@ const GlobalStyles = () => (
     }
     @keyframes homeTwinkle { 0%, 100% { opacity: 0.18; transform: scale(0.75); } 50% { opacity: 0.8; transform: scale(1); } }
     @keyframes matrixPulse { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.9; filter: drop-shadow(0 0 5px var(--home-accent)); } }
+    @keyframes qrScan { 0%,100% { top: 12%; opacity: .35; } 50% { top: 88%; opacity: .9; } }
     @keyframes envelopeFloat { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-7px) rotate(4deg); } }
+    @keyframes moodFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @keyframes shootingStar { 0% { transform: translate(0,0) rotate(315deg) scaleX(0); opacity: 0; } 10% { opacity: 1; scale: 1; } 100% { transform: translate(-55vw,55vh) rotate(315deg) scaleX(1); opacity: 0; } }
+    @keyframes sparkleFloat { 0%,100% { transform: translateY(0) scale(.55) rotate(0); opacity: .2; } 50% { transform: translateY(-18px) scale(1) rotate(35deg); opacity: .8; } }
+    .home-page .shooting-star { position:absolute; width:150px; height:2px; border-radius:99px; background:linear-gradient(90deg,transparent,var(--home-accent)); box-shadow:0 0 12px var(--home-bloom); animation:shootingStar 8s linear infinite; }
+    .home-page .ambient-sparkle { position:absolute; color:var(--home-accent); filter:drop-shadow(0 0 8px var(--home-bloom)); animation:sparkleFloat 5s ease-in-out infinite; }
 
     @keyframes mobileNavEnter {
       from { opacity: 0; transform: translateY(7px); filter: blur(4px); }
@@ -324,8 +358,9 @@ const HOME_SECTIONS = [
 	{ id: "tentang", label: "Tentang" },
 ] as const;
 
-function Navbar() {
+function Navbar({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
 	const [activeSection, setActiveSection] = useState<string>(HOME_SECTIONS[0].id);
+	const [menuOpen, setMenuOpen] = useState(false);
 
 	useEffect(() => {
 		let frame = 0;
@@ -361,17 +396,17 @@ function Navbar() {
 	return (
 		<nav className="glass-panel fixed top-0 z-50 w-full !border-x-0 !border-t-0 !rounded-none bg-[var(--home-glass)]/90 transition-all duration-300">
 			<div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
-				<div className="flex items-center gap-2 cursor-pointer group">
+				<a href="#beranda" className="flex items-center gap-2 cursor-pointer group">
 					<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--home-primary)] text-xl font-bold text-[var(--home-on-primary)] transition-transform group-hover:scale-105">M</div>
 					<span className="text-xl font-extrabold tracking-tight text-[var(--home-ink)]">MadiunTrip<span className="text-[var(--home-accent)]">.</span></span>
-				</div>
+				</a>
 				<div className="hidden items-center gap-8 font-medium text-[var(--home-ink)] md:flex">
 					<a href="#destinasi" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Destinasi</a>
 					<a href="#kuliner" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Kuliner</a>
 					<a href="#promo" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Promo</a>
 					<Link href="/scan" className="transition-colors hover:text-[var(--home-accent)]">Scan QR</Link>
 				</div>
-				<div className="flex items-center gap-2 md:hidden" aria-label={`Bagian halaman: ${current.label}`} aria-live="polite">
+				<div className="hidden items-center gap-2 sm:flex md:hidden" aria-label={`Bagian halaman: ${current.label}`} aria-live="polite">
 					<span className="relative flex h-2.5 w-2.5 shrink-0">
 						<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--home-accent)]/70" />
 						<span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--home-primary)]" />
@@ -381,8 +416,13 @@ function Navbar() {
 					<span key={current.id} className="mobile-nav-enter max-w-[30vw] truncate text-xs font-bold text-[var(--home-ink)]">{current.label}</span>
 					<span className="ml-1 h-1 w-10 overflow-hidden rounded-full bg-[var(--home-accent)]/25"><span className="block h-full rounded-full bg-[var(--home-primary)] transition-[width] duration-500 ease-out" style={{ width: `${((activeIndex + 1) / HOME_SECTIONS.length) * 100}%` }} /></span>
 				</div>
-				<Link href="/login" className="hidden rounded-full bg-[var(--home-primary)] px-6 py-2.5 font-medium text-white shadow-sm transition-all hover:scale-105 hover:bg-[var(--home-accent)] hover:text-[var(--home-ink)] md:inline-flex">Masuk</Link>
+				<div className="flex items-center gap-2">
+					<button type="button" onClick={onToggleTheme} className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-ink)] transition hover:-translate-y-0.5" aria-label={isDark ? "Aktifkan tema terang" : "Aktifkan tema gelap"} title={isDark ? "Tema terang" : "Tema gelap"}>{isDark ? <IconSun /> : <IconMoon />}</button>
+					<Link href="/login" className="hidden rounded-full bg-[var(--home-primary)] px-5 py-2.5 font-medium text-white shadow-sm transition-all hover:scale-105 md:inline-flex">Masuk</Link>
+					<button type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--home-glass-border)] text-[var(--home-ink)] md:hidden" aria-expanded={menuOpen} aria-label={menuOpen ? "Tutup menu" : "Buka menu"} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <IconX /> : <IconMenu />}</button>
+				</div>
 			</div>
+			{menuOpen && <div className="border-t border-[var(--home-glass-border)] px-5 py-4 shadow-lg md:hidden"><div className="mx-auto flex max-w-7xl flex-col gap-1">{HOME_SECTIONS.map((section) => <a key={section.id} href={`#${section.id}`} onClick={() => setMenuOpen(false)} className="rounded-xl px-4 py-3 font-semibold text-[var(--home-ink)] transition hover:bg-[var(--home-soft)]">{section.label}</a>)}<Link href="/scan" onClick={() => setMenuOpen(false)} className="rounded-xl px-4 py-3 font-semibold text-[var(--home-ink)] transition hover:bg-[var(--home-soft)]">Scan QR</Link><Link href="/login" onClick={() => setMenuOpen(false)} className="mt-2 rounded-xl bg-[var(--home-primary)] px-4 py-3 text-center font-bold text-white">Masuk petugas</Link></div></div>}
 		</nav>
 	);
 }
@@ -566,7 +606,8 @@ const MoodCategories = ({
 					type="button"
 					aria-pressed={selectedMood === mood.id}
 					onClick={() => onSelect(selectedMood === mood.id ? null : mood.id)}
-					className={`glass-panel flex items-center gap-3 px-6 py-4 rounded-2xl shadow-sm hover:shadow-md hover:border-[var(--home-accent)] hover:-translate-y-1 transition-all group ${selectedMood === mood.id ? "!bg-[var(--home-accent)]/20 !border-[var(--home-accent)]" : ""}`}>
+					style={{ animationDelay: `${mood.id * 180}ms` }}
+					className={`glass-panel mood-float flex items-center gap-3 px-6 py-4 rounded-2xl shadow-sm hover:shadow-md hover:border-[var(--home-accent)] hover:-translate-y-1 transition-all group ${selectedMood === mood.id ? "!bg-[var(--home-accent)]/20 !border-[var(--home-accent)]" : ""}`}>
 					<span className="text-2xl group-hover:scale-110 transition-transform">
 						{mood.icon}
 					</span>
@@ -706,20 +747,20 @@ const PromotionalSection = () => (
 			<div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
 				<div className="text-white max-w-lg text-center md:text-left">
 					<span className="inline-block bg-[var(--home-glass)]/20 backdrop-blur-sm text-white text-sm font-bold px-4 py-2 rounded-full mb-6">
-						PANDUAN WISATA
+						PREMIUM ACCESS · MADIUNTRIP
 					</span>
 					<h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">
-						Jelajah Lebih, <br />
-						Kenali Madiun.
+						Boarding Pass <br />
+						Digital-mu.
 					</h2>
 					<p className="text-white/80 text-lg mb-8">
-						Pindai QR di lokasi wisata untuk membuka halaman destinasi, cerita
-						lokal, dan sesi pengunjung.
+						Scan QR di lokasi untuk membuka cerita destinasi, memulai sesi pengunjung,
+						dan menemukan kejutan visual sepanjang perjalanan.
 					</p>
 					<Link
 						href="/scan"
 						className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-8 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-105">
-						Buka QR Scanner <IconArrowRight />
+						Aktifkan perjalanan <IconArrowRight />
 					</Link>
 				</div>
 
@@ -728,7 +769,8 @@ const PromotionalSection = () => (
 					<div className="absolute inset-0 bg-[var(--home-accent)] rounded-[2rem] rotate-6 group-hover:rotate-12 transition-transform duration-500"></div>
 					<div className="absolute -right-4 -top-5 z-20 flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-accent)] shadow-[0_0_24px_var(--home-bloom)] animate-envelope-float"><IconEnvelope /></div>
 					<div className="relative bg-[var(--home-glass)] rounded-[2rem] p-6 shadow-xl border-4 border-[var(--home-glass-border)] transform group-hover:-translate-y-2 group-hover:-rotate-3 transition-transform duration-500">
-						<div className="h-40 bg-[var(--home-soft)] rounded-xl mb-4 overflow-hidden relative flex items-center justify-center">
+						<div className="mb-4 flex items-center justify-between border-b border-[var(--home-glass-border)] pb-3 text-[var(--home-ink)]"><span className="font-black tracking-[.18em]">MDN-TRP</span><IconCamera /></div>
+						<div className="matrix-qr-stage h-40 bg-[var(--home-soft)] rounded-xl mb-4 overflow-hidden relative flex items-center justify-center">
 							<div
 								className="grid h-28 w-28 grid-cols-5 gap-1 rounded-xl bg-[var(--home-glass)] p-2"
 								aria-hidden="true">
@@ -741,10 +783,7 @@ const PromotionalSection = () => (
 								))}
 							</div>
 						</div>
-						<div className="font-bold text-[var(--home-ink)] text-xl mb-1">
-							Cerita lokal Madiun
-						</div>
-						<div className="text-[var(--home-accent)] font-bold">Scan QR di destinasi</div>
+						<div className="flex items-end justify-between gap-3"><div><div className="text-xs font-bold uppercase tracking-wider text-[var(--home-ink)]/55">Destinasi</div><div className="font-bold text-[var(--home-ink)] text-lg">Madiun Explorer</div></div><div className="rounded bg-[var(--home-accent)]/15 px-2 py-1 font-mono text-xs font-bold text-[var(--home-ink)]">READY TO SCAN</div></div>
 					</div>
 				</div>
 			</div>
@@ -827,9 +866,23 @@ const AssistantTirta = ({
 	);
 };
 
-const Footer = () => (
+const Footer = () => {
+	const [email, setEmail] = useState("");
+	const [newsletterMessage, setNewsletterMessage] = useState("");
+	function subscribe(event: React.FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		const normalizedEmail = email.trim().toLowerCase();
+		if (!normalizedEmail) return;
+		const existing = JSON.parse(window.localStorage.getItem("madiuntrip-newsletter") ?? "[]") as string[];
+		if (!existing.includes(normalizedEmail)) window.localStorage.setItem("madiuntrip-newsletter", JSON.stringify([...existing, normalizedEmail]));
+		setNewsletterMessage("Tersimpan di perangkat ini. Sinkronisasi email belum tersedia.");
+		setEmail("");
+	}
+	return (
 	<footer id="tentang" className="bg-[var(--home-glass)] pt-20 pb-10 px-6 border-t border-[var(--home-glass-border)]">
-		<div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+		<div className="max-w-7xl mx-auto">
+			<div className="mb-12 flex flex-col items-start justify-between gap-6 border-b border-[var(--home-glass-border)] pb-10 md:flex-row md:items-center"><div><h3 className="mb-2 text-2xl font-bold text-[var(--home-ink)]">Jangan Ketinggalan Jejak.</h3><p className="text-[var(--home-ink)]/65">Simpan email untuk mengikuti prototype update wisata di perangkat ini.</p></div><form onSubmit={subscribe} className="flex w-full gap-2 md:w-auto"><label className="sr-only" htmlFor="newsletter-email">Alamat email</label><input id="newsletter-email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email kamu..." className="min-w-0 flex-1 rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] px-5 py-3 text-[var(--home-ink)] outline-none focus:border-[var(--home-accent)] md:w-72"/><button type="submit" className="inline-flex items-center gap-2 rounded-full bg-[var(--home-primary)] px-5 py-3 font-bold text-white transition hover:-translate-y-0.5"><IconMail/> Simpan</button></form><p aria-live="polite" className="sr-only">{newsletterMessage}</p></div>
+		<div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
 			<div className="md:col-span-2">
 				<div className="flex items-center gap-2 mb-6">
 					<div className="w-10 h-10 rounded-full bg-[var(--home-primary)] flex items-center justify-center text-white font-bold text-xl">
@@ -889,7 +942,7 @@ const Footer = () => (
 			</div>
 		</div>
 		<div className="max-w-7xl mx-auto pt-8 border-t border-[var(--home-glass-border)] text-center md:text-left text-[var(--home-ink)]/50 text-sm flex flex-col md:flex-row justify-between items-center gap-4">
-			<p>&copy; MadiunTrip. Hak Cipta Dilindungi.</p>
+			<div><p>&copy; MadiunTrip. Hak Cipta Dilindungi.</p>{newsletterMessage && <p className="mt-2 text-xs text-[var(--home-ink)]/60" role="status">{newsletterMessage}</p>}</div>
 			<Link
 				href="/scan"
 				className="font-semibold text-[var(--home-ink)] hover:text-[var(--home-accent)]">
@@ -897,14 +950,28 @@ const Footer = () => (
 			</Link>
 		</div>
 	</footer>
-);
+	);
+};
 
 export default function MadiunTripApp() {
+	const [isDark, setIsDark] = useState(false);
 	const [destinations, setDestinations] = useState<DestinationCard[]>([]);
 	const [loadingDestinations, setLoadingDestinations] = useState(true);
 	const [destinationError, setDestinationError] = useState("");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedMood, setSelectedMood] = useState<number | null>(null);
+
+	useEffect(() => {
+		setIsDark(window.localStorage.getItem("madiuntrip-home-theme") === "dark");
+	}, []);
+
+	function toggleTheme() {
+		setIsDark((current) => {
+			const next = !current;
+			window.localStorage.setItem("madiuntrip-home-theme", next ? "dark" : "light");
+			return next;
+		});
+	}
 
 	useEffect(() => {
 		let cancelled = false;
@@ -973,9 +1040,9 @@ export default function MadiunTripApp() {
 	return (
 		<>
 			<GlobalStyles />
-			<div className="home-page min-h-screen relative selection:bg-[var(--home-accent)] selection:text-white">
-				<StarParticles />
-				<Navbar />
+			<div className={`home-page min-h-screen relative selection:bg-[var(--home-accent)] selection:text-white${isDark ? " dark" : ""}`}>
+				<StarParticles isDark={isDark} />
+				<Navbar isDark={isDark} onToggleTheme={toggleTheme} />
 
 				<main className="relative z-10">
 					<HeroSection />
