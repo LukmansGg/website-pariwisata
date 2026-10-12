@@ -22,6 +22,8 @@ type DestinationRow = {
 	image_url?: string | null;
 	image?: string | null;
 	cover_image?: string | null;
+	latitude?: number | string | null;
+	longitude?: number | string | null;
 	rating?: number | null;
 	reviews?: number | null;
 	tags?: string[] | null;
@@ -56,6 +58,16 @@ function toDestinationCard(row: DestinationRow): DestinationCard {
 		tags: Array.isArray(row.tags) ? row.tags : [],
 		featured: row.is_featured === true,
 	};
+}
+
+function destinationHasRequiredMediaAndLocation(row: DestinationRow) {
+	const image = row.image_url ?? row.cover_image ?? row.image;
+	if (row.latitude === null || row.latitude === undefined || row.latitude === "" || row.longitude === null || row.longitude === undefined || row.longitude === "") return false;
+	const latitude = Number(row.latitude);
+	const longitude = Number(row.longitude);
+	return typeof image === "string" && image.trim().length > 0 &&
+		Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
+		Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
 }
 
 const MOOD_TERMS: Record<number, string[]> = {
@@ -127,6 +139,12 @@ const IconArrowRight = () => (
 		<path d="m12 5 7 7-7 7" />
 	</svg>
 );
+const IconSparkle = () => (
+	<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+		<path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-2-5.8L4 11l6-2.2L12 3Z" />
+		<path d="m19 14 1 2.5 2.5 1-2.5 1L19 21l-1-2.5-2.5-1 2.5-1L19 14Z" />
+	</svg>
+);
 const IconStar = ({ filled }: { filled?: boolean }) => (
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
@@ -174,7 +192,6 @@ const IconX = () => (
 const IconSun = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2m-3.66 5.66 1.41 1.41M6.34 6.34 4.93 4.93"/></svg>;
 const IconMoon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z"/></svg>;
 const IconMenu = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>;
-const IconMail = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>;
 const IconEnvelope = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
 		<rect x="3" y="5" width="18" height="14" rx="3" />
@@ -623,11 +640,15 @@ const Highlights = ({
 	loading,
 	error,
 	onClearFilters,
+	hasActiveFilters,
+	incompleteCount,
 }: {
 	destinations: DestinationCard[];
 	loading: boolean;
 	error: string;
 	onClearFilters: () => void;
+	hasActiveFilters: boolean;
+	incompleteCount: number;
 }) => (
 	<section id="destinasi" className="py-20 px-6 max-w-7xl mx-auto">
 		<div className="flex justify-between items-end mb-12 animate-fade-up">
@@ -658,11 +679,9 @@ const Highlights = ({
 				{error}
 			</p>
 		) : null}
-		{!loading && !error && destinations.length === 0 ? (
+		{!loading && !error && destinations.length === 0 && hasActiveFilters ? (
 			<div className="rounded-2xl bg-[var(--home-glass)] p-8 text-center">
-				<p className="font-bold text-[var(--home-ink)]">
-					Belum ada destinasi terbit atau hasil yang cocok.
-				</p>
+				<p className="font-bold text-[var(--home-ink)]">Belum ada destinasi yang cocok dengan pencarian atau mood ini.</p>
 				<button
 					type="button"
 					onClick={onClearFilters}
@@ -671,6 +690,14 @@ const Highlights = ({
 				</button>
 			</div>
 		) : null}
+		{!loading && !error && destinations.length === 0 && !hasActiveFilters ? (
+			<div className="rounded-2xl border border-[var(--home-accent)]/35 bg-[var(--home-glass)] p-8 text-center">
+				<p className="font-bold text-[var(--home-ink)]">Belum ada destinasi terbit dengan foto dan koordinat lengkap.</p>
+				<p className="mx-auto mt-2 max-w-xl text-sm text-[var(--home-ink)]/70">Destinasi tanpa foto atau titik lokasi memang tidak ditampilkan. Petugas bisa melengkapi datanya dari ruang kelola.</p>
+				<Link href="/login" className="mt-4 inline-flex rounded-full bg-[var(--home-primary)] px-5 py-3 font-bold text-white">Buka ruang petugas</Link>
+			</div>
+		) : null}
+		{!loading && !error && incompleteCount > 0 ? <p role="status" className="mb-5 rounded-xl border border-amber-400/40 bg-amber-300/15 px-4 py-3 text-sm text-[var(--home-ink)]">{incompleteCount} destinasi disembunyikan karena foto atau koordinat belum lengkap. <Link href="/login" className="font-bold underline underline-offset-2">Petugas, lengkapi di ruang kelola.</Link></p> : null}
 		{!loading && !error && destinations.length > 0 ? (
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 				{destinations.map((dest, i) => (
@@ -867,21 +894,10 @@ const AssistantTirta = ({
 };
 
 const Footer = () => {
-	const [email, setEmail] = useState("");
-	const [newsletterMessage, setNewsletterMessage] = useState("");
-	function subscribe(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		const normalizedEmail = email.trim().toLowerCase();
-		if (!normalizedEmail) return;
-		const existing = JSON.parse(window.localStorage.getItem("madiuntrip-newsletter") ?? "[]") as string[];
-		if (!existing.includes(normalizedEmail)) window.localStorage.setItem("madiuntrip-newsletter", JSON.stringify([...existing, normalizedEmail]));
-		setNewsletterMessage("Tersimpan di perangkat ini. Sinkronisasi email belum tersedia.");
-		setEmail("");
-	}
 	return (
 	<footer id="tentang" className="bg-[var(--home-glass)] pt-20 pb-10 px-6 border-t border-[var(--home-glass-border)]">
 		<div className="max-w-7xl mx-auto">
-			<div className="mb-12 flex flex-col items-start justify-between gap-6 border-b border-[var(--home-glass-border)] pb-10 md:flex-row md:items-center"><div><h3 className="mb-2 text-2xl font-bold text-[var(--home-ink)]">Jangan Ketinggalan Jejak.</h3><p className="text-[var(--home-ink)]/65">Simpan email untuk mengikuti prototype update wisata di perangkat ini.</p></div><form onSubmit={subscribe} className="flex w-full gap-2 md:w-auto"><label className="sr-only" htmlFor="newsletter-email">Alamat email</label><input id="newsletter-email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email kamu..." className="min-w-0 flex-1 rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] px-5 py-3 text-[var(--home-ink)] outline-none focus:border-[var(--home-accent)] md:w-72"/><button type="submit" className="inline-flex items-center gap-2 rounded-full bg-[var(--home-primary)] px-5 py-3 font-bold text-white transition hover:-translate-y-0.5"><IconMail/> Simpan</button></form><p aria-live="polite" className="sr-only">{newsletterMessage}</p></div>
+			<div className="mb-12 flex flex-col items-start justify-between gap-6 border-b border-[var(--home-glass-border)] pb-10 md:flex-row md:items-center"><div><h3 className="mb-2 text-2xl font-bold text-[var(--home-ink)]">Mau mulai dari mana?</h3><p className="text-[var(--home-ink)]/65">Pilih cara eksplorasi yang paling cocok buat trip-mu.</p></div><div className="flex flex-wrap gap-3"><a href="#peta" className="rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] px-5 py-3 font-bold text-[var(--home-ink)] transition hover:-translate-y-0.5 hover:border-[var(--home-accent)]">Jelajah peta</a><a href="#kuliner" className="rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] px-5 py-3 font-bold text-[var(--home-ink)] transition hover:-translate-y-0.5 hover:border-[var(--home-accent)]">Pilih mood</a><Link href="/scan" className="rounded-full bg-[var(--home-primary)] px-5 py-3 font-bold text-white transition hover:-translate-y-0.5">Scan QR</Link></div></div>
 		<div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
 			<div className="md:col-span-2">
 				<div className="flex items-center gap-2 mb-6">
@@ -942,12 +958,13 @@ const Footer = () => {
 			</div>
 		</div>
 		<div className="max-w-7xl mx-auto pt-8 border-t border-[var(--home-glass-border)] text-center md:text-left text-[var(--home-ink)]/50 text-sm flex flex-col md:flex-row justify-between items-center gap-4">
-			<div><p>&copy; MadiunTrip. Hak Cipta Dilindungi.</p>{newsletterMessage && <p className="mt-2 text-xs text-[var(--home-ink)]/60" role="status">{newsletterMessage}</p>}</div>
+			<p>&copy; MadiunTrip. Hak Cipta Dilindungi.</p>
 			<Link
 				href="/scan"
 				className="font-semibold text-[var(--home-ink)] hover:text-[var(--home-accent)]">
 				Jelajahi dengan QR <IconArrowRight />
 			</Link>
+		</div>
 		</div>
 	</footer>
 	);
@@ -958,6 +975,7 @@ export default function MadiunTripApp() {
 	const [destinations, setDestinations] = useState<DestinationCard[]>([]);
 	const [loadingDestinations, setLoadingDestinations] = useState(true);
 	const [destinationError, setDestinationError] = useState("");
+	const [incompleteDestinationCount, setIncompleteDestinationCount] = useState(0);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedMood, setSelectedMood] = useState<number | null>(null);
 
@@ -983,10 +1001,8 @@ export default function MadiunTripApp() {
 					.from("destinations")
 					.select("*")
 					.eq("is_published", true)
-					.not("image_url", "is", null)
-					.not("latitude", "is", null)
-					.not("longitude", "is", null)
-					.limit(12);
+					.order("created_at", { ascending: false })
+					.limit(1000);
 
 				if (cancelled) return;
 				if (error) {
@@ -997,13 +1013,10 @@ export default function MadiunTripApp() {
 				}
 
 				const rows = (data ?? []) as unknown as DestinationRow[];
-				const cards = rows
-					.filter(
-						(row) =>
-							typeof row.id === "string" &&
-							typeof row.slug === "string" &&
-							typeof row.name === "string",
-					)
+				const identifiedRows = rows.filter((row) => typeof row.id === "string" && typeof row.slug === "string" && typeof row.name === "string");
+				const readyRows = identifiedRows.filter(destinationHasRequiredMediaAndLocation);
+				setIncompleteDestinationCount(identifiedRows.length - readyRows.length);
+				const cards = readyRows
 					.map(toDestinationCard)
 					.sort((a, b) => Number(b.featured) - Number(a.featured));
 				setDestinations(cards);
@@ -1036,6 +1049,7 @@ export default function MadiunTripApp() {
 			!terms || terms.some((term) => searchable.includes(term));
 		return matchesSearch && matchesMood;
 	});
+	const hasActiveFilters = Boolean(searchQuery.trim()) || selectedMood !== null;
 
 	return (
 		<>
@@ -1058,6 +1072,8 @@ export default function MadiunTripApp() {
 						destinations={visibleDestinations}
 						loading={loadingDestinations}
 						error={destinationError}
+						hasActiveFilters={hasActiveFilters}
+						incompleteCount={incompleteDestinationCount}
 						onClearFilters={() => {
 							setSearchQuery("");
 							setSelectedMood(null);
