@@ -309,7 +309,7 @@ export default function StaffLoginPage() {
     <>
       <GlobalStyles />
       {/* Background Utama (White) */}
-      <div className={`login-page theme-transition min-h-dvh flex items-center justify-center p-4 sm:p-6 md:p-8 relative overflow-hidden overflow-y-auto font-sans selection:bg-[var(--rock-blue)] selection:text-white${isDark ? ' theme-dark' : ' theme-light'}`} style={{ background: 'var(--bg-app)', perspective: '1200px' }}>
+      <div className={`login-page theme-transition min-h-dvh flex items-center justify-center p-4 sm:p-6 md:p-8 relative overflow-hidden font-sans selection:bg-[var(--rock-blue)] selection:text-white${isDark ? ' theme-dark' : ' theme-light'}`} style={{ background: 'var(--bg-app)', perspective: '1200px' }}>
         
         <div className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000" style={{ opacity: 'var(--stars-opacity)' }} aria-hidden="true">
           {Array.from({ length: 42 }, (_, index) => <span key={`star-${index}`} className="star-anim" style={{ left: `${(index * 37 + 13) % 100}%`, top: `${(index * 61 + 7) % 100}%`, width: `${index % 3 + 1}px`, height: `${index % 3 + 1}px`, animationDelay: `${index % 11 * 230}ms` }} />)}
