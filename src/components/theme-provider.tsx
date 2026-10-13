@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 type Theme = "light" | "dark";
@@ -11,18 +11,31 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
 	const [theme, setTheme] = useState<Theme>("light");
+	const applyTheme = useCallback((next: Theme) => {
+		setTheme(next);
+		const root = document.documentElement;
+		root.dataset.theme = next;
+		root.classList.toggle("dark", next === "dark");
+		root.classList.toggle("light", next === "light");
+		window.localStorage.setItem(STORAGE_KEY, next);
+	}, []);
 
 	useEffect(() => {
 		const storedTheme = window.localStorage.getItem(STORAGE_KEY);
 		const initialTheme: Theme = storedTheme === "dark" ? "dark" : "light";
-		setTheme(initialTheme);
-		document.documentElement.dataset.theme = initialTheme;
+		const setInitialTheme = (next: Theme) => {
+			setTheme(next);
+			const root = document.documentElement;
+			root.dataset.theme = next;
+			root.classList.toggle("dark", next === "dark");
+			root.classList.toggle("light", next === "light");
+		};
+		setInitialTheme(initialTheme);
 
 		const syncTheme = (event: StorageEvent) => {
 			if (event.key !== STORAGE_KEY) return;
 			const next: Theme = event.newValue === "dark" ? "dark" : "light";
-			setTheme(next);
-			document.documentElement.dataset.theme = next;
+			setInitialTheme(next);
 		};
 		window.addEventListener("storage", syncTheme);
 		return () => window.removeEventListener("storage", syncTheme);
@@ -31,13 +44,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 	const value = useMemo<ThemeContextValue>(() => ({
 		theme,
 		isDark: theme === "dark",
-		toggleTheme: () => setTheme((current) => {
-				const next = current === "dark" ? "light" : "dark";
-				window.localStorage.setItem(STORAGE_KEY, next);
-				document.documentElement.dataset.theme = next;
-				return next;
-			}),
-	}), [theme]);
+		toggleTheme: () => applyTheme(theme === "dark" ? "light" : "dark"),
+	}), [theme, applyTheme]);
 
 	return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

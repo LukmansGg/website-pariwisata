@@ -147,9 +147,9 @@ function optionalUrl(raw: string) {
 	}
 }
 
-function parseCoordinates(formData: FormData) {
-	const latRaw = value(formData, "latitude", 32);
-	const lngRaw = value(formData, "longitude", 32);
+function parseCoordinates(formData: FormData, latitudeKey = "latitude", longitudeKey = "longitude") {
+	const latRaw = value(formData, latitudeKey, 32);
+	const lngRaw = value(formData, longitudeKey, 32);
 	if (!latRaw && !lngRaw) return { latitude: null, longitude: null };
 	const latitude = Number(latRaw);
 	const longitude = Number(lngRaw);
@@ -167,6 +167,10 @@ function refreshWorkspace(options: { destinations?: boolean } = {}) {
 	if (options.destinations) revalidateTag("public-destinations", { expire: 0 });
 }
 
+function hasValidDescriptionLength(description: string) {
+	return description.trim() === "" || description.trim().split(/\s+/).length <= 300;
+}
+
 export async function createDestinationAction(
 	_previousState: WorkspaceActionState,
 	formData: FormData,
@@ -181,41 +185,53 @@ export async function createDestinationAction(
 	const coordinates = parseCoordinates(formData);
 	const hasCoordinateInput = Boolean(value(formData, "latitude", 32) || value(formData, "longitude", 32));
 	const hasValidCoordinates = coordinates !== null && coordinates.latitude !== null && coordinates.longitude !== null;
+	const qrCoordinates = parseCoordinates(formData, "qr_latitude", "qr_longitude");
+	const qrCode = value(formData, "qr_code", 110).toLowerCase();
+	const qrName = value(formData, "qr_name_visible", 120);
 	const tags = value(formData, "tags", 500)
 		.split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 15);
+	const allowedMinigames = new Set(["find_friends", "photobox"]);
+	const additionalMinigames = [...new Set(formData.getAll("additional_minigames").map(String).filter((game) => allowedMinigames.has(game)))];
 	const wantsPublication = formData.get("is_published") === "on";
 	const isPublished = wantsPublication && hasValidCoordinates && Boolean(imageUrl);
 
 	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
 		return { error: "Slug gunakan huruf kecil, angka, dan tanda hubung." };
 	}
-	if (!name || (hasCoordinateInput && coordinates === null) || (imageUrlRaw && !imageUrl)) {
-		return { error: "Periksa nama, URL foto, serta pasangan koordinat yang dimasukkan." };
+	if (!name || !hasValidDescriptionLength(description) || (hasCoordinateInput && coordinates === null) || !hasValidCoordinates || !qrCoordinates || qrCoordinates.latitude === null || qrCoordinates.longitude === null || !qrName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(qrCode) || (imageUrlRaw && !imageUrl)) {
+		return { error: !hasValidDescriptionLength(description) ? "Deskripsi destinasi maksimal 300 kata." : "Lengkapi pin destinasi, nama dan kode QR, serta koordinat pemasangan QR yang valid." };
 	}
 
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk menginput data." };
 
-	const { error } = await staff.supabase.from("destinations").insert({
-		slug,
-		name,
-		description,
-		category: category || null,
-		address: address || null,
-		...coordinates,
-		image_url: imageUrl,
-		tags,
-		is_featured: formData.get("is_featured") === "on",
-		is_published: isPublished,
-		created_by: staff.userId,
-		updated_by: staff.userId,
+	const { error } = await staff.supabase.rpc("save_destination_with_qr", {
+		p_destination_id: null,
+		p_qr_point_id: null,
+		p_slug: slug,
+		p_name: name,
+		p_description: description,
+		p_category: category || null,
+		p_address: address || null,
+		p_latitude: coordinates.latitude,
+		p_longitude: coordinates.longitude,
+		p_image_url: imageUrl,
+		p_tags: tags,
+		p_is_featured: formData.get("is_featured") === "on",
+		p_is_published: isPublished,
+		p_additional_minigames: additionalMinigames,
+		p_qr_name: qrName,
+		p_qr_code: qrCode,
+		p_qr_address: value(formData, "qr_address", 500) || address || null,
+		p_qr_latitude: qrCoordinates.latitude,
+		p_qr_longitude: qrCoordinates.longitude,
 	});
 	if (error) {
-		return { error: error.code === "23505" ? "Slug tersebut sudah dipakai destinasi lain." : "Destinasi belum tersimpan. Periksa migrasi database dan coba lagi." };
+		return { error: error.code === "23505" ? "Slug wisata atau kode QR sudah dipakai. Periksa kembali lalu coba lagi." : "Wisata dan titik QR belum tersimpan. Jalankan migration fitur QR utama di Supabase, lalu coba lagi." };
 	}
 
 	refreshWorkspace({ destinations: true });
-	return { success: isPublished ? "Destinasi berhasil disimpan dan diterbitkan." : wantsPublication ? "Tersimpan sebagai draft. Belum tayang: lengkapi foto sampul dan koordinat yang valid." : "Destinasi berhasil disimpan sebagai draft." };
+	return { success: isPublished ? "Destinasi dan QR utama berhasil disimpan; wisata sudah diterbitkan." : wantsPublication ? "Destinasi dan QR utama tersimpan sebagai draft. Lengkapi foto sampul sebelum tayang." : "Destinasi dan QR utama berhasil disimpan sebagai draft." };
 }
 
 export async function updateDestinationAction(
@@ -233,23 +249,44 @@ export async function updateDestinationAction(
 	const coordinates = parseCoordinates(formData);
 	const hasCoordinateInput = Boolean(value(formData, "latitude", 32) || value(formData, "longitude", 32));
 	const hasValidCoordinates = coordinates !== null && coordinates.latitude !== null && coordinates.longitude !== null;
+	const qrCoordinates = parseCoordinates(formData, "qr_latitude", "qr_longitude");
+	const qrPointId = value(formData, "qr_point_id", 64);
+	const qrCode = value(formData, "qr_code", 110).toLowerCase();
+	const qrName = value(formData, "qr_name_visible", 120);
 	const tags = value(formData, "tags", 500).split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 15);
+	const allowedMinigames = new Set(["find_friends", "photobox"]);
+	const additionalMinigames = [...new Set(formData.getAll("additional_minigames").map(String).filter((game) => allowedMinigames.has(game)))];
 	const wantsPublication = formData.get("is_published") === "on";
 	const isPublished = wantsPublication && hasValidCoordinates && Boolean(imageUrl);
-	if (!id || !name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (hasCoordinateInput && coordinates === null) || (imageUrlRaw && !imageUrl)) {
-		return { error: "Periksa nama, link, URL foto, serta pasangan koordinat yang dimasukkan." };
+	if (!id || !name || !hasValidDescriptionLength(description) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (hasCoordinateInput && coordinates === null) || !hasValidCoordinates || !qrCoordinates || qrCoordinates.latitude === null || qrCoordinates.longitude === null || !qrName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(qrCode) || (imageUrlRaw && !imageUrl)) {
+		return { error: !hasValidDescriptionLength(description) ? "Deskripsi destinasi maksimal 300 kata." : "Periksa nama, tautan, foto, serta koordinat destinasi dan QR." };
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengedit data wisata." };
-	const { error } = await staff.supabase.from("destinations").update({
-		slug, name, description, category: category || null, address: address || null,
-		latitude: coordinates?.latitude ?? null, longitude: coordinates?.longitude ?? null,
-		image_url: imageUrl, tags, is_featured: formData.get("is_featured") === "on",
-		is_published: isPublished, updated_by: staff.userId,
-	}).eq("id", id);
-	if (error) return { error: error.code === "23505" ? "Link tersebut sudah dipakai destinasi lain." : "Perubahan belum tersimpan. Periksa akses dan migrasi database." };
+	const { error } = await staff.supabase.rpc("save_destination_with_qr", {
+		p_destination_id: id,
+		p_qr_point_id: qrPointId || null,
+		p_slug: slug,
+		p_name: name,
+		p_description: description,
+		p_category: category || null,
+		p_address: address || null,
+		p_latitude: coordinates.latitude,
+		p_longitude: coordinates.longitude,
+		p_image_url: imageUrl,
+		p_tags: tags,
+		p_is_featured: formData.get("is_featured") === "on",
+		p_is_published: isPublished,
+		p_additional_minigames: additionalMinigames,
+		p_qr_name: qrName,
+		p_qr_code: qrCode,
+		p_qr_address: value(formData, "qr_address", 500) || address || null,
+		p_qr_latitude: qrCoordinates.latitude,
+		p_qr_longitude: qrCoordinates.longitude,
+	});
+	if (error) return { error: error.code === "23505" ? "Link wisata atau kode QR sudah digunakan." : "Perubahan wisata dan QR belum tersimpan. Periksa migration serta akses Supabase." };
 	refreshWorkspace({ destinations: true });
-	return { success: isPublished ? "Wisata diperbarui dan ditayangkan." : wantsPublication ? "Perubahan tersimpan sebagai draft. Belum tayang: lengkapi foto sampul dan koordinat yang valid." : "Perubahan wisata tersimpan sebagai draft." };
+	return { success: isPublished ? "Wisata dan QR utama diperbarui; wisata sudah tayang." : wantsPublication ? "Perubahan dan QR tersimpan sebagai draft. Lengkapi foto sampul sebelum tayang." : "Perubahan wisata dan QR utama berhasil disimpan." };
 }
 
 export async function createQrPointAction(
@@ -283,6 +320,9 @@ export async function createPartnerAction(
 	_previousState: WorkspaceActionState,
 	formData: FormData,
 ): Promise<WorkspaceActionState> {
+	const destinationId = value(formData, "destination_id", 64);
+	const maxDistanceRaw = value(formData, "max_distance_meters", 8);
+	const maxDistanceMeters = Number(maxDistanceRaw || "500");
 	const businessName = value(formData, "business_name", 160);
 	const slug = value(formData, "slug", 100).toLowerCase();
 	const businessType = value(formData, "business_type", 80);
@@ -295,14 +335,24 @@ export async function createPartnerAction(
 	const websiteUrl = optionalUrl(websiteRaw);
 	const logoUrlRaw = value(formData, "logo_url", 2048);
 	const logoUrl = optionalUrl(logoUrlRaw);
-	if (!businessName || !businessType || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) || (websiteRaw && !websiteUrl) || (logoUrlRaw && !logoUrl)) {
-		return { error: "Periksa nama, kategori, slug, email, dan tautan mitra." };
+	if (!destinationId || !Number.isInteger(maxDistanceMeters) || maxDistanceMeters < 50 || maxDistanceMeters > 2000 || maxDistanceMeters % 50 !== 0 || !businessName || !businessType || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) || (websiteRaw && !websiteUrl) || (logoUrlRaw && !logoUrl)) {
+		return { error: "Periksa nama, jenis usaha, slug, destinasi wisata, dan batas jarak 50–2.000 meter. Pastikan email dan tautan valid." };
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola mitra." };
+	const { data: destination, error: destinationError } = await staff.supabase
+		.from("destinations")
+		.select("id, latitude, longitude")
+		.eq("id", destinationId)
+		.maybeSingle();
+	if (destinationError || !destination || destination.latitude === null || destination.longitude === null) {
+		return { error: "Pilih wisata lokal yang memiliki koordinat valid agar batas jarak QR bisa digunakan." };
+	}
 	const { error } = await staff.supabase.from("tourism_partners").insert({
 		business_name: businessName,
 		slug,
+		destination_id: destinationId,
+		max_distance_meters: maxDistanceMeters,
 		business_type: businessType,
 		description,
 		contact_name: contactName || null,
@@ -316,6 +366,35 @@ export async function createPartnerAction(
 	if (error) return { error: error.code === "23505" ? "Slug mitra sudah digunakan." : "Data mitra belum tersimpan. Periksa migrasi database dan coba lagi." };
 	refreshWorkspace();
 	return { success: "Mitra lokal berhasil disimpan." };
+}
+
+export async function updatePartnerProximityAction(
+	_previousState: WorkspaceActionState,
+	formData: FormData,
+): Promise<WorkspaceActionState> {
+	const partnerId = value(formData, "partner_id", 64);
+	const destinationId = value(formData, "destination_id", 64);
+	const maxDistanceMeters = Number(value(formData, "max_distance_meters", 8));
+	if (!partnerId || !destinationId || !Number.isInteger(maxDistanceMeters) || maxDistanceMeters < 50 || maxDistanceMeters > 2000 || maxDistanceMeters % 50 !== 0) {
+		return { error: "Pilih wisata lokal dan batas jarak 50–2.000 meter dengan kelipatan 50 meter." };
+	}
+	const staff = await requireStaff();
+	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola mitra." };
+	const { data: destination, error: destinationError } = await staff.supabase
+		.from("destinations")
+		.select("id, latitude, longitude")
+		.eq("id", destinationId)
+		.maybeSingle();
+	if (destinationError || !destination || destination.latitude === null || destination.longitude === null) {
+		return { error: "Pilih wisata lokal yang memiliki koordinat valid." };
+	}
+	const { error } = await staff.supabase
+		.from("tourism_partners")
+		.update({ destination_id: destinationId, max_distance_meters: maxDistanceMeters })
+		.eq("id", partnerId);
+	if (error) return { error: "Keterkaitan wisata mitra belum tersimpan. Periksa migrasi database dan coba lagi." };
+	refreshWorkspace();
+	return { success: "Wisata lokal dan radius minigame berhasil diperbarui." };
 }
 
 export async function createPromotionAction(
@@ -341,6 +420,16 @@ export async function createPromotionAction(
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola promosi." };
+	const [{ data: partner }, { data: qrPoint }] = await Promise.all([
+		staff.supabase.from("tourism_partners").select("destination_id").eq("id", partnerId).maybeSingle(),
+		staff.supabase.from("qr_points").select("destination_id").eq("id", qrPointId).maybeSingle(),
+	]);
+	if (!partner?.destination_id) {
+		return { error: "Mitra ini belum ditautkan ke wisata lokal. Lengkapi data keterkaitan mitra terlebih dahulu." };
+	}
+	if (!qrPoint || qrPoint.destination_id !== partner.destination_id) {
+		return { error: "Pilih titik QR yang berada di wisata lokal yang ditautkan ke mitra ini." };
+	}
 	const { error } = await staff.supabase.from("promotion_campaigns").insert({
 		partner_id: partnerId,
 		qr_point_id: qrPointId,

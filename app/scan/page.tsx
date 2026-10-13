@@ -55,6 +55,18 @@ function getDestinationSlug(value: string): string | null {
 	}
 }
 
+function getQrCode(value: string): string | null {
+	try {
+		const url = new URL(value.trim());
+		const parts = url.pathname.split("/").filter(Boolean);
+		const qrIndex = parts.findIndex((part) => part === "qr");
+		const code = qrIndex >= 0 ? parts[qrIndex + 1] : null;
+		return code && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(code) ? code : null;
+	} catch {
+		return null;
+	}
+}
+
 function CameraIcon({ className = "h-5 w-5" }: { className?: string }) {
 	return (
 		<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
@@ -210,14 +222,30 @@ export default function ScanPage() {
 		setStatus("paused");
 
 		const slug = getDestinationSlug(text);
+		if (slug) {
+			setScannedSlug(slug);
+			void loadDestination(slug);
+			return;
+		}
+
+		const qrCode = getQrCode(text);
+		if (qrCode) {
+			void fetch(`/api/qr/resolve?code=${encodeURIComponent(qrCode)}`)
+				.then(async (response) => {
+					const result = (await response.json()) as { destinationSlug?: string; error?: string };
+					if (!response.ok || !result.destinationSlug) throw new Error(result.error || "QR tidak ditemukan.");
+					setScannedSlug(result.destinationSlug);
+					await loadDestination(result.destinationSlug);
+				})
+				.catch(() => setPreviewError("QR ini tidak aktif atau destinasi belum diterbitkan."));
+			return;
+		}
+
 		if (!slug) {
 			setScannedSlug(null);
 			setPreviewError("Format QR belum dikenali. Gunakan QR yang berisi URL atau slug destinasi.");
 			return;
 		}
-
-		setScannedSlug(slug);
-		void loadDestination(slug);
 	}
 
 	async function startCamera(deviceId?: string) {

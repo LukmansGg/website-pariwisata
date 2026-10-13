@@ -27,8 +27,8 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	if (roleError || !staff || !["admin", "editor"].includes(staff.role)) redirect("/login");
 
 	const [destinationsResult, partnersResult, qrPointsResult, promotionsResult, driveResult] = await Promise.all([
-		supabase.from("destinations").select("id, slug, name, description, category, address, latitude, longitude, image_url, tags, is_published, is_featured, created_at").order("created_at", { ascending: false }),
-		supabase.from("tourism_partners").select("id, business_name, slug, business_type, address, status, created_at").order("created_at", { ascending: false }),
+		supabase.from("destinations").select("id, slug, name, description, category, address, latitude, longitude, image_url, tags, additional_minigames, is_published, is_featured, created_at").order("created_at", { ascending: false }),
+		supabase.from("tourism_partners").select("id, business_name, slug, destination_id, max_distance_meters, business_type, address, status, created_at").order("created_at", { ascending: false }),
 		supabase.from("qr_points").select("id, destination_id, name, code, address, latitude, longitude, is_active, created_at").order("created_at", { ascending: false }),
 		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, status, starts_at, ends_at, created_at").order("created_at", { ascending: false }),
 		supabase.from("google_drive_connections").select("id, connected_email, updated_at").eq("id", "primary").maybeSingle(),
@@ -53,7 +53,10 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 		role: staff.role as "admin" | "editor",
 		email: typeof claimsData?.claims.email === "string" ? claimsData.claims.email : "Petugas Pariwisata",
 		destinations,
-		partners: partnersResult.data ?? [],
+		partners: (partnersResult.data ?? []).map((partner) => ({
+			...partner,
+			destination_name: partner.destination_id ? destinationById.get(partner.destination_id) ?? null : null,
+		})),
 		qrPoints,
 		promotions: (promotionsResult.data ?? []).map((campaign) => ({
 			...campaign,
