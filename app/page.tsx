@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTheme } from "@/src/components/theme-provider";
@@ -41,7 +41,27 @@ type DestinationCard = {
 	reviews?: number;
 	tags: string[];
 	featured: boolean;
+	latitude: number;
+	longitude: number;
 };
+
+type MapArea = { id: "county" | "city"; name: string; latitude: number; longitude: number };
+type MapBoundaries = { countyPath: string; cityPath: string; areas: MapArea[] };
+const MADIUN_MAP_BOUNDS = { minX: 111.18, maxX: 111.88, minY: -7.91, maxY: -7.32 };
+function projectMapPoint(longitude: number, latitude: number) {
+	return {
+		x: ((longitude - MADIUN_MAP_BOUNDS.minX) / (MADIUN_MAP_BOUNDS.maxX - MADIUN_MAP_BOUNDS.minX)) * 1000,
+		y: (1 - (latitude - MADIUN_MAP_BOUNDS.minY) / (MADIUN_MAP_BOUNDS.maxY - MADIUN_MAP_BOUNDS.minY)) * 560,
+	};
+}
+function tourismMarkerStyle(destination: DestinationCard) {
+	const category = destination.category.toLocaleLowerCase("id");
+	if (category.includes("alam") || category.includes("air")) return { shape: "leaf", color: "#059669" } as const;
+	if (category.includes("budaya") || category.includes("sejarah")) return { shape: "star", color: "#7c3aed" } as const;
+	if (category.includes("kuliner") || category.includes("makan")) return { shape: "diamond", color: "#ea580c" } as const;
+	if (category.includes("spot") || category.includes("lokasi")) return { shape: "pin", color: "#0284c7" } as const;
+	return { shape: "circle", color: "#0284c7" } as const;
+}
 
 function toDestinationCard(row: DestinationRow): DestinationCard {
 	const imageValue = row.image_url ?? row.cover_image ?? row.image;
@@ -57,6 +77,8 @@ function toDestinationCard(row: DestinationRow): DestinationCard {
 		...(typeof row.reviews === "number" ? { reviews: row.reviews } : {}),
 		tags: Array.isArray(row.tags) ? row.tags : [],
 		featured: row.is_featured === true,
+		latitude: Number(row.latitude),
+		longitude: Number(row.longitude),
 	};
 }
 
@@ -268,6 +290,18 @@ const GlobalStyles = () => (
     .home-page .matrix-cell.is-fixed { animation: none; opacity: 1; }
     .home-page .matrix-qr-stage::after { content: ""; position: absolute; left: 8%; right: 8%; top: 10%; height: 2px; background: var(--home-accent); box-shadow: 0 0 14px var(--home-accent); opacity: .8; animation: qrScan 3.4s ease-in-out infinite; pointer-events: none; }
     .home-page .mood-float { animation: moodFloat 4.6s ease-in-out infinite; }
+    .home-page .madiun-marker { transform-box: fill-box; transform-origin: center; animation: markerIdle 2.8s ease-in-out infinite; }
+    .home-page .madiun-marker:hover { animation: markerBoing 520ms cubic-bezier(.2,.9,.25,1.25) both; }
+    .home-page .marker-visibility { opacity: 1; visibility: visible; transition: opacity 180ms ease, visibility 180ms; }
+    .home-page .markers-hidden { opacity: 0; visibility: hidden; }
+    .home-page .map-activate-lock { box-shadow: 0 8px 24px rgba(47, 116, 159, .14), inset 0 1px 0 rgba(255,255,255,.95); transition: transform 220ms cubic-bezier(.2,.8,.2,1), box-shadow 220ms ease, background-color 220ms ease; }
+    .home-page .map-activate-lock:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 12px 28px rgba(47, 116, 159, .2), inset 0 1px 0 rgba(255,255,255,.98); }
+    .home-page .map-control-bar { box-shadow: 0 8px 24px rgba(31, 71, 99, .12), inset 0 1px 0 rgba(255,255,255,.9); }
+    .home-page .map-surface { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 28px rgba(50, 112, 145, .08); }
+    .home-page .map-activation-halo { animation: mapActivationHalo 3.4s ease-out infinite; }
+    @keyframes markerIdle { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    @keyframes markerBoing { 0% { transform: translateY(0) scale(1); } 45% { transform: translateY(-9px) scale(1.08); } 75% { transform: translateY(2px) scale(.96); } 100% { transform: translateY(0) scale(1); } }
+    @keyframes mapActivationHalo { 0% { opacity: .34; transform: scale(.88); } 70%,100% { opacity: 0; transform: scale(1.3); } }
     .home-page .animate-envelope-float { animation: envelopeFloat 4.5s ease-in-out infinite; }
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(30px); }
@@ -523,18 +557,110 @@ const HeroSection = () => {
 const DiscoveryMap = ({
 	searchQuery,
 	onSearchChange,
+	destinations,
 }: {
 	searchQuery: string;
 	onSearchChange: (value: string) => void;
+	destinations: DestinationCard[];
 }) => {
-	const [area, setArea] = useState<"kabupaten" | "kota">("kabupaten");
-	const mapAreas = {
-		kabupaten: { label: "Kabupaten Madiun", bbox: "111.20,-7.88,111.86,-7.35", marker: "-7.62,111.55" },
-		kota: { label: "Kota Madiun", bbox: "111.48,-7.68,111.56,-7.59", marker: "-7.63,111.53" },
-	} as const;
-	const selectedArea = mapAreas[area];
-	const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(selectedArea.bbox)}&layer=mapnik&marker=${encodeURIComponent(selectedArea.marker)}`;
-	const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedArea.label)}`;
+	const [boundaryPaths, setBoundaryPaths] = useState<MapBoundaries | null>(null);
+	const [mapAreas, setMapAreas] = useState<MapArea[]>([]);
+	const [boundaryFailed, setBoundaryFailed] = useState(false);
+	const [selectedDestination, setSelectedDestination] = useState<DestinationCard | null>(null);
+	const [selectedArea, setSelectedArea] = useState<MapArea | null>(null);
+	const [mapActive, setMapActive] = useState(false);
+	const [mapSearchText, setMapSearchText] = useState(searchQuery);
+	const [searchOpen, setSearchOpen] = useState(false);
+	const [mapScale, setMapScale] = useState(1);
+	const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
+	const [showMarkers, setShowMarkers] = useState(true);
+	const mapViewportRef = useRef<HTMLDivElement | null>(null);
+	const dragRef = useRef<{ pointerId: number; x: number; y: number; originX: number; originY: number } | null>(null);
+
+	useEffect(() => {
+		let active = true;
+		fetch("/api/map-boundaries", { cache: "no-store" }).then(async (response) => {
+			if (!response.ok) throw new Error("Batas wilayah tidak tersedia");
+			return response.json() as Promise<MapBoundaries>;
+		}).then((data) => {
+			if (!data.countyPath || !data.cityPath || !Array.isArray(data.areas)) throw new Error("Geometri batas kosong");
+			if (active) {
+				setBoundaryPaths(data);
+				setMapAreas(data.areas);
+			}
+		}).catch(() => { if (active) setBoundaryFailed(true); });
+		return () => { active = false; };
+	}, []);
+
+	useEffect(() => {
+		if (!selectedArea) setMapSearchText(searchQuery);
+	}, [searchQuery, selectedArea]);
+
+	useEffect(() => {
+		if (!mapActive) return;
+		const scrollY = window.scrollY;
+		const body = document.body;
+		const html = document.documentElement;
+		const previous = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow, htmlOverflow: html.style.overflow };
+		body.style.position = "fixed";
+		body.style.top = `-${scrollY}px`;
+		body.style.width = "100%";
+		body.style.overflow = "hidden";
+		html.style.overflow = "hidden";
+		const handleOutsidePress = (event: PointerEvent) => {
+			if (event.target instanceof Node && !mapViewportRef.current?.contains(event.target)) setMapActive(false);
+		};
+		const handleEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setMapActive(false); };
+		document.addEventListener("pointerdown", handleOutsidePress);
+		window.addEventListener("keydown", handleEscape);
+		return () => {
+			document.removeEventListener("pointerdown", handleOutsidePress);
+			window.removeEventListener("keydown", handleEscape);
+			body.style.position = previous.position;
+			body.style.top = previous.top;
+			body.style.width = previous.width;
+			body.style.overflow = previous.overflow;
+			html.style.overflow = previous.htmlOverflow;
+			window.scrollTo(0, scrollY);
+		};
+	}, [mapActive]);
+
+	useEffect(() => {
+		const viewport = mapViewportRef.current;
+		if (!mapActive || !viewport) return;
+		const handleWheel = (event: WheelEvent) => {
+			event.preventDefault();
+			setMapScale((value) => Math.max(1, Math.min(2.8, Number((value + (event.deltaY < 0 ? .12 : -.12)).toFixed(2)))));
+		};
+		viewport.addEventListener("wheel", handleWheel, { passive: false });
+		return () => viewport.removeEventListener("wheel", handleWheel);
+	}, [mapActive]);
+
+	const markers = useMemo(() => destinations.filter((destination) => destination.longitude >= MADIUN_MAP_BOUNDS.minX && destination.longitude <= MADIUN_MAP_BOUNDS.maxX && destination.latitude >= MADIUN_MAP_BOUNDS.minY && destination.latitude <= MADIUN_MAP_BOUNDS.maxY).map((destination) => ({ destination, point: projectMapPoint(destination.longitude, destination.latitude) })), [destinations]);
+	const googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=Kabupaten+Madiun+Kota+Madiun";
+	const zoom = (delta: number) => setMapScale((value) => Math.max(1, Math.min(2.8, Number((value + delta).toFixed(2)))));
+	const areaSuggestions = mapAreas.filter((area) => !mapSearchText.trim() || area.name.toLocaleLowerCase("id").includes(mapSearchText.trim().toLocaleLowerCase("id")) || mapSearchText.trim().toLocaleLowerCase("id").split(/\s+/).every((term) => area.name.toLocaleLowerCase("id").includes(term)));
+	const moveToArea = (area: MapArea) => {
+		const point = projectMapPoint(area.longitude, area.latitude);
+		const viewport = mapViewportRef.current;
+		const scale = area.id === "city" ? 1.85 : 1.25;
+		setSelectedArea(area);
+		setSelectedDestination(null);
+		setMapActive(true);
+		setMapScale(scale);
+		if (viewport) {
+			const width = viewport.clientWidth;
+			const height = viewport.clientHeight;
+			const maxX = width * (1.2 * scale - 1) / 2;
+			const maxY = height * (1.2 * scale - 1) / 2;
+			const desiredX = -((point.x / 1000 - .5) * width * 1.2 * scale);
+			const desiredY = -((point.y / 560 - .5) * height * 1.2 * scale);
+			setMapOffset({ x: Math.max(-maxX, Math.min(maxX, desiredX)), y: Math.max(-maxY, Math.min(maxY, desiredY)) });
+		}
+		setMapSearchText(area.name);
+		setSearchOpen(false);
+		onSearchChange("");
+	};
 
 	return (
 		<section
@@ -549,50 +675,59 @@ const DiscoveryMap = ({
 						</div>
 						<input
 							type="text"
-							placeholder="Cari hidden gem, kuliner, atau wisata alam..."
+							placeholder="Cari wisata atau area: Kota / Kabupaten Madiun..."
 							className="w-full bg-transparent border-none outline-none px-4 py-3 text-[var(--home-ink)] placeholder-[var(--home-ink)]/40 font-medium"
-							value={searchQuery}
-							onChange={(e) => onSearchChange(e.target.value)}
+							value={mapSearchText}
+							onFocus={() => setSearchOpen(true)}
+							onBlur={() => window.setTimeout(() => setSearchOpen(false), 140)}
+							onChange={(e) => { setSelectedArea(null); setMapSearchText(e.target.value); onSearchChange(e.target.value); setSearchOpen(true); }}
+							onKeyDown={(event) => { if (event.key === "Enter" && areaSuggestions.length === 1) { event.preventDefault(); moveToArea(areaSuggestions[0]); } }}
 						/>
 						<button
 							type="button"
-							onClick={() =>
-								document
-									.getElementById("destinasi")
-									?.scrollIntoView({ behavior: "smooth" })
-							}
+							onClick={() => areaSuggestions.length === 1 ? moveToArea(areaSuggestions[0]) : setSearchOpen(true)}
 							className="bg-[var(--home-accent)] text-[var(--home-on-accent)] px-6 py-3 rounded-full font-bold hover:bg-[var(--home-primary)] hover:text-white transition-colors shadow-sm">
 							Cari
 						</button>
 					</div>
+					{searchOpen && areaSuggestions.length > 0 && <div className="absolute left-4 right-4 top-full mt-2 overflow-hidden rounded-2xl border border-sky-100 bg-white/95 p-2 shadow-xl backdrop-blur-xl">
+						<p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Area dari OpenStreetMap · bukan destinasi wisata</p>
+						{areaSuggestions.map((area) => <button key={area.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => moveToArea(area)} className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-800 transition hover:bg-sky-50"><span>{area.name}</span><span className="text-xs font-semibold text-sky-700">Tampilkan di peta →</span></button>)}
+					</div>}
 				</div>
 
 				{/* Map Container */}
-				<div className="glass-panel rounded-[2rem] p-4 pt-16 map-container relative overflow-hidden group">
+				<div className="glass-panel rounded-[1.75rem] border border-sky-100/80 bg-white/80 p-4 pt-16 shadow-[0_18px_55px_-36px_rgba(34,108,148,.28)] map-container relative overflow-hidden group">
 					{/* Decorative map corner */}
-					<div className="absolute top-0 right-0 bg-[var(--home-soft)] text-[var(--home-ink)] text-xs font-bold px-4 py-2 rounded-bl-2xl rounded-tr-xl border-b border-l border-[var(--home-ink)]/10 z-10">
-						Peta · {selectedArea.label}
+					<div className="absolute top-0 right-0 bg-white/85 text-slate-600 text-[11px] font-bold tracking-wide px-4 py-2 rounded-bl-2xl rounded-tr-[1.65rem] border-b border-l border-sky-100 z-10">
+						WILAYAH MADIUN
 					</div>
 
-					<div className="w-full h-[400px] rounded-2xl overflow-hidden bg-[var(--home-soft)] relative">
-						<iframe
-							width="100%"
-							height="100%"
-							frameBorder="0"
-							scrolling="yes"
-							marginHeight={0}
-							marginWidth={0}
-							loading="lazy"
-							src={mapEmbedUrl}
-							title={`Peta interaktif ${selectedArea.label}`}
-							className="w-full h-full object-cover"></iframe>
-						{/* Overlay interaction hint */}
-						<div className="absolute inset-0 bg-[var(--home-primary)]/5 pointer-events-none group-hover:bg-transparent transition-colors duration-500"></div>
+					<div ref={mapViewportRef} className={`map-surface w-full h-[400px] rounded-[1.35rem] overflow-hidden bg-[#f5f9fc] relative border border-slate-200/80 ${mapActive ? "touch-none cursor-grab active:cursor-grabbing" : "touch-pan-y cursor-default"}`} aria-label={mapActive ? "Peta interaktif. Geser atau scroll untuk navigasi." : "Peta statis."} onClick={() => { if (!mapActive) setMapActive(true); }} onPointerDown={(event) => { if (!mapActive || (event.target as HTMLElement).closest("[data-map-control], [data-marker]")) return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, originX: mapOffset.x, originY: mapOffset.y }; }} onPointerMove={(event) => { const drag = dragRef.current; if (!mapActive || !drag || drag.pointerId !== event.pointerId) return; const maxX = event.currentTarget.clientWidth * (1.2 * mapScale - 1) / 2; const maxY = event.currentTarget.clientHeight * (1.2 * mapScale - 1) / 2; setMapOffset({ x: Math.max(-maxX, Math.min(maxX, drag.originX + event.clientX - drag.x)), y: Math.max(-maxY, Math.min(maxY, drag.originY + event.clientY - drag.y)) }); }} onPointerUp={(event) => { if (dragRef.current?.pointerId === event.pointerId) { dragRef.current = null; setMapOffset((offset) => ({ ...offset })); } }} onPointerCancel={() => { dragRef.current = null; setMapOffset((offset) => ({ ...offset })); }}>
+						<div className="absolute -inset-[10%] origin-center will-change-transform" style={{ transform: `translate(${mapOffset.x}px, ${mapOffset.y}px) scale(${mapScale})`, transition: dragRef.current ? "none" : "transform 280ms cubic-bezier(.2,.8,.2,1)" }}>
+						<iframe className="absolute inset-0 h-full w-full border-0 pointer-events-none" loading="lazy" scrolling="no" title="Peta OpenStreetMap Kabupaten dan Kota Madiun" src="https://www.openstreetmap.org/export/embed.html?bbox=111.18%2C-7.91%2C111.88%2C-7.32&amp;layer=mapnik" />
+						<div className="absolute inset-0 bg-sky-50/20 pointer-events-none" />
+						<svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label="Batas Kabupaten dan Kota Madiun">
+							{boundaryPaths?.countyPath && <path d={boundaryPaths.countyPath} fill="none" fillRule="evenodd" stroke="#0284c7" strokeWidth="2.4" strokeDasharray="6 6" vectorEffect="non-scaling-stroke" />}
+							{boundaryPaths?.cityPath && <path d={boundaryPaths.cityPath} fill="none" fillRule="evenodd" stroke="#7c3aed" strokeWidth="2.8" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
+							{selectedArea && (() => { const point = projectMapPoint(selectedArea.longitude, selectedArea.latitude); return <g data-marker className="madiun-marker" aria-label={`Area ${selectedArea.name}`}><circle cx={point.x} cy={point.y} r="12" fill="#f97316" stroke="white" strokeWidth="3"/><circle cx={point.x} cy={point.y} r="4" fill="white"/><text x={point.x + 16} y={point.y - 12} fill="#7c2d12" stroke="white" strokeWidth="4" paintOrder="stroke" fontSize="18" fontWeight="800">{selectedArea.name}</text></g>; })()}
+							<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); return <g key={destination.id} data-marker role="button" tabIndex={0} aria-label={`Buka wisata ${destination.title}`} onClick={() => setSelectedDestination(destination)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedDestination(destination); }} className="madiun-marker cursor-pointer">
+								<title>{destination.title} · {destination.category}</title>
+								{marker.shape === "pin" ? <><path d={`M${point.x} ${point.y + 11}S${point.x - 8} ${point.y + 2} ${point.x - 8} ${point.y - 3}a8 8 0 1 1 16 0c0 5-8 14-8 14Z`} fill={marker.color} stroke="white" strokeWidth="2"/><circle cx={point.x} cy={point.y - 3} r="2.5" fill="white"/></> : marker.shape === "star" ? <path d={`m${point.x} ${point.y - 9} 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "diamond" ? <path d={`m${point.x} ${point.y - 9} 8 9-8 9-8-9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "leaf" ? <path d={`M${point.x} ${point.y + 8}C${point.x - 12} ${point.y + 1} ${point.x - 3} ${point.y - 10} ${point.x + 8} ${point.y - 8}C${point.x + 9} ${point.y + 2} ${point.x + 3} ${point.y + 8} ${point.x} ${point.y + 8}M${point.x} ${point.y + 7}l5-8`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : <circle cx={point.x} cy={point.y} r="7" fill={marker.color} stroke="white" strokeWidth="2"/>}
+							</g>; })}</g>
+						</svg>
+						</div>
+						{mapActive ? <div className="absolute right-3 top-3 z-10 flex gap-2"><div className="map-control-bar flex overflow-hidden rounded-xl border border-white/90 bg-white/90 text-slate-700 backdrop-blur-md"><button data-map-control type="button" onClick={() => zoom(.2)} className="px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perbesar peta">+</button><button data-map-control type="button" onClick={() => zoom(-.2)} className="border-l border-slate-100 px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perkecil peta">−</button><button data-map-control type="button" onClick={() => setShowMarkers((shown) => !shown)} aria-pressed={showMarkers} className="border-l border-slate-100 px-3 py-2 text-xs font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label={showMarkers ? "Sembunyikan marker wisata" : "Tampilkan marker wisata"}>{showMarkers ? "Pin on" : "Pin off"}</button></div><button data-map-control type="button" onClick={() => setMapActive(false)} className="map-control-bar rounded-xl border border-white/90 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 backdrop-blur-md transition hover:bg-sky-50 hover:text-sky-700">Selesai <span aria-hidden="true">×</span></button></div> : <button data-map-control type="button" aria-label="Aktifkan navigasi peta" title="Aktifkan navigasi peta" onClick={() => setMapActive(true)} className="map-activate-lock absolute left-1/2 top-1/2 z-[5] grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/90 bg-white/80 text-sky-700 backdrop-blur-sm"><span className="map-activation-halo absolute inset-0 rounded-full border border-sky-300/70"/><svg className="relative h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/><path d="M12 16.5v1.5"/></svg></button>}
+						<div className="absolute right-3 bottom-3 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600">© OpenStreetMap contributors</div>
+						{!boundaryPaths && <div className="absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">{boundaryFailed ? "Garis batas belum termuat; peta tetap tersedia." : "Memuat garis batas…"}</div>}
+						<div className="absolute bottom-3 left-3 rounded-xl bg-white/90 px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-sm">{markers.length} wisata cocok · batas tersimpan di Supabase</div>
+						{selectedDestination && <div className="absolute right-3 bottom-3 z-20 max-w-[250px] rounded-2xl border border-sky-100 bg-white/95 p-3 shadow-lg"><button type="button" onClick={() => setSelectedDestination(null)} className="absolute right-2 top-2 rounded-full px-2 text-slate-400 hover:bg-slate-100" aria-label="Tutup">×</button><p className="pr-5 text-sm font-extrabold text-slate-800">{selectedDestination.title}</p><p className="mt-1 text-xs text-slate-500">{selectedDestination.category}</p><Link href={`/wisata/${selectedDestination.slug}`} className="mt-2 inline-flex text-xs font-bold text-sky-700">Lihat detail →</Link></div>}
 					</div>
 					<div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-						<div className="inline-flex rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-1" aria-label="Pilih area peta">
-							<button type="button" aria-pressed={area === "kabupaten"} onClick={() => setArea("kabupaten")} className={`rounded-full px-4 py-2 text-sm font-bold transition ${area === "kabupaten" ? "bg-[var(--home-primary)] text-white" : "text-[var(--home-ink)] hover:bg-[var(--home-soft)]"}`}>Kabupaten</button>
-							<button type="button" aria-pressed={area === "kota"} onClick={() => setArea("kota")} className={`rounded-full px-4 py-2 text-sm font-bold transition ${area === "kota" ? "bg-[var(--home-primary)] text-white" : "text-[var(--home-ink)] hover:bg-[var(--home-soft)]"}`}>Kota Madiun</button>
+						<div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[var(--home-ink)]/65" aria-label="Legenda peta">
+							<span className="inline-flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-sky-600" />Kabupaten</span>
+							<span className="inline-flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-violet-600" />Kota</span>
+							<span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Wisata dari Supabase</span>
 						</div>
 						<a href={googleMapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-[var(--home-ink)] transition hover:bg-[var(--home-soft)]">Buka di Google Maps <IconArrowRight /></a>
 					</div>
@@ -749,59 +884,133 @@ const Highlights = ({
 	</section>
 );
 
-const PromotionalSection = () => (
-	<section id="promo" className="py-20 px-6 max-w-6xl mx-auto">
-		<div className="bg-[var(--home-primary)] rounded-[3rem] p-8 md:p-16 relative overflow-hidden shadow-2xl animate-fade-up">
-			{/* Decorative Graphics */}
-			<div className="absolute top-0 right-0 w-64 h-64 bg-[var(--home-accent)] rounded-full blur-[80px] opacity-50 -translate-y-1/2 translate-x-1/4"></div>
-			<div className="absolute bottom-0 left-0 w-64 h-64 bg-[var(--home-accent)] rounded-full blur-[80px] opacity-40 translate-y-1/4 -translate-x-1/4"></div>
+type PublicCampaign = {
+	id: string;
+	title: string;
+	description: string;
+	imageUrl: string | null;
+	experienceType: "popup" | "minigame" | "photobox";
+	ctaLabel: string | null;
+	ctaUrl: string;
+};
 
-			<div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
-				<div className="text-white max-w-lg text-center md:text-left">
-					<span className="inline-block bg-[var(--home-glass)]/20 backdrop-blur-sm text-white text-sm font-bold px-4 py-2 rounded-full mb-6">
-						PREMIUM ACCESS · MADIUNTRIP
-					</span>
-					<h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">
-						Boarding Pass <br />
-						Digital-mu.
-					</h2>
-					<p className="text-white/80 text-lg mb-8">
-						Scan QR di lokasi untuk membuka cerita destinasi, memulai sesi pengunjung,
-						dan menemukan kejutan visual sepanjang perjalanan.
-					</p>
-					<Link
-						href="/scan"
-						className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-8 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-105">
-						Aktifkan perjalanan <IconArrowRight />
-					</Link>
+const PromotionalSection = () => {
+	const [campaigns, setCampaigns] = useState<PublicCampaign[]>([]);
+	const [activeIndex, setActiveIndex] = useState(0);
+	const touchStartX = useRef<number | null>(null);
+
+	useEffect(() => {
+		let isMounted = true;
+		fetch("/api/public-campaigns")
+			.then((response) => (response.ok ? response.json() : { campaigns: [] }))
+			.then((result: { campaigns?: PublicCampaign[] }) => {
+				if (isMounted && Array.isArray(result.campaigns)) setCampaigns(result.campaigns);
+			})
+			.catch(() => undefined);
+		return () => { isMounted = false; };
+	}, []);
+
+	const slides = [
+		{ id: "boarding-pass", campaign: null as PublicCampaign | null },
+		...campaigns.map((campaign) => ({ id: campaign.id, campaign })),
+	];
+	const activeSlide = slides[activeIndex] ?? slides[0];
+	const campaign = activeSlide.campaign;
+	const campaignType = campaign?.experienceType === "minigame"
+		? "MINIGAME · MADIUNTRIP"
+		: campaign?.experienceType === "photobox"
+			? "PHOTO EXPERIENCE · MADIUNTRIP"
+			: "CAMPAIGN · MADIUNTRIP";
+	const ctaLabel = campaign?.ctaLabel?.trim() || (campaign?.experienceType === "photobox" ? "Coba photobox" : campaign?.experienceType === "minigame" ? "Mulai minigame" : "Jelajahi event");
+	const ctaUrl = campaign?.ctaUrl || "/scan";
+
+	function moveSlide(direction: -1 | 1) {
+		setActiveIndex((current) => (current + direction + slides.length) % slides.length);
+	}
+
+	return (
+		<section id="promo" className="py-20 px-6 max-w-6xl mx-auto">
+			<div
+				className="relative"
+				onTouchStart={(event) => { touchStartX.current = event.changedTouches[0]?.clientX ?? null; }}
+				onTouchEnd={(event) => {
+					const endX = event.changedTouches[0]?.clientX;
+					if (touchStartX.current === null || endX === undefined) return;
+					const distance = endX - touchStartX.current;
+					if (Math.abs(distance) > 48) moveSlide(distance > 0 ? -1 : 1);
+					touchStartX.current = null;
+				}}>
+				<div key={activeSlide.id} className="min-h-[420px] bg-[var(--home-primary)] rounded-[2.5rem] p-8 md:p-14 relative overflow-hidden shadow-[0_24px_80px_-34px_var(--home-bloom)] animate-fade-up">
+					<div className="absolute top-0 right-0 w-64 h-64 bg-[var(--home-accent)] rounded-full blur-[80px] opacity-50 -translate-y-1/2 translate-x-1/4" />
+					<div className="absolute bottom-0 left-0 w-64 h-64 bg-[var(--home-accent)] rounded-full blur-[80px] opacity-40 translate-y-1/4 -translate-x-1/4" />
+					<div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
+						<div className="text-white max-w-lg text-center md:text-left">
+							<span className="inline-block bg-[var(--home-glass)]/20 backdrop-blur-sm text-white text-xs md:text-sm font-bold tracking-[.12em] px-4 py-2 rounded-full mb-6">
+								{campaign ? campaignType : "PREMIUM ACCESS · MADIUNTRIP"}
+							</span>
+							<h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">
+								{campaign ? campaign.title : <>Boarding Pass <br />Digital-mu.</>}
+							</h2>
+							<p className="text-white/80 text-lg mb-8">
+								{campaign?.description?.trim() || "Scan QR di lokasi untuk membuka cerita destinasi, memulai sesi pengunjung, dan menemukan kejutan visual sepanjang perjalanan."}
+							</p>
+							{ctaUrl.startsWith("/") ? (
+								<Link href={ctaUrl} className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-7 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-[1.03]">
+									{campaign ? ctaLabel : "Aktifkan perjalanan"} <IconArrowRight />
+								</Link>
+							) : (
+								<a href={ctaUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-7 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-[1.03]">
+									{ctaLabel} <IconArrowRight />
+								</a>
+							)}
+						</div>
+
+						{campaign?.imageUrl ? (
+							<div className="w-full max-w-sm h-64 md:h-80 relative overflow-hidden rounded-[2rem] border border-white/30 shadow-2xl">
+								<Image src={campaign.imageUrl} alt={campaign.title} fill unoptimized sizes="(max-width: 768px) 90vw, 380px" className="object-cover" />
+								<div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
+								<div className="absolute inset-x-0 bottom-0 p-5 text-white">
+									<div className="text-xs font-bold tracking-[.16em] text-white/75">MADIUNTRIP EVENT</div>
+									<div className="mt-1 text-xl font-black">{campaign.title}</div>
+								</div>
+							</div>
+						) : campaign ? (
+							<div className="w-full max-w-sm h-64 md:h-80 relative overflow-hidden rounded-[2rem] border border-white/20 bg-white/10 flex items-center justify-center">
+								<div className="absolute inset-5 rounded-[1.5rem] border border-dashed border-white/25" />
+								<div className="relative text-center text-white"><div className="text-6xl mb-4" aria-hidden="true">{campaign.experienceType === "photobox" ? "📸" : campaign.experienceType === "minigame" ? "🎮" : "✨"}</div><div className="text-xs font-bold tracking-[.18em] text-white/70">MADIUNTRIP EVENT</div><div className="mt-2 text-2xl font-black">{campaign.title}</div></div>
+							</div>
+						) : (
+							<div className="w-full max-w-sm relative group">
+								<div className="absolute inset-0 bg-[var(--home-accent)] rounded-[2rem] rotate-6 group-hover:rotate-12 transition-transform duration-500" />
+								<div className="absolute -right-4 -top-5 z-20 flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-accent)] shadow-[0_0_24px_var(--home-bloom)] animate-envelope-float"><IconEnvelope /></div>
+								<div className="relative bg-[var(--home-glass)] rounded-[2rem] p-6 shadow-xl border-4 border-[var(--home-glass-border)] transform group-hover:-translate-y-2 group-hover:-rotate-3 transition-transform duration-500">
+									<div className="mb-4 flex items-center justify-between border-b border-[var(--home-glass-border)] pb-3 text-[var(--home-ink)]"><span className="font-black tracking-[.18em]">MDN-TRP</span><IconCamera /></div>
+									<div className="matrix-qr-stage h-40 bg-[var(--home-soft)] rounded-xl mb-4 overflow-hidden relative flex items-center justify-center">
+										<div className="grid h-28 w-28 grid-cols-5 gap-1 rounded-xl bg-[var(--home-glass)] p-2" aria-hidden="true">
+											{Array.from({ length: 25 }, (_, index) => <span key={index} className={`matrix-cell rounded-sm ${[0, 1, 3, 5, 7, 12, 16, 18, 20, 21, 23, 24].includes(index) ? "is-fixed bg-[var(--home-primary)]" : "bg-[var(--home-accent)]/40"}`} style={{ animationDelay: `${(index % 5) * 180}ms` }} />)}
+										</div>
+									</div>
+									<div className="flex items-end justify-between gap-3"><div><div className="text-xs font-bold uppercase tracking-wider text-[var(--home-ink)]/55">Destinasi</div><div className="font-bold text-[var(--home-ink)] text-lg">Madiun Explorer</div></div><div className="rounded bg-[var(--home-accent)]/15 px-2 py-1 font-mono text-xs font-bold text-[var(--home-ink)]">READY TO SCAN</div></div>
+								</div>
+							</div>
+						)}
+					</div>
 				</div>
 
-				{/* Mockup / Graphic area */}
-				<div className="w-full max-w-sm relative group cursor-pointer">
-					<div className="absolute inset-0 bg-[var(--home-accent)] rounded-[2rem] rotate-6 group-hover:rotate-12 transition-transform duration-500"></div>
-					<div className="absolute -right-4 -top-5 z-20 flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-accent)] shadow-[0_0_24px_var(--home-bloom)] animate-envelope-float"><IconEnvelope /></div>
-					<div className="relative bg-[var(--home-glass)] rounded-[2rem] p-6 shadow-xl border-4 border-[var(--home-glass-border)] transform group-hover:-translate-y-2 group-hover:-rotate-3 transition-transform duration-500">
-						<div className="mb-4 flex items-center justify-between border-b border-[var(--home-glass-border)] pb-3 text-[var(--home-ink)]"><span className="font-black tracking-[.18em]">MDN-TRP</span><IconCamera /></div>
-						<div className="matrix-qr-stage h-40 bg-[var(--home-soft)] rounded-xl mb-4 overflow-hidden relative flex items-center justify-center">
-							<div
-								className="grid h-28 w-28 grid-cols-5 gap-1 rounded-xl bg-[var(--home-glass)] p-2"
-								aria-hidden="true">
-								{Array.from({ length: 25 }, (_, index) => (
-									<span
-										key={index}
-										className={`matrix-cell rounded-sm ${[0, 1, 3, 5, 7, 12, 16, 18, 20, 21, 23, 24].includes(index) ? "is-fixed bg-[var(--home-primary)]" : "bg-[var(--home-accent)]/40"}`}
-										style={{ animationDelay: `${(index % 5) * 180}ms` }}
-									/>
-								))}
-							</div>
-						</div>
-						<div className="flex items-end justify-between gap-3"><div><div className="text-xs font-bold uppercase tracking-wider text-[var(--home-ink)]/55">Destinasi</div><div className="font-bold text-[var(--home-ink)] text-lg">Madiun Explorer</div></div><div className="rounded bg-[var(--home-accent)]/15 px-2 py-1 font-mono text-xs font-bold text-[var(--home-ink)]">READY TO SCAN</div></div>
+				<div className="mt-5 flex items-center justify-between gap-4 px-1">
+					<div className="flex items-center gap-2" aria-label="Pilih promo">
+						{slides.map((slide, index) => <button key={slide.id} type="button" onClick={() => setActiveIndex(index)} aria-label={`Tampilkan promo ${index + 1}`} aria-current={index === activeIndex ? "true" : undefined} className={`h-2.5 rounded-full transition-all duration-300 ${index === activeIndex ? "w-8 bg-[var(--home-primary)]" : "w-2.5 bg-[var(--home-primary)]/25 hover:bg-[var(--home-primary)]/50"}`} />)}
+						<span className="ml-2 text-xs font-bold tracking-widest text-[var(--home-ink)]/55">{String(activeIndex + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}</span>
+					</div>
+					<div className="flex items-center gap-2">
+						<button type="button" onClick={() => moveSlide(-1)} aria-label="Promo sebelumnya" className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--home-primary)]/15 bg-[var(--home-glass)] text-[var(--home-primary)] shadow-sm transition hover:-translate-x-0.5 hover:shadow-md"><span className="rotate-180"><IconArrowRight /></span></button>
+						<button type="button" onClick={() => moveSlide(1)} aria-label="Promo berikutnya" className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--home-primary)]/15 bg-[var(--home-glass)] text-[var(--home-primary)] shadow-sm transition hover:translate-x-0.5 hover:shadow-md"><IconArrowRight /></button>
 					</div>
 				</div>
 			</div>
-		</div>
-	</section>
-);
+		</section>
+	);
+};
 
 const AssistantTirta = ({
 	onSearch,
@@ -969,7 +1178,9 @@ export default function MadiunTripApp() {
 
 		async function loadDestinations() {
 			try {
-				const response = await fetch("/api/public-destinations");
+				const query = searchQuery.trim();
+				const url = query ? `/api/public-destinations?q=${encodeURIComponent(query)}` : "/api/public-destinations";
+				const response = await fetch(url, { cache: "no-store" });
 
 				if (cancelled) return;
 				if (!response.ok) {
@@ -988,6 +1199,7 @@ export default function MadiunTripApp() {
 					.map(toDestinationCard)
 					.sort((a, b) => Number(b.featured) - Number(a.featured));
 				setDestinations(cards);
+				setDestinationError("");
 			} catch {
 				if (!cancelled)
 					setDestinationError(
@@ -998,11 +1210,12 @@ export default function MadiunTripApp() {
 			}
 		}
 
-		void loadDestinations();
+		const debounce = window.setTimeout(() => { void loadDestinations(); }, searchQuery.trim() ? 280 : 0);
 		return () => {
 			cancelled = true;
+			window.clearTimeout(debounce);
 		};
-	}, []);
+	}, [searchQuery]);
 
 	const visibleDestinations = destinations.filter((destination) => {
 		const searchable =
@@ -1031,6 +1244,7 @@ export default function MadiunTripApp() {
 					<DiscoveryMap
 						searchQuery={searchQuery}
 						onSearchChange={setSearchQuery}
+						destinations={visibleDestinations}
 					/>
 					<MoodCategories
 						selectedMood={selectedMood}
