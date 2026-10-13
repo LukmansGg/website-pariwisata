@@ -93,11 +93,11 @@ function destinationHasRequiredMediaAndLocation(row: DestinationRow) {
 }
 
 const MOOD_TERMS: Record<number, string[]> = {
-	1: ["alam", "hutan", "waduk", "air terjun", "alam"],
+	1: ["alam", "hutan", "waduk", "air terjun"],
 	2: ["kuliner", "makanan", "pecel", "malam"],
-	3: ["foto", "spot", "pemandangan", "view"],
+	3: ["spot foto", "foto", "pemandangan", "view"],
 	4: ["sejarah", "budaya", "monumen", "museum"],
-	5: ["adrenalin", "petualangan", "camping", "sepeda", "trail"],
+	5: ["petualangan", "adrenalin", "aktivitas", "rekreasi", "camping", "sepeda", "trail"],
 };
 
 // Reusable SVG Icons to avoid external dependencies
@@ -501,7 +501,7 @@ const HeroSection = () => {
 
 				<p className="text-lg md:text-xl text-[var(--home-ink)]/80 max-w-2xl mb-12 animate-fade-up delay-200">
 					Temukan spot rahasia, kuliner legendaris, dan petualangan epik di
-					Kabupaten Madiun.
+					Madiun.
 				</p>
 
 				{/* The Main Feature: Interactive QR Scanner Concept */}
@@ -569,13 +569,16 @@ const DiscoveryMap = ({
 	const [selectedDestination, setSelectedDestination] = useState<DestinationCard | null>(null);
 	const [selectedArea, setSelectedArea] = useState<MapArea | null>(null);
 	const [mapActive, setMapActive] = useState(false);
-	const [mapSearchText, setMapSearchText] = useState(searchQuery);
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [mapScale, setMapScale] = useState(1);
 	const [mapOffset, setMapOffset] = useState({ x: 0, y: 0 });
+	const mapOffsetRef = useRef(mapOffset);
+	const mapLayerRef = useRef<HTMLDivElement | null>(null);
+	const [isMapDragging, setIsMapDragging] = useState(false);
 	const [showMarkers, setShowMarkers] = useState(true);
 	const mapViewportRef = useRef<HTMLDivElement | null>(null);
-	const dragRef = useRef<{ pointerId: number; x: number; y: number; originX: number; originY: number } | null>(null);
+	const dragRef = useRef<{ pointerId: number; x: number; y: number; originX: number; originY: number; moved: boolean } | null>(null);
+	const suppressMapClickRef = useRef(false);
 
 	useEffect(() => {
 		let active = true;
@@ -591,10 +594,6 @@ const DiscoveryMap = ({
 		}).catch(() => { if (active) setBoundaryFailed(true); });
 		return () => { active = false; };
 	}, []);
-
-	useEffect(() => {
-		if (!selectedArea) setMapSearchText(searchQuery);
-	}, [searchQuery, selectedArea]);
 
 	useEffect(() => {
 		if (!mapActive) return;
@@ -630,16 +629,16 @@ const DiscoveryMap = ({
 		if (!mapActive || !viewport) return;
 		const handleWheel = (event: WheelEvent) => {
 			event.preventDefault();
-			setMapScale((value) => Math.max(1, Math.min(2.8, Number((value + (event.deltaY < 0 ? .12 : -.12)).toFixed(2)))));
+			setMapScale((value) => Math.max(1, Math.min(3.5, Number((value + (event.deltaY < 0 ? .16 : -.16)).toFixed(2)))));
 		};
 		viewport.addEventListener("wheel", handleWheel, { passive: false });
 		return () => viewport.removeEventListener("wheel", handleWheel);
 	}, [mapActive]);
 
 	const markers = useMemo(() => destinations.filter((destination) => destination.longitude >= MADIUN_MAP_BOUNDS.minX && destination.longitude <= MADIUN_MAP_BOUNDS.maxX && destination.latitude >= MADIUN_MAP_BOUNDS.minY && destination.latitude <= MADIUN_MAP_BOUNDS.maxY).map((destination) => ({ destination, point: projectMapPoint(destination.longitude, destination.latitude) })), [destinations]);
-	const googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=Kabupaten+Madiun+Kota+Madiun";
-	const zoom = (delta: number) => setMapScale((value) => Math.max(1, Math.min(2.8, Number((value + delta).toFixed(2)))));
-	const areaSuggestions = mapAreas.filter((area) => !mapSearchText.trim() || area.name.toLocaleLowerCase("id").includes(mapSearchText.trim().toLocaleLowerCase("id")) || mapSearchText.trim().toLocaleLowerCase("id").split(/\s+/).every((term) => area.name.toLocaleLowerCase("id").includes(term)));
+	const googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=Madiun";
+	const zoom = (delta: number) => setMapScale((value) => Math.max(1, Math.min(3.5, Number((value + delta).toFixed(2)))));
+	const areaSuggestions = mapAreas.filter((area) => !searchQuery.trim() || area.name.toLocaleLowerCase("id").includes(searchQuery.trim().toLocaleLowerCase("id")) || searchQuery.trim().toLocaleLowerCase("id").split(/\s+/).every((term) => area.name.toLocaleLowerCase("id").includes(term)));
 	const moveToArea = (area: MapArea) => {
 		const point = projectMapPoint(area.longitude, area.latitude);
 		const viewport = mapViewportRef.current;
@@ -655,11 +654,71 @@ const DiscoveryMap = ({
 			const maxY = height * (1.2 * scale - 1) / 2;
 			const desiredX = -((point.x / 1000 - .5) * width * 1.2 * scale);
 			const desiredY = -((point.y / 560 - .5) * height * 1.2 * scale);
-			setMapOffset({ x: Math.max(-maxX, Math.min(maxX, desiredX)), y: Math.max(-maxY, Math.min(maxY, desiredY)) });
+			const offset = { x: Math.max(-maxX, Math.min(maxX, desiredX)), y: Math.max(-maxY, Math.min(maxY, desiredY)) };
+			mapOffsetRef.current = offset;
+			setMapOffset(offset);
 		}
-		setMapSearchText(area.name);
 		setSearchOpen(false);
 		onSearchChange("");
+	};
+	const destinationSuggestions = searchQuery.trim()
+		? destinations.filter((destination) => {
+			const inBounds = destination.longitude >= MADIUN_MAP_BOUNDS.minX && destination.longitude <= MADIUN_MAP_BOUNDS.maxX && destination.latitude >= MADIUN_MAP_BOUNDS.minY && destination.latitude <= MADIUN_MAP_BOUNDS.maxY;
+			return inBounds && `${destination.title} ${destination.category}`.toLocaleLowerCase("id").includes(searchQuery.trim().toLocaleLowerCase("id"));
+		}).slice(0, 5)
+		: [];
+	const focusDestination = (destination: DestinationCard) => {
+		const point = projectMapPoint(destination.longitude, destination.latitude);
+		const viewport = mapViewportRef.current;
+		const scale = 2.2;
+		setSelectedArea(null);
+		setSelectedDestination(destination);
+		setMapActive(true);
+		setMapScale(scale);
+		if (viewport) {
+			const width = viewport.clientWidth;
+			const height = viewport.clientHeight;
+			const maxX = width * (1.2 * scale - 1) / 2;
+			const maxY = height * (1.2 * scale - 1) / 2;
+			const desiredX = -((point.x / 1000 - .5) * width * 1.2 * scale);
+			const desiredY = -((point.y / 560 - .5) * height * 1.2 * scale);
+			const offset = { x: Math.max(-maxX, Math.min(maxX, desiredX)), y: Math.max(-maxY, Math.min(maxY, desiredY)) };
+			mapOffsetRef.current = offset;
+			setMapOffset(offset);
+		}
+		setSearchOpen(false);
+		onSearchChange(destination.title);
+	};
+	const handleMapPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+		if (!mapActive || (event.target as HTMLElement).closest("[data-map-control]")) return;
+		event.currentTarget.setPointerCapture(event.pointerId);
+		dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, originX: mapOffsetRef.current.x, originY: mapOffsetRef.current.y, moved: false };
+		setIsMapDragging(true);
+	};
+	const handleMapPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+		const drag = dragRef.current;
+		if (!mapActive || !drag || drag.pointerId !== event.pointerId) return;
+		const deltaX = event.clientX - drag.x;
+		const deltaY = event.clientY - drag.y;
+		if (Math.abs(deltaX) + Math.abs(deltaY) > 5) drag.moved = true;
+		const maxX = event.currentTarget.clientWidth * (1.2 * mapScale - 1) / 2;
+		const maxY = event.currentTarget.clientHeight * (1.2 * mapScale - 1) / 2;
+		const offset = { x: Math.max(-maxX, Math.min(maxX, drag.originX + deltaX * 1.15)), y: Math.max(-maxY, Math.min(maxY, drag.originY + deltaY * 1.15)) };
+		mapOffsetRef.current = offset;
+		mapLayerRef.current?.style.setProperty("transform", `translate(${offset.x}px, ${offset.y}px) scale(${mapScale})`);
+	};
+	const handleMapPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+		if (dragRef.current?.pointerId !== event.pointerId) return;
+		if (dragRef.current.moved) suppressMapClickRef.current = true;
+		dragRef.current = null;
+		setMapOffset(mapOffsetRef.current);
+		setIsMapDragging(false);
+	};
+	const handleMapPointerCancel = () => {
+		dragRef.current = null;
+		suppressMapClickRef.current = false;
+		setMapOffset(mapOffsetRef.current);
+		setIsMapDragging(false);
 	};
 
 	return (
@@ -675,24 +734,24 @@ const DiscoveryMap = ({
 						</div>
 						<input
 							type="text"
-							placeholder="Cari wisata atau area: Kota / Kabupaten Madiun..."
+							placeholder="Cari wisata atau area Madiun..."
 							className="w-full bg-transparent border-none outline-none px-4 py-3 text-[var(--home-ink)] placeholder-[var(--home-ink)]/40 font-medium"
-							value={mapSearchText}
+							value={selectedArea ? selectedArea.name : searchQuery}
 							onFocus={() => setSearchOpen(true)}
 							onBlur={() => window.setTimeout(() => setSearchOpen(false), 140)}
-							onChange={(e) => { setSelectedArea(null); setMapSearchText(e.target.value); onSearchChange(e.target.value); setSearchOpen(true); }}
-							onKeyDown={(event) => { if (event.key === "Enter" && areaSuggestions.length === 1) { event.preventDefault(); moveToArea(areaSuggestions[0]); } }}
+							onChange={(e) => { setSelectedArea(null); setSelectedDestination(null); onSearchChange(e.target.value); setSearchOpen(true); }}
+							onKeyDown={(event) => { if (event.key === "Enter" && areaSuggestions.length + destinationSuggestions.length === 1) { event.preventDefault(); if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } }}
 						/>
 						<button
 							type="button"
-							onClick={() => areaSuggestions.length === 1 ? moveToArea(areaSuggestions[0]) : setSearchOpen(true)}
+							onClick={() => { if (areaSuggestions.length + destinationSuggestions.length === 1) { if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } else setSearchOpen(true); }}
 							className="bg-[var(--home-accent)] text-[var(--home-on-accent)] px-6 py-3 rounded-full font-bold hover:bg-[var(--home-primary)] hover:text-white transition-colors shadow-sm">
 							Cari
 						</button>
 					</div>
-					{searchOpen && areaSuggestions.length > 0 && <div className="absolute left-4 right-4 top-full mt-2 overflow-hidden rounded-2xl border border-sky-100 bg-white/95 p-2 shadow-xl backdrop-blur-xl">
-						<p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Area dari OpenStreetMap · bukan destinasi wisata</p>
-						{areaSuggestions.map((area) => <button key={area.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => moveToArea(area)} className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-800 transition hover:bg-sky-50"><span>{area.name}</span><span className="text-xs font-semibold text-sky-700">Tampilkan di peta →</span></button>)}
+					{searchOpen && (areaSuggestions.length > 0 || destinationSuggestions.length > 0) && <div className="absolute left-4 right-4 top-full mt-2 max-h-[min(55vh,360px)] overflow-y-auto rounded-2xl border border-sky-100 bg-white/95 p-2 shadow-xl backdrop-blur-xl">
+						{areaSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Wilayah</p>{areaSuggestions.map((area) => <button key={area.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => moveToArea(area)} className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-800 transition hover:bg-sky-50"><span>{area.name}</span><span className="text-xs font-semibold text-sky-700">Tampilkan →</span></button>)}</>}
+						{destinationSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Destinasi terdaftar</p>{destinationSuggestions.map((destination) => <button key={destination.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => focusDestination(destination)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-sky-50"><span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-800">{destination.title}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{destination.category}</span></span><span className="shrink-0 text-xs font-semibold text-sky-700">Lihat peta →</span></button>)}</>}
 					</div>}
 				</div>
 
@@ -703,15 +762,15 @@ const DiscoveryMap = ({
 						WILAYAH MADIUN
 					</div>
 
-					<div ref={mapViewportRef} className={`map-surface w-full h-[400px] rounded-[1.35rem] overflow-hidden bg-[#f5f9fc] relative border border-slate-200/80 ${mapActive ? "touch-none cursor-grab active:cursor-grabbing" : "touch-pan-y cursor-default"}`} aria-label={mapActive ? "Peta interaktif. Geser atau scroll untuk navigasi." : "Peta statis."} onClick={() => { if (!mapActive) setMapActive(true); }} onPointerDown={(event) => { if (!mapActive || (event.target as HTMLElement).closest("[data-map-control], [data-marker]")) return; event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, originX: mapOffset.x, originY: mapOffset.y }; }} onPointerMove={(event) => { const drag = dragRef.current; if (!mapActive || !drag || drag.pointerId !== event.pointerId) return; const maxX = event.currentTarget.clientWidth * (1.2 * mapScale - 1) / 2; const maxY = event.currentTarget.clientHeight * (1.2 * mapScale - 1) / 2; setMapOffset({ x: Math.max(-maxX, Math.min(maxX, drag.originX + event.clientX - drag.x)), y: Math.max(-maxY, Math.min(maxY, drag.originY + event.clientY - drag.y)) }); }} onPointerUp={(event) => { if (dragRef.current?.pointerId === event.pointerId) { dragRef.current = null; setMapOffset((offset) => ({ ...offset })); } }} onPointerCancel={() => { dragRef.current = null; setMapOffset((offset) => ({ ...offset })); }}>
-						<div className="absolute -inset-[10%] origin-center will-change-transform" style={{ transform: `translate(${mapOffset.x}px, ${mapOffset.y}px) scale(${mapScale})`, transition: dragRef.current ? "none" : "transform 280ms cubic-bezier(.2,.8,.2,1)" }}>
-						<iframe className="absolute inset-0 h-full w-full border-0 pointer-events-none" loading="lazy" scrolling="no" title="Peta OpenStreetMap Kabupaten dan Kota Madiun" src="https://www.openstreetmap.org/export/embed.html?bbox=111.18%2C-7.91%2C111.88%2C-7.32&amp;layer=mapnik" />
+					<div ref={mapViewportRef} className={`map-surface relative h-[480px] w-full overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#f5f9fc] sm:h-[540px] lg:h-[600px] ${mapActive ? "touch-none cursor-grab active:cursor-grabbing" : "touch-pan-y cursor-default"}`} aria-label={mapActive ? "Peta interaktif. Geser atau scroll untuk navigasi." : "Peta statis."} onClick={() => { if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } if (!mapActive) setMapActive(true); }} onPointerDown={handleMapPointerDown} onPointerMove={handleMapPointerMove} onPointerUp={handleMapPointerUp} onPointerCancel={handleMapPointerCancel}>
+						<div ref={mapLayerRef} className="absolute -inset-[10%] origin-center will-change-transform" style={{ transform: `translate(${mapOffset.x}px, ${mapOffset.y}px) scale(${mapScale})`, transition: isMapDragging ? "none" : "transform 280ms cubic-bezier(.2,.8,.2,1)" }}>
+						<iframe className="absolute inset-0 h-full w-full border-0 pointer-events-none" loading="lazy" scrolling="no" title="Peta OpenStreetMap Madiun" src="https://www.openstreetmap.org/export/embed.html?bbox=111.18%2C-7.91%2C111.88%2C-7.32&amp;layer=mapnik" />
 						<div className="absolute inset-0 bg-sky-50/20 pointer-events-none" />
-						<svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label="Batas Kabupaten dan Kota Madiun">
+						<svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label="Batas wilayah Madiun">
 							{boundaryPaths?.countyPath && <path d={boundaryPaths.countyPath} fill="none" fillRule="evenodd" stroke="#0284c7" strokeWidth="2.4" strokeDasharray="6 6" vectorEffect="non-scaling-stroke" />}
 							{boundaryPaths?.cityPath && <path d={boundaryPaths.cityPath} fill="none" fillRule="evenodd" stroke="#7c3aed" strokeWidth="2.8" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
 							{selectedArea && (() => { const point = projectMapPoint(selectedArea.longitude, selectedArea.latitude); return <g data-marker className="madiun-marker" aria-label={`Area ${selectedArea.name}`}><circle cx={point.x} cy={point.y} r="12" fill="#f97316" stroke="white" strokeWidth="3"/><circle cx={point.x} cy={point.y} r="4" fill="white"/><text x={point.x + 16} y={point.y - 12} fill="#7c2d12" stroke="white" strokeWidth="4" paintOrder="stroke" fontSize="18" fontWeight="800">{selectedArea.name}</text></g>; })()}
-							<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); return <g key={destination.id} data-marker role="button" tabIndex={0} aria-label={`Buka wisata ${destination.title}`} onClick={() => setSelectedDestination(destination)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedDestination(destination); }} className="madiun-marker cursor-pointer">
+							<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); return <g key={destination.id} data-marker role="button" tabIndex={0} aria-label={`Buka wisata ${destination.title}`} onClick={(event) => { if (suppressMapClickRef.current) { suppressMapClickRef.current = false; event.stopPropagation(); return; } setSelectedDestination(destination); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedDestination(destination); }} className="madiun-marker cursor-pointer">
 								<title>{destination.title} · {destination.category}</title>
 								{marker.shape === "pin" ? <><path d={`M${point.x} ${point.y + 11}S${point.x - 8} ${point.y + 2} ${point.x - 8} ${point.y - 3}a8 8 0 1 1 16 0c0 5-8 14-8 14Z`} fill={marker.color} stroke="white" strokeWidth="2"/><circle cx={point.x} cy={point.y - 3} r="2.5" fill="white"/></> : marker.shape === "star" ? <path d={`m${point.x} ${point.y - 9} 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "diamond" ? <path d={`m${point.x} ${point.y - 9} 8 9-8 9-8-9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "leaf" ? <path d={`M${point.x} ${point.y + 8}C${point.x - 12} ${point.y + 1} ${point.x - 3} ${point.y - 10} ${point.x + 8} ${point.y - 8}C${point.x + 9} ${point.y + 2} ${point.x + 3} ${point.y + 8} ${point.x} ${point.y + 8}M${point.x} ${point.y + 7}l5-8`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : <circle cx={point.x} cy={point.y} r="7" fill={marker.color} stroke="white" strokeWidth="2"/>}
 							</g>; })}</g>
@@ -720,7 +779,7 @@ const DiscoveryMap = ({
 						{mapActive ? <div className="absolute right-3 top-3 z-10 flex gap-2"><div className="map-control-bar flex overflow-hidden rounded-xl border border-white/90 bg-white/90 text-slate-700 backdrop-blur-md"><button data-map-control type="button" onClick={() => zoom(.2)} className="px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perbesar peta">+</button><button data-map-control type="button" onClick={() => zoom(-.2)} className="border-l border-slate-100 px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perkecil peta">−</button><button data-map-control type="button" onClick={() => setShowMarkers((shown) => !shown)} aria-pressed={showMarkers} className="border-l border-slate-100 px-3 py-2 text-xs font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label={showMarkers ? "Sembunyikan marker wisata" : "Tampilkan marker wisata"}>{showMarkers ? "Pin on" : "Pin off"}</button></div><button data-map-control type="button" onClick={() => setMapActive(false)} className="map-control-bar rounded-xl border border-white/90 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 backdrop-blur-md transition hover:bg-sky-50 hover:text-sky-700">Selesai <span aria-hidden="true">×</span></button></div> : <button data-map-control type="button" aria-label="Aktifkan navigasi peta" title="Aktifkan navigasi peta" onClick={() => setMapActive(true)} className="map-activate-lock absolute left-1/2 top-1/2 z-[5] grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/90 bg-white/80 text-sky-700 backdrop-blur-sm"><span className="map-activation-halo absolute inset-0 rounded-full border border-sky-300/70"/><svg className="relative h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/><path d="M12 16.5v1.5"/></svg></button>}
 						<div className="absolute right-3 bottom-3 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600">© OpenStreetMap contributors</div>
 						{!boundaryPaths && <div className="absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">{boundaryFailed ? "Garis batas belum termuat; peta tetap tersedia." : "Memuat garis batas…"}</div>}
-						<div className="absolute bottom-3 left-3 rounded-xl bg-white/90 px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-sm">{markers.length} wisata cocok · batas tersimpan di Supabase</div>
+						<div className="absolute bottom-3 left-3 rounded-xl bg-white/90 px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-sm">{markers.length} wisata cocok</div>
 						{selectedDestination && <div className="absolute right-3 bottom-3 z-20 max-w-[250px] rounded-2xl border border-sky-100 bg-white/95 p-3 shadow-lg"><button type="button" onClick={() => setSelectedDestination(null)} className="absolute right-2 top-2 rounded-full px-2 text-slate-400 hover:bg-slate-100" aria-label="Tutup">×</button><p className="pr-5 text-sm font-extrabold text-slate-800">{selectedDestination.title}</p><p className="mt-1 text-xs text-slate-500">{selectedDestination.category}</p><Link href={`/wisata/${selectedDestination.slug}`} className="mt-2 inline-flex text-xs font-bold text-sky-700">Lihat detail →</Link></div>}
 					</div>
 					<div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -796,7 +855,7 @@ const Highlights = ({
 					Spot pilihan
 				</h2>
 				<p className="text-[var(--home-ink)]/70">
-					Tempat seru di Kabupaten dan Kota Madiun.
+					Tempat seru di Madiun.
 				</p>
 			</div>
 			{destinations.length > 0 && (
@@ -1104,7 +1163,7 @@ const Footer = () => {
 				</div>
 				<p className="text-[var(--home-ink)]/70 max-w-sm mb-6 leading-relaxed">
 					Platform penemuan wisata premium untuk mengeksplorasi keindahan alam,
-					budaya, dan kuliner Kabupaten Madiun.
+					budaya, dan kuliner Madiun.
 				</p>
 			</div>
 			<div>
@@ -1243,7 +1302,7 @@ export default function MadiunTripApp() {
 					<HeroSection />
 					<DiscoveryMap
 						searchQuery={searchQuery}
-						onSearchChange={setSearchQuery}
+						onSearchChange={(query) => { setSearchQuery(query); if (query.trim()) setSelectedMood(null); }}
 						destinations={visibleDestinations}
 					/>
 					<MoodCategories

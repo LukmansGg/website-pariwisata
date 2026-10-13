@@ -449,22 +449,21 @@ export default function ScanPage() {
 						) : null}
 					</div>
 
-					{status === "scanning" ? <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-20 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-2xl border border-white/25 bg-[#F5EEDD]/95 p-2.5 text-[#16587B] shadow-xl backdrop-blur-xl sm:bottom-9 sm:gap-3 sm:p-3">
+					{status === "scanning" ? <div aria-label="Kontrol kamera" className="absolute bottom-[max(.75rem,env(safe-area-inset-bottom))] left-1/2 z-20 flex -translate-x-1/2 flex-nowrap items-center justify-center gap-2 rounded-2xl border border-white/30 bg-[#F5EEDD]/95 p-2 shadow-xl backdrop-blur-xl sm:bottom-6 sm:gap-2.5 sm:p-2.5">
 						{status === "scanning" && devices.length > 1 ? (
-							<button type="button" onClick={() => void switchCamera()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#84B3CE]/50 bg-[#F5EEDD] px-4 py-2.5 text-sm font-bold transition hover:bg-[#84B3CE]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B]" aria-label="Putar kamera"><FlipIcon /> Putar</button>
+							<button type="button" onClick={() => void switchCamera()} className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#84B3CE]/50 bg-white text-[#16587B] transition hover:bg-[#84B3CE]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B]" aria-label="Putar kamera" title="Putar kamera"><FlipIcon /></button>
 						) : null}
 						{status === "scanning" && torchSupported ? (
-							<button type="button" onClick={() => void toggleTorch()} className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B] ${torchOn ? "bg-[#16587B] text-white" : "border border-[#84B3CE]/50 bg-[#F5EEDD] hover:bg-[#84B3CE]/25"}`} aria-pressed={torchOn}><FlashIcon active={torchOn} /> {torchOn ? "Flash mati" : "Flash"}</button>
+							<button type="button" onClick={() => void toggleTorch()} className={`inline-flex h-11 w-11 items-center justify-center rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B] ${torchOn ? "bg-[#16587B] text-white" : "border border-[#84B3CE]/50 bg-white text-[#16587B] hover:bg-[#84B3CE]/25"}`} aria-label={torchOn ? "Matikan flash" : "Nyalakan flash"} title={torchOn ? "Matikan flash" : "Nyalakan flash"} aria-pressed={torchOn}><FlashIcon active={torchOn} /></button>
 						) : null}
 						{status === "scanning" ? (
-							<button type="button" onClick={() => { stopCamera(); setStatus("idle"); }} className="min-h-11 rounded-xl border border-[#84B3CE]/50 bg-white px-4 py-2.5 text-sm font-bold transition hover:bg-[#F5EEDD] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B]">Selesai</button>
+							<button type="button" onClick={() => { stopCamera(); setStatus("idle"); }} className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[#84B3CE]/50 bg-white text-[#16587B] transition hover:bg-[#F5EEDD] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B]" aria-label="Selesai memindai" title="Selesai"><CloseIcon /></button>
 						) : null}
 					</div> : null}
 				</div>
 
-				{status === "scanning" ? <div className="absolute bottom-[calc(5.75rem+env(safe-area-inset-bottom))] left-0 right-0 z-20 px-4 text-center text-xs text-white/90 sm:bottom-28">
-					<p>Arahkan QR ke dalam frame. Pastikan gambar cukup terang dan tidak buram.</p>
-					<p className="mt-1 font-semibold">Privat · Tanpa pelacakan lokasi</p>
+				{status === "scanning" ? <div className="pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top)+4.75rem)] z-20 w-[min(calc(100%-2rem),28rem)] -translate-x-1/2 rounded-xl border border-white/20 bg-[#0b3044]/70 px-4 py-2 text-center text-xs leading-5 text-white shadow-lg backdrop-blur-md">
+					<p>Arahkan QR ke dalam bingkai. Pastikan gambar terang dan fokus.</p>
 				</div> : null}
 			</section>
 
