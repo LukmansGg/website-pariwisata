@@ -17,12 +17,12 @@ function originIsAllowed(request: Request) {
 }
 
 async function uploadPrivatePhoto(accessToken: string, folderId: string, bytes: Uint8Array) {
-	const boundary = `madiuntrip_${randomUUID().replaceAll("-", "")}`;
+	const boundary = `tiloc_${randomUUID().replaceAll("-", "")}`;
 	const metadata = JSON.stringify({
 		name: `kenangan-${new Date().toISOString().slice(0, 10)}-${randomUUID().slice(0, 8)}.jpg`,
 		mimeType: "image/jpeg",
 		parents: [folderId],
-		appProperties: { madiuntripAsset: "true", assetFolder: "visitor_photobox" },
+		appProperties: { tilocAsset: "true", assetFolder: "visitor_photobox" },
 	});
 	const prefix = new TextEncoder().encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`);
 	const suffix = new TextEncoder().encode(`\r\n--${boundary}--`);

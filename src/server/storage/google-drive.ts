@@ -172,10 +172,10 @@ export async function createDriveAssetsFolder(accessToken: string) {
 		method: "POST",
 		cache: "no-store",
 		headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-		body: JSON.stringify({ name: "MadiunTrip Assets", mimeType: "application/vnd.google-apps.folder" }),
+		body: JSON.stringify({ name: "TiLoc Assets", mimeType: "application/vnd.google-apps.folder" }),
 	});
 	const result = await response.json() as { id?: string; error?: { message?: string } };
-	if (!response.ok || !result.id) throw new Error(result.error?.message || "Folder aset MadiunTrip gagal dibuat di Drive.");
+	if (!response.ok || !result.id) throw new Error(result.error?.message || "Folder aset TiLoc gagal dibuat di Drive.");
 	return result.id;
 }
 
@@ -204,7 +204,7 @@ export async function startDriveResumableUpload({ accessToken, folderId, mimeTyp
 		name: `${assetFolder}-${randomBytes(16).toString("hex")}.${extension[mimeType]}`,
 		mimeType,
 		parents: [folderId],
-		appProperties: { madiuntripAsset: "true", assetFolder },
+		appProperties: { tilocAsset: "true", assetFolder },
 	};
 	const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType", {
 		method: "POST",

@@ -6,7 +6,8 @@ import type { ReactNode } from "react";
 type Theme = "light" | "dark";
 type ThemeContextValue = { theme: Theme; isDark: boolean; toggleTheme: () => void };
 
-const STORAGE_KEY = "madiuntrip-home-theme";
+const STORAGE_KEY = "tiloc-home-theme";
+const LEGACY_STORAGE_KEY = "madiuntrip-home-theme";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -21,8 +22,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	useEffect(() => {
-		const storedTheme = window.localStorage.getItem(STORAGE_KEY);
+		const storedTheme = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
 		const initialTheme: Theme = storedTheme === "dark" ? "dark" : "light";
+		if (storedTheme) window.localStorage.setItem(STORAGE_KEY, storedTheme);
 		const setInitialTheme = (next: Theme) => {
 			setTheme(next);
 			const root = document.documentElement;
@@ -33,7 +35,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 		setInitialTheme(initialTheme);
 
 		const syncTheme = (event: StorageEvent) => {
-			if (event.key !== STORAGE_KEY) return;
+			if (event.key !== STORAGE_KEY && event.key !== LEGACY_STORAGE_KEY) return;
 			const next: Theme = event.newValue === "dark" ? "dark" : "light";
 			setInitialTheme(next);
 		};

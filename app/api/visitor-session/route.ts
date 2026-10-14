@@ -68,6 +68,26 @@ export async function POST(request: Request) {
 			destination.id,
 		);
 
+		// Keep a small, staff-readable projection for the workspace monitor. The
+		// session RPC remains the source of truth for the visitor experience.
+		const { error: monitorError } = await supabase
+			.from("tourism_visitor_sessions")
+			.upsert({
+				id: session.id,
+				visitor_id: session.visitor_id,
+				destination_id: session.destination_id ?? destination.id,
+				started_at: session.started_at,
+				last_activity_at: session.last_activity_at,
+				expires_at: session.expires_at,
+				status: session.status,
+				updated_at: new Date().toISOString(),
+			}, { onConflict: "id" });
+		if (monitorError) {
+			console.error("Visitor session monitor projection failed", {
+				code: monitorError.code,
+			});
+		}
+
 		return NextResponse.json({ session }, { status: 200 });
 	} catch (error) {
 		const message =

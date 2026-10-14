@@ -3,8 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/src/components/theme-provider";
 
 export const metadata: Metadata = {
-	title: "MadiunTrip — Jelajah Pariwisata Madiun",
-	description: "Temukan destinasi, cerita, dan pengalaman wisata di Madiun.",
+	title: "TiLoc (Titik Lokasi) — Jelajah Pariwisata Madiun",
+	description: "TiLoc, Titik Lokasi untuk menemukan destinasi, cerita, dan pengalaman wisata di Madiun.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -2,7 +2,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* MadiunTrip palette: white, Merino, Rock Blue, Venice Blue. */
+  /* TiLoc palette: white, Merino, Rock Blue, Venice Blue. */
   --color-merino: #F5EEDD;
   --color-rock-blue: #84B3CE;
   --color-venice-blue: #16587B;

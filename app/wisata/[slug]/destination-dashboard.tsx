@@ -31,7 +31,7 @@ const GUIDE_ITEMS = [
 
 function MascotCrew({ group, imageUrl }: { group: "upper" | "lower"; imageUrl?: string | null }) {
 	const indexes = group === "upper" ? [0, 1, 2] : [3, 4, 5];
-	return <div aria-label="Maskot MadiunTrip" className={"mascot-crew " + group}>{indexes.map((frame, index) => <div key={frame} className={"mascot-sprite mascot-sprite--" + index}><Image src={imageUrl || MASCOT_FRAMES[frame]} alt={index === 0 ? "Maskot pemandu MadiunTrip" : ""} aria-hidden={index > 0} fill sizes="200px" unoptimized className="object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></div>)}</div>;
+	return <div aria-label="Maskot TiLoc" className={"mascot-crew " + group}>{indexes.map((frame, index) => <div key={frame} className={"mascot-sprite mascot-sprite--" + index}><Image src={imageUrl || MASCOT_FRAMES[frame]} alt={index === 0 ? "Maskot pemandu TiLoc" : ""} aria-hidden={index > 0} fill sizes="200px" unoptimized className="object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></div>)}</div>;
 }
 
 function MagicBackground({ dark }: { dark: boolean }) {
@@ -132,6 +132,17 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 		const timer = window.setTimeout(() => setShowSessionModal(true), Math.max(0, remaining - 60_000));
 		return () => window.clearTimeout(timer);
 	}, [session]);
+	useEffect(() => {
+		const heartbeat = () => {
+			if (document.visibilityState === "visible") void startSession();
+		};
+		const timer = window.setInterval(heartbeat, 120_000);
+		document.addEventListener("visibilitychange", heartbeat);
+		return () => {
+			window.clearInterval(timer);
+			document.removeEventListener("visibilitychange", heartbeat);
+		};
+	}, [startSession]);
 
 	async function sendPrompt(prompt: string) {
 		const question = prompt.trim();
@@ -225,7 +236,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 		`}</style>
 		<MagicBackground dark={dark} />
 		<header className="sticky top-0 z-30 border-b border-white/70 bg-white/65 px-4 py-3 shadow-sm backdrop-blur-2xl sm:px-6"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-			<div className="flex min-w-0 items-center gap-3"><Link href="/" aria-label="Kembali ke beranda" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#84B3CE]/40 bg-white/80 text-[#16587B] shadow-sm transition hover:-translate-x-0.5 hover:bg-white"><Icon name="back" className="h-5 w-5" /></Link><Link href="/" className="hidden text-lg font-black tracking-tight text-[#16587B] sm:block">Madiun<span className="text-[#84B3CE]">Trip</span></Link></div>
+			<div className="flex min-w-0 items-center gap-3"><Link href="/" aria-label="Kembali ke beranda" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#84B3CE]/40 bg-white/80 text-[#16587B] shadow-sm transition hover:-translate-x-0.5 hover:bg-white"><Icon name="back" className="h-5 w-5" /></Link><Link href="/" aria-label="TiLoc · Titik Lokasi" className="hidden text-lg font-black tracking-tight text-[#16587B] sm:block">TiLoc</Link></div>
 			<div className="flex items-center gap-2 sm:gap-3"><span className="hidden items-center gap-2 rounded-full border border-[#84B3CE]/45 bg-[#F5EEDD]/85 px-4 py-2 text-[10px] font-black uppercase tracking-[.16em] text-[#16587B] sm:flex"><span className={"h-2 w-2 rounded-full " + (sessionIsActive ? "bg-[#84B3CE] shadow-[0_0_10px_#84B3CE]" : "bg-[#16587B]/35")} />Perjalanan {visitorName}</span><button type="button" onClick={() => setDark((value) => !value)} aria-label={dark ? "Gunakan tema terang" : "Gunakan tema malam"} className="grid h-10 w-10 place-items-center rounded-full border border-[#84B3CE]/35 bg-white/85 text-[#16587B] shadow-sm transition hover:rotate-6 hover:scale-105"><Icon name={dark ? "sun" : "moon"} className="h-5 w-5" /></button></div>
 		</div></header>
 
@@ -256,7 +267,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 {chatAiEnabled && (
 				<aside className="relative mt-16 lg:col-span-5 lg:mt-16" aria-label="Pemandu AI"><div className="pointer-events-none absolute -top-24 right-3 z-0 h-36 w-52 sm:-top-32 sm:right-4 sm:h-48 sm:w-64"><MascotCrew group="upper" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div>
 					<section className="tourism-glass relative z-10 flex min-h-[650px] flex-col rounded-[2rem] p-5 pt-14 sm:rounded-[2.5rem] sm:p-7 sm:pt-16" aria-labelledby="guide-chat-title">
-						<div className="mb-4 flex items-center justify-between gap-3 border-b border-[#84B3CE]/35 pb-4"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#16587B] text-xl text-white shadow-lg">✦</span><div><p className="text-[9px] font-black uppercase tracking-[.2em] text-[#16587B]/65">PEMANDU AI</p><h2 id="guide-chat-title" className="mt-0.5 text-lg font-black text-[#16587B] sm:text-xl">MadiunTrip Guide</h2></div></div>
+						<div className="mb-4 flex items-center justify-between gap-3 border-b border-[#84B3CE]/35 pb-4"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#16587B] text-xl text-white shadow-lg">✦</span><div><p className="text-[9px] font-black uppercase tracking-[.2em] text-[#16587B]/65">PEMANDU AI</p><h2 id="guide-chat-title" className="mt-0.5 text-lg font-black text-[#16587B] sm:text-xl">TiLoc Guide</h2></div></div>
 							<button type="button" onClick={speakLastReply} aria-label={isSpeaking ? "Sedang membacakan jawaban" : "Dengarkan jawaban terakhir"} title="Dengarkan jawaban terakhir" className={"grid h-10 w-10 shrink-0 place-items-center rounded-2xl border transition " + (isSpeaking ? "border-[#16587B] bg-[#16587B] text-white" : "border-[#84B3CE]/40 bg-white/80 text-[#16587B] hover:bg-[#84B3CE]/20")}><Icon name="sound" className="h-5 w-5" /></button>
 						</div>
 						<p className="mb-4 text-xs leading-5 text-[#16587B]/70">Tanyakan apa saja tentang <strong>{destination.name}</strong>. Jawaban merujuk pada informasi dari pengelola.</p>
@@ -275,11 +286,11 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			</div>
 
 			<section className="tourism-glass relative mt-14 flex flex-col items-center gap-5 overflow-hidden rounded-[2rem] p-6 sm:mt-20 sm:flex-row sm:gap-8 sm:rounded-[2.5rem] sm:p-9" aria-labelledby="explore-title"><div aria-hidden="true" className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-[#84B3CE]/20 blur-3xl" />
-				<div className="relative h-36 w-52 shrink-0 sm:h-44 sm:w-60"><MascotCrew group="lower" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div><div className="relative z-10 flex-1 text-center sm:text-left"><h2 id="explore-title" className="text-2xl font-black text-[#16587B] sm:text-3xl">Jelajahi MadiunTrip!</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[#16587B]/75 sm:mx-0 sm:text-base">Temukan pesona wisata lokal bersama pemandu cerdas kami. Pindai QR di spot menarik untuk menyambung petualanganmu.</p>
+				<div className="relative h-36 w-52 shrink-0 sm:h-44 sm:w-60"><MascotCrew group="lower" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div><div className="relative z-10 flex-1 text-center sm:text-left"><h2 id="explore-title" className="text-2xl font-black text-[#16587B] sm:text-3xl">Jelajahi TiLoc!</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[#16587B]/75 sm:mx-0 sm:text-base">Temukan pesona wisata lokal bersama pemandu cerdas kami. Pindai QR di spot menarik untuk menyambung petualanganmu.</p>
 					<div className="mt-6 flex flex-wrap justify-center gap-3 sm:justify-start"><button type="button" onClick={() => setShowGuideModal(true)} className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#84B3CE]/50 bg-white/70 px-4 py-2.5 font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#84B3CE]/20"><Icon name="book" className="h-5 w-5" /></span>Panduan Wisata</button><button type="button" onClick={() => setShowSessionModal(true)} className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#84B3CE]/50 bg-[#84B3CE]/15 px-4 py-2.5 font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#84B3CE]/25"><span className="relative grid h-9 w-9 place-items-center rounded-xl bg-[#16587B] text-lg text-white"><span className={"absolute right-1 top-1 h-2 w-2 rounded-full ring-2 ring-[#F5EEDD] " + (sessionIsActive ? "bg-[#84B3CE]" : "bg-[#84B3CE]/45")} />◉</span>Status Sesi</button></div>
 				</div>
 			</section>
-			<footer className="pb-5 pt-7 text-center text-xs font-semibold text-[#16587B]/55">© MadiunTrip · Jelajah dengan nyaman, simpan kenangan indah.</footer>
+			<footer className="pb-5 pt-7 text-center text-xs font-semibold text-[#16587B]/55">© TiLoc · Jelajah dengan nyaman, simpan kenangan indah.</footer>
 		</main>
 
 		{showNameModal && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#102F43]/55 p-4 backdrop-blur-md"><section role="dialog" aria-modal="true" aria-labelledby="welcome-title" className="tourism-glass relative my-auto w-full max-w-md overflow-hidden rounded-[2.5rem] border-2 border-white/80 p-7 text-center shadow-2xl sm:p-9"><div aria-hidden="true" className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-[#84B3CE]/30 blur-3xl" /><div className="relative mx-auto mb-3 h-36 w-52"><MascotCrew group="upper" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div>

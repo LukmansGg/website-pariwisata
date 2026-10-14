@@ -452,7 +452,7 @@ export default function ScanPage() {
 							<div className="absolute inset-0 flex items-center justify-center bg-[#16587B]/30 px-4 py-20 text-center backdrop-blur-[2px] landscape:py-12">
 								<div className="w-full max-w-sm rounded-[2rem] border border-white/35 bg-[#F5EEDD]/95 p-5 text-[#16587B] shadow-[0_24px_90px_-22px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:p-8 landscape:rounded-2xl landscape:p-3">
 									<div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-[#16587B] text-[#F5EEDD] shadow-lg shadow-[#16587B]/25 landscape:mb-1 landscape:h-9 landscape:w-9"><CameraIcon className="h-7 w-7 landscape:h-5 landscape:w-5" /></div>
-									<p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#16587B]/55">MadiunTrip · QR Scanner</p>
+									<p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#16587B]/55">TiLoc · QR Scanner</p>
 									<h2 className="mt-2 text-xl font-black sm:text-2xl landscape:mt-1 landscape:text-lg">Siap untuk menjelajah?</h2>
 									<p className="mt-2 text-sm leading-6 text-[#16587B]/70 landscape:mt-1 landscape:text-xs landscape:leading-4">Izinkan kamera untuk mengenali QR dan menampilkan informasi wisata. Kamera hanya aktif saat halaman scanner dibuka.</p>
 									<button type="button" onClick={() => void startCamera()} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#16587B] px-6 py-3 font-bold text-white shadow-lg shadow-[#16587B]/20 transition hover:-translate-y-0.5 hover:bg-[#16587B]/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#84B3CE]/60 landscape:mt-2 landscape:min-h-10 landscape:py-2">

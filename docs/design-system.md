@@ -1,4 +1,4 @@
-# Palet visual MadiunTrip
+# Palet visual TiLoc
 
 Gunakan palet ini untuk semua antarmuka situs. Jangan menambahkan pink, coral, jingga, merah, hijau, atau abu-abu sebagai warna UI.
 

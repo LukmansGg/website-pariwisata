@@ -83,7 +83,7 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 		const tags = (state?.destinationTags ?? destination.tags ?? []).map((tag) => `#${tag.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "")}`).filter((tag) => tag.length > 1).slice(0, 4);
 		const base = (program.captionTemplate || "Kenangan seru di {destination}!").replaceAll("{destination}", destination.name);
 		const place = destination.address || state?.destinationAddress;
-		setCaption(`${base} ${place ? `📍 ${place}` : ""} ${[...new Set([...tags, "#MadiunTrip", "#JelajahMadiun"])].join(" ")}`.trim().slice(0, program.maxCaptionLength));
+		setCaption(`${base} ${place ? `📍 ${place}` : ""} ${[...new Set([...tags, "#TiLoc", "#JelajahMadiun"])].join(" ")}`.trim().slice(0, program.maxCaptionLength));
 		initializedCaption.current = true;
 	}, [destination.name, destination.tags, program, state?.destinationTags]);
 	useEffect(() => () => {

@@ -345,7 +345,7 @@ export default function StaffLoginPage() {
                   <IconDroplet />
                 </div>
                 <h1 className="text-xl sm:text-2xl font-black text-[var(--text-primary)] tracking-tight">
-                  MadiunTrip<span className="text-[var(--rock-blue)]">.</span>
+                  TiLoc<span className="text-[var(--rock-blue)]">.</span>
                 </h1>
               </div>
               <div className="flex items-center gap-2 sm:gap-3">

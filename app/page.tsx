@@ -434,9 +434,9 @@ function Navbar({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
 	return (
 		<nav className="glass-panel fixed top-0 z-50 w-full !border-x-0 !border-t-0 !rounded-none bg-[var(--home-glass)]/90 transition-all duration-300">
 			<div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
-				<a href="#beranda" className="flex items-center gap-2 cursor-pointer group">
-					<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--home-primary)] text-xl font-bold text-[var(--home-on-primary)] transition-transform group-hover:scale-105">M</div>
-					<span className="text-xl font-extrabold tracking-tight text-[var(--home-ink)]">MadiunTrip<span className="text-[var(--home-accent)]">.</span></span>
+				<a href="#beranda" aria-label="TiLoc · Titik Lokasi" className="flex items-center gap-2 cursor-pointer group">
+					<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--home-primary)] text-xs font-black text-[var(--home-on-primary)] transition-transform group-hover:scale-105">TL</div>
+					<span className="text-xl font-extrabold tracking-tight text-[var(--home-ink)]">TiLoc<span className="text-[var(--home-accent)]">.</span></span>
 				</a>
 				<div className="hidden items-center gap-8 font-medium text-[var(--home-ink)] md:flex">
 					<a href="#destinasi" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Destinasi</a>
@@ -969,10 +969,10 @@ const PromotionalSection = () => {
 	const activeSlide = slides[activeIndex] ?? slides[0];
 	const campaign = activeSlide.campaign;
 	const campaignType = campaign?.experienceType === "minigame"
-		? "MINIGAME · MADIUNTRIP"
+		? "MINIGAME · TILOC"
 		: campaign?.experienceType === "photobox"
-			? "PHOTO EXPERIENCE · MADIUNTRIP"
-			: "CAMPAIGN · MADIUNTRIP";
+			? "PHOTO EXPERIENCE · TILOC"
+			: "CAMPAIGN · TILOC";
 	const ctaLabel = campaign?.ctaLabel?.trim() || (campaign?.experienceType === "photobox" ? "Coba photobox" : campaign?.experienceType === "minigame" ? "Mulai minigame" : "Jelajahi event");
 	const ctaUrl = campaign?.ctaUrl || "/scan";
 
@@ -998,7 +998,7 @@ const PromotionalSection = () => {
 					<div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-10">
 						<div className="text-white max-w-lg text-center md:text-left">
 							<span className="inline-block bg-[var(--home-glass)]/20 backdrop-blur-sm text-white text-xs md:text-sm font-bold tracking-[.12em] px-4 py-2 rounded-full mb-6">
-								{campaign ? campaignType : "PREMIUM ACCESS · MADIUNTRIP"}
+								{campaign ? campaignType : "PREMIUM ACCESS · TILOC"}
 							</span>
 							<h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">
 								{campaign ? campaign.title : <>Boarding Pass <br />Digital-mu.</>}
@@ -1022,14 +1022,14 @@ const PromotionalSection = () => {
 								<Image src={campaign.imageUrl} alt={campaign.title} fill unoptimized sizes="(max-width: 768px) 90vw, 380px" className="object-cover" />
 								<div className="absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-transparent" />
 								<div className="absolute inset-x-0 bottom-0 p-5 text-white">
-									<div className="text-xs font-bold tracking-[.16em] text-white/75">MADIUNTRIP EVENT</div>
+									<div className="text-xs font-bold tracking-[.16em] text-white/75">TILOC EVENT</div>
 									<div className="mt-1 text-xl font-black">{campaign.title}</div>
 								</div>
 							</div>
 						) : campaign ? (
 							<div className="w-full max-w-sm h-64 md:h-80 relative overflow-hidden rounded-[2rem] border border-white/20 bg-white/10 flex items-center justify-center">
 								<div className="absolute inset-5 rounded-[1.5rem] border border-dashed border-white/25" />
-								<div className="relative text-center text-white"><div className="text-6xl mb-4" aria-hidden="true">{campaign.experienceType === "photobox" ? "📸" : campaign.experienceType === "minigame" ? "🎮" : "✨"}</div><div className="text-xs font-bold tracking-[.18em] text-white/70">MADIUNTRIP EVENT</div><div className="mt-2 text-2xl font-black">{campaign.title}</div></div>
+								<div className="relative text-center text-white"><div className="text-6xl mb-4" aria-hidden="true">{campaign.experienceType === "photobox" ? "📸" : campaign.experienceType === "minigame" ? "🎮" : "✨"}</div><div className="text-xs font-bold tracking-[.18em] text-white/70">TILOC EVENT</div><div className="mt-2 text-2xl font-black">{campaign.title}</div></div>
 							</div>
 						) : (
 							<div className="w-full max-w-sm relative group">
@@ -1042,7 +1042,7 @@ const PromotionalSection = () => {
 											{Array.from({ length: 25 }, (_, index) => <span key={index} className={`matrix-cell rounded-sm ${[0, 1, 3, 5, 7, 12, 16, 18, 20, 21, 23, 24].includes(index) ? "is-fixed bg-[var(--home-primary)]" : "bg-[var(--home-accent)]/40"}`} style={{ animationDelay: `${(index % 5) * 180}ms` }} />)}
 										</div>
 									</div>
-									<div className="flex items-end justify-between gap-3"><div><div className="text-xs font-bold uppercase tracking-wider text-[var(--home-ink)]/55">Destinasi</div><div className="font-bold text-[var(--home-ink)] text-lg">Madiun Explorer</div></div><div className="rounded bg-[var(--home-accent)]/15 px-2 py-1 font-mono text-xs font-bold text-[var(--home-ink)]">READY TO SCAN</div></div>
+									<div className="flex items-end justify-between gap-3"><div><div className="text-xs font-bold uppercase tracking-wider text-[var(--home-ink)]/55">Destinasi</div><div className="font-bold text-[var(--home-ink)] text-lg">TiLoc Explorer</div></div><div className="rounded bg-[var(--home-accent)]/15 px-2 py-1 font-mono text-xs font-bold text-[var(--home-ink)]">READY TO SCAN</div></div>
 								</div>
 							</div>
 						)}
@@ -1147,11 +1147,11 @@ const Footer = () => {
 		<div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
 			<div className="md:col-span-2">
 				<div className="flex items-center gap-2 mb-6">
-					<div className="w-10 h-10 rounded-full bg-[var(--home-primary)] flex items-center justify-center text-white font-bold text-xl">
-						M
+					<div className="w-10 h-10 rounded-full bg-[var(--home-primary)] flex items-center justify-center text-white font-black text-xs">
+						TL
 					</div>
 					<span className="text-2xl font-extrabold text-[var(--home-ink)] tracking-tight">
-						MadiunTrip<span className="text-[var(--home-accent)]">.</span>
+						TiLoc<span className="text-[var(--home-accent)]">.</span><span className="mt-0.5 block text-[10px] font-bold uppercase tracking-[.18em] text-[var(--home-ink)]/55">Titik Lokasi</span>
 					</span>
 				</div>
 				<p className="text-[var(--home-ink)]/70 max-w-sm mb-6 leading-relaxed">
@@ -1204,7 +1204,7 @@ const Footer = () => {
 			</div>
 		</div>
 		<div className="max-w-7xl mx-auto pt-8 border-t border-[var(--home-glass-border)] text-center md:text-left text-[var(--home-ink)]/50 text-sm flex flex-col md:flex-row justify-between items-center gap-4">
-			<p>&copy; MadiunTrip. Hak Cipta Dilindungi.</p>
+			<p>&copy; TiLoc. Hak Cipta Dilindungi.</p>
 			<Link
 				href="/scan"
 				className="font-semibold text-[var(--home-ink)] hover:text-[var(--home-accent)]">
@@ -1216,7 +1216,7 @@ const Footer = () => {
 	);
 };
 
-export default function MadiunTripApp() {
+export default function TiLocApp() {
 	const { isDark, toggleTheme } = useTheme();
 	const [destinations, setDestinations] = useState<DestinationCard[]>([]);
 	const [loadingDestinations, setLoadingDestinations] = useState(true);

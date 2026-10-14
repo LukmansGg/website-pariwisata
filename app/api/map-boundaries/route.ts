@@ -37,7 +37,7 @@ async function fetchMadiunBoundaries(): Promise<{ county: Feature; city: Feature
 	const nominatimUrl = (process.env.OSM_NOMINATIM_URL ?? "https://nominatim.openstreetmap.org").replace(/\/$/, "");
 	const response = await fetch(`${nominatimUrl}/lookup?${params}`, {
 		cache: "no-store",
-		headers: { Accept: "application/geo+json", "User-Agent": "MadiunTrip/1.0 (one-time map boundary cache)" },
+		headers: { Accept: "application/geo+json", "User-Agent": "TiLoc/1.0 (one-time map boundary cache)" },
 	});
 	if (!response.ok) throw new Error("OSM boundary request failed");
 	const data = await response.json() as { features?: Feature[] };

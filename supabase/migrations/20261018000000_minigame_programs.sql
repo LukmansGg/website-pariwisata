@@ -35,7 +35,7 @@ create table if not exists public.tourism_minigame_destinations (
   required_components text[] not null default '{}',
   photobox_access_mode text not null default 'standalone' check (photobox_access_mode in ('standalone', 'mission_reward')),
   photobox_templates jsonb not null default '[]'::jsonb,
-  caption_template text not null default 'Kenangan seru di {destination}! #MadiunTrip',
+  caption_template text not null default 'Kenangan seru di {destination}! #TiLoc',
   max_caption_length integer not null default 280 check (max_caption_length between 40 and 1000),
   max_dependency_distance_meters integer not null default 1000 check (max_dependency_distance_meters between 100 and 10000),
   created_at timestamptz not null default now(),
@@ -289,7 +289,7 @@ begin
     components = coalesce(p_components, '{}'), required_components = coalesce(p_required_components, '{}'),
     photobox_access_mode = p_photobox_access_mode,
     photobox_templates = coalesce(p_photobox_templates, '[]'::jsonb),
-    caption_template = coalesce(nullif(trim(p_caption_template), ''), 'Kenangan seru di {destination}! #MadiunTrip'),
+    caption_template = coalesce(nullif(trim(p_caption_template), ''), 'Kenangan seru di {destination}! #TiLoc'),
     max_caption_length = p_max_caption_length,
     max_dependency_distance_meters = p_max_dependency_distance_meters, updated_at = now()
   where id = p_assignment_id;

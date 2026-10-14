@@ -107,7 +107,7 @@ function driveNotice(status?: string) {
 		"drive-api-failed": "OAuth berhasil, tetapi Google Drive API gagal membuat folder aset. Pastikan Google Drive API aktif di project Google Cloud; lihat terminal Next.js untuk detail.",
 		"drive-config-failed": "Token Google diterima tetapi gagal dienkripsi. Pastikan GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY berisi 32 byte (base64 atau 64 karakter hex).",
 		"consent-denied": "Izin Google Drive belum diberikan. Setujui izin drive.file agar dashboard dapat menyimpan media.",
-		reauthorize: "Google tidak mengirim refresh token. Admin perlu cabut izin MadiunTrip di akun Google lalu hubungkan ulang.",
+		reauthorize: "Google tidak mengirim refresh token. Admin perlu cabut izin TiLoc di akun Google lalu hubungkan ulang.",
 		"migration-required": "Koneksi Google berhasil, tetapi tabel integrasi belum tersedia. Jalankan migration Google Drive di Supabase lalu hubungkan ulang.",
 		"not-configured": "Isi variabel OAuth, kunci enkripsi, APP_ORIGIN, dan GOOGLE_DRIVE_OWNER_EMAIL di konfigurasi server sebelum menghubungkan akun.",
 		"owner-not-configured": "Pemilik Drive belum ditentukan. Isi GOOGLE_DRIVE_OWNER_EMAIL di konfigurasi server dengan akun Google milik aplikasi sebelum menghubungkan.",
