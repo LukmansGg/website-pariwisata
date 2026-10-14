@@ -22,7 +22,7 @@ export default function DestinationPage({ params, searchParams }: PageProps) {
 	);
 }
 
-async function DestinationContent({ params }: PageProps) {
+async function DestinationContent({ params, searchParams }: PageProps) {
 	await connection();
 
 	const [{ slug }, query] = await Promise.all([params, searchParams]);
