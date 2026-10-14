@@ -3,19 +3,19 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import MinigameEngine from "./minigame-engine";
+import MinigameHub from "./minigame-hub";
 import NearbyCampaignPopup from "./nearby-campaign-popup";
 
 type Destination = {
 	id: string; slug: string; name: string; description: string;
 	short_description?: string | null; category?: string | null; categories?: string[] | null;
 	address?: string | null; latitude?: number | null; longitude?: number | null;
-	image_url?: string | null; tags?: string[] | null; additional_minigames?: string[] | null;
+	image_url?: string | null; tags?: string[] | null; mascot_mode?: "tiloc" | "custom"; mascot_image_url?: string | null;
 };
 type VisitorSession = { id: string; destination_id: string | null; started_at: string; expires_at: string; status: "active" | "expired" | "ended" };
 type ChatMessage = { role: "user" | "model"; text: string; local?: boolean };
 
-const MASCOT_FRAMES = ["/maskot/frame_0.png", "/maskot/frame_1.png", "/maskot/frame_2.png", "/maskot/frame_3.png", "/maskot/frame_4.png", "/maskot/frame_5.png"];
+const MASCOT_FRAMES = Array.from({ length: 6 }, () => "/maskot/frame_0.png");
 const QUICK_PROMPTS = ["Ceritakan daya tarik tempat ini", "Apa informasi yang tercatat?", "Di mana lokasinya?"];
 const GREETINGS = [
 	"Hai, {name}! Senang kamu mampir ke {destination}. Mau mulai dengan melihat daya tariknya?",
@@ -29,9 +29,9 @@ const GUIDE_ITEMS = [
 	{ icon: "✨", title: "Selesaikan misi perjalanan", text: "Cari teman maskot atau gunakan photobox jika misi tersebut tersedia di destinasi ini." },
 ];
 
-function MascotCrew({ group }: { group: "upper" | "lower" }) {
+function MascotCrew({ group, imageUrl }: { group: "upper" | "lower"; imageUrl?: string | null }) {
 	const indexes = group === "upper" ? [0, 1, 2] : [3, 4, 5];
-	return <div aria-label="Maskot MadiunTrip" className={"mascot-crew " + group}>{indexes.map((frame, index) => <div key={frame} className={"mascot-sprite mascot-sprite--" + index}><Image src={MASCOT_FRAMES[frame]} alt={index === 0 ? "Maskot pemandu MadiunTrip" : ""} aria-hidden={index > 0} fill sizes="200px" unoptimized className="object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></div>)}</div>;
+	return <div aria-label="Maskot MadiunTrip" className={"mascot-crew " + group}>{indexes.map((frame, index) => <div key={frame} className={"mascot-sprite mascot-sprite--" + index}><Image src={imageUrl || MASCOT_FRAMES[frame]} alt={index === 0 ? "Maskot pemandu MadiunTrip" : ""} aria-hidden={index > 0} fill sizes="200px" unoptimized className="object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></div>)}</div>;
 }
 
 function MagicBackground({ dark }: { dark: boolean }) {
@@ -55,14 +55,13 @@ function Icon({ name, className = "" }: { name: "back" | "sun" | "moon" | "pin" 
 	return <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-export default function DestinationDashboard({ destination, initialQrCode, initialGame }: { destination: Destination; initialQrCode?: string; initialGame?: string }) {
+export default function DestinationDashboard({ destination, initialQrCode, initialQrSource = "qr_link", chatAiEnabled = true }: { destination: Destination; initialQrCode?: string; initialQrSource?: "qr_link" | "camera"; chatAiEnabled?: boolean }) {
 	const [dark, setDark] = useState(false);
 	const [visitorName, setVisitorName] = useState("Teman");
 	const [nameInput, setNameInput] = useState("");
 	const [showNameModal, setShowNameModal] = useState(false);
 	const [showGuideModal, setShowGuideModal] = useState(false);
 	const [showSessionModal, setShowSessionModal] = useState(false);
-	const [showMinigame, setShowMinigame] = useState(false);
 	const [session, setSession] = useState<VisitorSession | null>(null);
 	const [sessionLoading, setSessionLoading] = useState(true);
 	const [sessionError, setSessionError] = useState("");
@@ -79,13 +78,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
 	const categories = destination.categories?.length ? destination.categories : destination.category ? [destination.category] : [];
 	const tags = destination.tags ?? [];
-	const configuredMinigames = destination.additional_minigames ?? [];
-	const minigames = configuredMinigames.length ? configuredMinigames : ["photobox"];
-	const routeGameEnabled = configuredMinigames.includes("find_friends");
 	const sessionIsActive = session?.status === "active" && new Date(session.expires_at).getTime() > Date.now();
-	useEffect(() => {
-		if ((initialQrCode && routeGameEnabled) || initialGame === "photobox") setShowMinigame(true);
-	}, [initialGame, initialQrCode, routeGameEnabled]);
 
 	const startSession = useCallback(async () => {
 		setSessionLoading(true);
@@ -257,16 +250,11 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 							</div>
 						</div>
 					</div>
-						{minigames.some((game) => game === "find_friends" || game === "photobox") && <section className="relative overflow-hidden rounded-[2rem] bg-[#16587B] p-6 text-white shadow-[0_22px_50px_-20px_rgba(22,88,123,.65)] sm:rounded-[2.5rem] sm:p-9" aria-labelledby="mission-title"><div aria-hidden="true" className="absolute -right-12 -top-20 h-64 w-64 rounded-full border border-white/20" /><div aria-hidden="true" className="absolute bottom-0 right-12 h-32 w-32 rounded-full bg-[#84B3CE]/30 blur-3xl" />
-						<div className="relative z-10 flex items-center justify-between gap-3"><span className="rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[.18em]">MISI PERJALANAN</span><span className="text-xs font-bold text-white/75">{minigames.length} misi tersedia</span></div>
-						<h2 id="mission-title" className="relative z-10 mt-5 text-3xl font-black sm:text-4xl">{minigames.includes("find_friends") ? "Find Our Friends! 🦊" : "Misi Seru Menantimu! ✨"}</h2>
-						<p className="relative z-10 mt-3 max-w-lg leading-7 text-white/80">{minigames.includes("find_friends") ? "Beberapa teman maskot bersembunyi di sekitar sini. Temukan mereka sambil menjelajahi spot wisata!" : "Abadikan momen dan jelajahi tantangan pilihan pengelola di destinasi ini."}</p>
-						<div className="relative z-10 mt-5 flex flex-wrap gap-2">{minigames.map((game) => <span key={game} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold">{game === "find_friends" ? "🦊 Cari teman maskot" : game === "photobox" ? "📸 Photobox" : game}</span>)}</div>
-						<button type="button" onClick={() => setShowMinigame(true)} className="relative z-10 mt-7 inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#F5EEDD] px-6 py-3 font-black text-[#16587B] shadow-lg transition hover:-translate-y-0.5 hover:bg-white">Buka Papan Petualangan <span className="ml-2">→</span></button>
-					</section>}
+					<MinigameHub destinationSlug={destination.slug} initialQrCode={initialQrCode} source={initialQrSource} />
 				</section>
 
-				<aside className="relative mt-16 lg:col-span-5 lg:mt-16" aria-label="Pemandu AI"><div className="pointer-events-none absolute -top-24 right-3 z-0 h-36 w-52 sm:-top-32 sm:right-4 sm:h-48 sm:w-64"><MascotCrew group="upper" /></div>
+{chatAiEnabled && (
+				<aside className="relative mt-16 lg:col-span-5 lg:mt-16" aria-label="Pemandu AI"><div className="pointer-events-none absolute -top-24 right-3 z-0 h-36 w-52 sm:-top-32 sm:right-4 sm:h-48 sm:w-64"><MascotCrew group="upper" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div>
 					<section className="tourism-glass relative z-10 flex min-h-[650px] flex-col rounded-[2rem] p-5 pt-14 sm:rounded-[2.5rem] sm:p-7 sm:pt-16" aria-labelledby="guide-chat-title">
 						<div className="mb-4 flex items-center justify-between gap-3 border-b border-[#84B3CE]/35 pb-4"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#16587B] text-xl text-white shadow-lg">✦</span><div><p className="text-[9px] font-black uppercase tracking-[.2em] text-[#16587B]/65">PEMANDU AI</p><h2 id="guide-chat-title" className="mt-0.5 text-lg font-black text-[#16587B] sm:text-xl">MadiunTrip Guide</h2></div></div>
 							<button type="button" onClick={speakLastReply} aria-label={isSpeaking ? "Sedang membacakan jawaban" : "Dengarkan jawaban terakhir"} title="Dengarkan jawaban terakhir" className={"grid h-10 w-10 shrink-0 place-items-center rounded-2xl border transition " + (isSpeaking ? "border-[#16587B] bg-[#16587B] text-white" : "border-[#84B3CE]/40 bg-white/80 text-[#16587B] hover:bg-[#84B3CE]/20")}><Icon name="sound" className="h-5 w-5" /></button>
@@ -282,18 +270,19 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 							<p className="mt-1.5 text-right text-[10px] tabular-nums text-[#16587B]/50">{message.length} / 600</p>
 						</div>
 					</section>
+)}
 				</aside>
 			</div>
 
 			<section className="tourism-glass relative mt-14 flex flex-col items-center gap-5 overflow-hidden rounded-[2rem] p-6 sm:mt-20 sm:flex-row sm:gap-8 sm:rounded-[2.5rem] sm:p-9" aria-labelledby="explore-title"><div aria-hidden="true" className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-[#84B3CE]/20 blur-3xl" />
-				<div className="relative h-36 w-52 shrink-0 sm:h-44 sm:w-60"><MascotCrew group="lower" /></div><div className="relative z-10 flex-1 text-center sm:text-left"><h2 id="explore-title" className="text-2xl font-black text-[#16587B] sm:text-3xl">Jelajahi MadiunTrip!</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[#16587B]/75 sm:mx-0 sm:text-base">Temukan pesona wisata lokal bersama pemandu cerdas kami. Pindai QR di spot menarik untuk menyambung petualanganmu.</p>
+				<div className="relative h-36 w-52 shrink-0 sm:h-44 sm:w-60"><MascotCrew group="lower" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div><div className="relative z-10 flex-1 text-center sm:text-left"><h2 id="explore-title" className="text-2xl font-black text-[#16587B] sm:text-3xl">Jelajahi MadiunTrip!</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[#16587B]/75 sm:mx-0 sm:text-base">Temukan pesona wisata lokal bersama pemandu cerdas kami. Pindai QR di spot menarik untuk menyambung petualanganmu.</p>
 					<div className="mt-6 flex flex-wrap justify-center gap-3 sm:justify-start"><button type="button" onClick={() => setShowGuideModal(true)} className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#84B3CE]/50 bg-white/70 px-4 py-2.5 font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#84B3CE]/20"><Icon name="book" className="h-5 w-5" /></span>Panduan Wisata</button><button type="button" onClick={() => setShowSessionModal(true)} className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#84B3CE]/50 bg-[#84B3CE]/15 px-4 py-2.5 font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#84B3CE]/25"><span className="relative grid h-9 w-9 place-items-center rounded-xl bg-[#16587B] text-lg text-white"><span className={"absolute right-1 top-1 h-2 w-2 rounded-full ring-2 ring-[#F5EEDD] " + (sessionIsActive ? "bg-[#84B3CE]" : "bg-[#84B3CE]/45")} />◉</span>Status Sesi</button></div>
 				</div>
 			</section>
 			<footer className="pb-5 pt-7 text-center text-xs font-semibold text-[#16587B]/55">© MadiunTrip · Jelajah dengan nyaman, simpan kenangan indah.</footer>
 		</main>
 
-		{showNameModal && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#102F43]/55 p-4 backdrop-blur-md"><section role="dialog" aria-modal="true" aria-labelledby="welcome-title" className="tourism-glass relative my-auto w-full max-w-md overflow-hidden rounded-[2.5rem] border-2 border-white/80 p-7 text-center shadow-2xl sm:p-9"><div aria-hidden="true" className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-[#84B3CE]/30 blur-3xl" /><div className="relative mx-auto mb-3 h-36 w-52"><MascotCrew group="upper" /></div>
+		{showNameModal && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#102F43]/55 p-4 backdrop-blur-md"><section role="dialog" aria-modal="true" aria-labelledby="welcome-title" className="tourism-glass relative my-auto w-full max-w-md overflow-hidden rounded-[2.5rem] border-2 border-white/80 p-7 text-center shadow-2xl sm:p-9"><div aria-hidden="true" className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-[#84B3CE]/30 blur-3xl" /><div className="relative mx-auto mb-3 h-36 w-52"><MascotCrew group="upper" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div>
 			<h2 id="welcome-title" className="relative text-3xl font-black text-[#16587B]">Halo, Teman! 👋</h2><p className="relative mt-3 text-sm leading-6 text-[#16587B]/75">Sebelum jalan-jalan di <strong>{destination.name}</strong>, mau pakai nama panggilan?</p>
 			<form onSubmit={startJourney} className="relative mt-6"><label htmlFor="visitor-name" className="mb-2 block text-left text-xs font-extrabold text-[#16587B]">Nama panggilan <span className="font-medium text-[#16587B]/55">(opsional)</span></label><input id="visitor-name" type="text" value={nameInput} onChange={(event) => setNameInput(event.currentTarget.value.slice(0, 32))} maxLength={32} placeholder="mis. Kelinci Ceria" autoComplete="nickname" className="mb-4 min-h-12 w-full rounded-2xl border-2 border-[#84B3CE]/40 bg-white/85 px-4 text-center font-bold text-[#16587B] outline-none transition placeholder:font-medium placeholder:text-[#16587B]/40 focus:border-[#16587B] focus:ring-4 focus:ring-[#84B3CE]/20" /><button type="submit" className="min-h-13 w-full rounded-2xl bg-[#16587B] px-5 py-3.5 text-base font-black text-white shadow-lg shadow-[#16587B]/25 transition hover:-translate-y-0.5 hover:bg-[#10445f]">Mulai Perjalanan ✨</button><button type="button" onClick={skipName} className="mt-3 min-h-11 w-full rounded-2xl px-4 text-sm font-bold text-[#16587B]/75 transition hover:bg-[#84B3CE]/15">Lewati, lanjut sebagai Teman</button></form>
 		</section></div>}
@@ -309,7 +298,6 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			<div className="mt-5 max-h-[55vh] space-y-3 overflow-y-auto pr-1">{GUIDE_ITEMS.map((item, index) => <article key={item.title} className="rounded-2xl border border-[#84B3CE]/30 bg-white/65 p-4 transition hover:-translate-y-0.5"><h3 className="flex items-center gap-2 font-extrabold text-[#16587B]"><span className="text-xl">{item.icon}</span>{index + 1}. {item.title}</h3><p className="mt-2 text-sm leading-6 text-[#16587B]/75">{item.text}</p></article>)}</div>
 			<button type="button" onClick={() => setShowGuideModal(false)} className="mt-5 min-h-12 w-full rounded-2xl bg-[#16587B] px-5 font-black text-white shadow-lg transition hover:-translate-y-0.5">Tutup Panduan</button>
 		</section></div>}
-		{showMinigame && !sessionLoading && <MinigameEngine destinationSlug={destination.slug} destinationName={destination.name} destinationDescription={destination.short_description || destination.description} destinationAddress={destination.address} destinationTags={tags} games={minigames.filter((game) => game === "find_friends" || game === "photobox")} initialQrCode={initialQrCode} initialGame={initialGame === "photobox" ? "photobox" : undefined} onClose={() => setShowMinigame(false)} />}
 		<NearbyCampaignPopup destinationSlug={destination.slug} active={Boolean(sessionIsActive && !showNameModal && !showGuideModal && !showSessionModal)} />
 	</div>;
 }

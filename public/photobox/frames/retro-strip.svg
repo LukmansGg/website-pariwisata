@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" fill="none">
+  <defs>
+    <linearGradient id="paper" x1="36" y1="20" x2="1044" y2="1900" gradientUnits="userSpaceOnUse"><stop stop-color="#fffdf7"/><stop offset="1" stop-color="#f3e8cf"/></linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1080" y2="1920" gradientUnits="userSpaceOnUse"><stop stop-color="#e9bd66"/><stop offset="1" stop-color="#c98738"/></linearGradient>
+  </defs>
+  <path d="M0 0h1080v1920H0z" fill="url(#paper)" fill-opacity=".08"/>
+  <rect x="24" y="24" width="1032" height="1872" rx="38" stroke="#fffdf7" stroke-width="42"/>
+  <rect x="44" y="44" width="992" height="1832" rx="24" stroke="url(#gold)" stroke-width="5"/>
+  <path d="M0 0h1080v220H0zM0 1718h1080v202H0z" fill="#fffdf7" fill-opacity=".96"/>
+  <path d="M0 978h1080" stroke="#fffdf7" stroke-width="38"/>
+  <path d="M86 147v-36a22 22 0 0 1 22-22h36m828 58v-36a22 22 0 0 0-22-22h-36M86 1773v36a22 22 0 0 0 22 22h36m828-58v36a22 22 0 0 1-22 22h-36" stroke="url(#gold)" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="77" cy="77" r="16" fill="#e8ac43"/><circle cx="1003" cy="77" r="16" fill="#75b7c9"/>
+  <text x="540" y="148" text-anchor="middle" fill="#16587b" font-family="Arial,sans-serif" font-size="34" font-weight="800" letter-spacing="10">MOMEN KITA</text>
+  <text x="540" y="1810" text-anchor="middle" fill="#16587b" font-family="Arial,sans-serif" font-size="25" font-weight="800" letter-spacing="7">MADIUNTRIP · JELAJAH BARENG</text>
+  <text x="540" y="1857" text-anchor="middle" fill="#16587b" fill-opacity=".6" font-family="Arial,sans-serif" font-size="19" font-weight="700" letter-spacing="4">TAP · SMILE · SAVE THE MOMENT</text>
+</svg>

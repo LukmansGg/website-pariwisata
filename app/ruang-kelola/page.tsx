@@ -26,15 +26,24 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	const { data: staff, error: roleError } = await supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
 	if (roleError || !staff || !["admin", "editor"].includes(staff.role)) redirect("/login");
 
-	const [destinationsResult, partnersResult, qrPointsResult, promotionsResult, driveResult] = await Promise.all([
-		supabase.from("destinations").select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, is_published, is_featured, created_at").order("created_at", { ascending: false }),
+	const [destinationQuery, partnersResult, qrPointsResult, promotionsResult, driveResult] = await Promise.all([
+		supabase.from("destinations").select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, mascot_mode, mascot_image_url, is_published, is_featured, created_at").order("created_at", { ascending: false }),
 		supabase.from("tourism_partners").select("id, business_name, slug, destination_id, max_distance_meters, business_type, address, status, created_at").order("created_at", { ascending: false }),
-		supabase.from("qr_points").select("id, destination_id, name, code, address, latitude, longitude, mission_order, scan_radius_meters, is_active, created_at").order("created_at", { ascending: false }),
+		supabase.from("qr_points").select("id, destination_id, name, code, address, latitude, longitude, is_active, created_at").order("created_at", { ascending: false }),
 		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, status, starts_at, ends_at, created_at").order("created_at", { ascending: false }),
 		supabase.from("google_drive_connections").select("id, connected_email, updated_at").eq("id", "primary").maybeSingle(),
 	]);
 
-	const destinations = destinationsResult.data ?? [];
+	let destinationRows = destinationQuery.data as WorkspaceData["destinations"] | null;
+	let destinationError = destinationQuery.error;
+	if (destinationError?.code === "42703") {
+		const legacyDestinations = await supabase.from("destinations")
+			.select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, is_published, is_featured, created_at")
+			.order("created_at", { ascending: false });
+		destinationRows = legacyDestinations.data as WorkspaceData["destinations"] | null;
+		destinationError = legacyDestinations.error;
+	}
+	const destinations = destinationRows ?? [];
 	const partnerById = new Map((partnersResult.data ?? []).map((partner) => [partner.id, partner.business_name]));
 	const destinationById = new Map(destinations.map((destination) => [destination.id, destination.name]));
 	const qrPoints = (qrPointsResult.data ?? []).map((point) => ({
@@ -43,7 +52,7 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	}));
 	const qrById = new Map(qrPoints.map((point) => [point.id, point]));
 	const dataIssues = [
-		destinationsResult.error ? `destinations: ${databaseIssue(destinationsResult.error)}` : null,
+		destinationError ? `destinations: ${databaseIssue(destinationError)}` : null,
 		partnersResult.error ? `tourism_partners: ${databaseIssue(partnersResult.error)}` : null,
 		qrPointsResult.error ? `qr_points: ${databaseIssue(qrPointsResult.error)}` : null,
 		promotionsResult.error ? `promotion_campaigns: ${databaseIssue(promotionsResult.error)}` : null,

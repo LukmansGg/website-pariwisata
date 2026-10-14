@@ -133,6 +133,7 @@ export default function ScanPage() {
 	const [torchSupported, setTorchSupported] = useState(false);
 	const [torchOn, setTorchOn] = useState(false);
 	const [scannedSlug, setScannedSlug] = useState<string | null>(null);
+	const [scannedQrCode, setScannedQrCode] = useState<string | null>(null);
 	const [preview, setPreview] = useState<DestinationPreview | null>(null);
 	const [loadingPreview, setLoadingPreview] = useState(false);
 	const [previewError, setPreviewError] = useState("");
@@ -230,6 +231,8 @@ export default function ScanPage() {
 		setTorchOn(false);
 		setStatus("paused");
 
+		const qrCode = getQrCode(text);
+		setScannedQrCode(qrCode);
 		const slug = getDestinationSlug(text);
 		if (slug) {
 			setScannedSlug(slug);
@@ -237,7 +240,6 @@ export default function ScanPage() {
 			return;
 		}
 
-		const qrCode = getQrCode(text);
 		if (qrCode) {
 			const requestController = new AbortController();
 			qrRequestRef.current?.abort();
@@ -353,6 +355,7 @@ export default function ScanPage() {
 		qrRequestRef.current = null;
 		setQrDetected(false);
 		setScannedSlug(null);
+		setScannedQrCode(null);
 		setPreview(null);
 		setPreviewError("");
 		setIsExploring(false);
@@ -397,7 +400,12 @@ export default function ScanPage() {
 			});
 			const result = (await response.json()) as { error?: string };
 			if (!response.ok) throw new Error(result.error ?? "Sesi pengunjung gagal dibuat.");
-			router.push(`/wisata/${encodeURIComponent(scannedSlug)}`);
+			const destinationUrl = new URL(`/wisata/${encodeURIComponent(scannedSlug)}`, window.location.origin);
+			if (scannedQrCode) {
+				destinationUrl.searchParams.set("qr", scannedQrCode);
+				destinationUrl.searchParams.set("source", "camera");
+			}
+			router.push(destinationUrl.pathname + destinationUrl.search);
 		} catch (exploreError) {
 			setPreviewError(
 				exploreError instanceof Error

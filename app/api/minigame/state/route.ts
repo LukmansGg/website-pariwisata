@@ -24,6 +24,9 @@ export async function GET(request: Request) {
 		if (data?.error === "DESTINATION_NOT_FOUND") {
 			return NextResponse.json({ error: "Destinasi tidak ditemukan." }, { status: 404 });
 		}
+		if (!Array.isArray(data?.programs)) {
+			return NextResponse.json({ error: "Minigame sedang disiapkan untuk destinasi ini. Silakan coba lagi nanti." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+		}
 		return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
 	} catch {
 		return NextResponse.json({ error: "Data petualangan belum dapat dimuat. Pastikan migration minigame sudah diterapkan." }, { status: 503 });

@@ -10,6 +10,7 @@ type Campaign = {
 	ctaLabel: string | null;
 	ctaUrl: string | null;
 	experienceType: "popup" | "minigame" | "photobox";
+	programSlug?: string | null;
 	latitude: number;
 	longitude: number;
 	maxDistanceMeters: number;
@@ -63,7 +64,10 @@ export default function NearbyCampaignPopup({ destinationSlug, active }: Props) 
 			setPermissionNeeded(false);
 			setLocationStatus("");
 			let seen = new Set<string>();
-			try { seen = new Set(JSON.parse(sessionStorage.getItem(`mt_campaign_seen:${destinationSlug}`) || "[]") as string[]); } catch { /* Start a fresh session list. */ }
+			try {
+				const parsed: unknown = JSON.parse(sessionStorage.getItem(`mt_campaign_seen:${destinationSlug}`) || "[]");
+				if (Array.isArray(parsed)) seen = new Set(parsed.filter((item): item is string => typeof item === "string"));
+			} catch { /* Start a fresh session list. */ }
 			const nearest = campaignsRef.current
 				.filter((item) => !seen.has(item.id))
 				.map((item) => ({ item, distance: distanceMeters(position.coords.latitude, position.coords.longitude, item.latitude, item.longitude) }))
@@ -101,14 +105,17 @@ export default function NearbyCampaignPopup({ destinationSlug, active }: Props) 
 	function dismiss() {
 		if (campaign) {
 			let seen: string[] = [];
-			try { seen = JSON.parse(sessionStorage.getItem(`mt_campaign_seen:${destinationSlug}`) || "[]") as string[]; } catch { /* Start a fresh session list. */ }
+			try {
+				const parsed: unknown = JSON.parse(sessionStorage.getItem(`mt_campaign_seen:${destinationSlug}`) || "[]");
+				if (Array.isArray(parsed)) seen = parsed.filter((item): item is string => typeof item === "string");
+			} catch { /* Start a fresh session list. */ }
 			if (!seen.includes(campaign.id)) sessionStorage.setItem(`mt_campaign_seen:${destinationSlug}`, JSON.stringify([...seen, campaign.id]));
 		}
 		setCampaign(null);
 	}
 
 	if (!active) return null;
-	const campaignUrl = campaign ? safeUrl(campaign.ctaUrl) ?? (campaign.experienceType === "photobox" ? `/wisata/${encodeURIComponent(destinationSlug)}?game=photobox` : null) : null;
+	const campaignUrl = campaign ? safeUrl(campaign.ctaUrl) ?? (campaign.experienceType === "photobox" && campaign.programSlug ? `/photobox/${encodeURIComponent(campaign.programSlug)}/${encodeURIComponent(destinationSlug)}` : null) : null;
 	return <>
 		{permissionNeeded && !campaigns.length && null}
 		{permissionNeeded && campaigns.length > 0 && !campaign && <button type="button" onClick={() => { setLocationStatus("Memeriksa promo sekitar…"); void locateCampaign(); }} className="fixed bottom-4 right-4 z-[65] max-w-[calc(100vw-2rem)] rounded-full border border-white/80 bg-[#16587B] px-4 py-3 text-left text-xs font-bold text-white shadow-xl transition hover:-translate-y-0.5">📍 Tampilkan promo sekitar</button>}

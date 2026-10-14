@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" fill="none">
+  <defs>
+    <linearGradient id="postcard" x1="30" y1="20" x2="1050" y2="1080" gradientUnits="userSpaceOnUse"><stop stop-color="#fff9eb"/><stop offset="1" stop-color="#f4e9d0"/></linearGradient>
+  </defs>
+  <path d="M0 0h1080v1080H0z" fill="url(#postcard)" fill-opacity=".08"/>
+  <rect x="22" y="22" width="1036" height="1036" rx="38" stroke="#fff9eb" stroke-width="40"/>
+  <rect x="44" y="44" width="992" height="992" rx="24" stroke="#e9ad49" stroke-width="5"/>
+  <path d="M0 0h1080v150H0zM0 930h1080v150H0z" fill="#fff9eb" fill-opacity=".96"/>
+  <path d="M0 540h1080" stroke="#fff9eb" stroke-width="20"/>
+  <path d="M360 150v780M720 150v780" stroke="#fff9eb" stroke-width="20"/>
+  <circle cx="78" cy="74" r="14" fill="#e9ad49"/><circle cx="1002" cy="74" r="14" fill="#7bbaca"/>
+  <text x="540" y="98" text-anchor="middle" fill="#16587b" font-family="Arial,sans-serif" font-size="27" font-weight="800" letter-spacing="7">POSTCARD MOMENTS</text>
+  <text x="540" y="985" text-anchor="middle" fill="#16587b" font-family="Arial,sans-serif" font-size="23" font-weight="800" letter-spacing="5">ENAM POTONG CERITA ✦</text>
+</svg>

@@ -5,7 +5,7 @@ import { DRIVE_IMAGE_TYPES, MAX_DRIVE_IMAGE_BYTES } from "@/src/shared/google-dr
 
 const inputClass = "w-full rounded-xl border border-[#84B3CE]/40 bg-white px-4 py-3 text-sm text-[#16587B] outline-none transition placeholder:text-[#16587B]/35 focus:border-[#16587B] focus:ring-4 focus:ring-[#84B3CE]/20";
 
-export function MediaUploadField({ folder, name, label, defaultUrl = "" }: { folder: "destinations" | "partners" | "campaigns"; name: string; label: string; defaultUrl?: string }) {
+export function MediaUploadField({ folder, name, label, defaultUrl = "", onUrlChange }: { folder: "destinations" | "partners" | "campaigns" | "mascots" | "photobox"; name: string; label: string; defaultUrl?: string; onUrlChange?: (url: string) => void }) {
 	const [url, setUrl] = useState(defaultUrl);
 	const [status, setStatus] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -61,6 +61,7 @@ export function MediaUploadField({ folder, name, label, defaultUrl = "" }: { fol
 			}
 			if (!imageUrl) throw new Error("Drive belum mengonfirmasi gambar selesai diunggah.");
 			setUrl(imageUrl);
+			onUrlChange?.(imageUrl);
 			setProgress(100);
 			setStatus("Gambar tersimpan di Drive dan dapat dilihat publik. Simpan formulir untuk menautkannya ke data.");
 		} catch (error) {
@@ -75,7 +76,7 @@ export function MediaUploadField({ folder, name, label, defaultUrl = "" }: { fol
 		<input type="hidden" name={name} value={url} />
 		<div className="flex flex-col gap-2 sm:flex-row">
 		<input className={inputClass} id={`${name}-upload`} type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={busy} onChange={(event) => void upload(event.currentTarget.files?.[0])} />
-			{url && <button type="button" className="shrink-0 rounded-xl border border-[#84B3CE]/50 px-4 py-2 text-sm font-semibold text-[#16587B] hover:bg-[#F5EEDD]" onClick={() => { setUrl(""); setStatus("Gambar dilepas dari formulir."); }}>Hapus pilihan</button>}
+			{url && <button type="button" className="shrink-0 rounded-xl border border-[#84B3CE]/50 px-4 py-2 text-sm font-semibold text-[#16587B] hover:bg-[#F5EEDD]" onClick={() => { setUrl(""); onUrlChange?.(""); setStatus("Gambar dilepas dari formulir."); }}>Hapus pilihan</button>}
 		</div>
 		{status && <p role="status" className="mt-2 text-xs text-[#16587B]/75">{status}</p>}
 		{busy && <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#84B3CE]/25" role="progressbar" aria-label="Progress upload gambar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><div className="h-full rounded-full bg-[#16587B] transition-[width] duration-200" style={{ width: `${Math.max(progress, 4)}%` }} /></div>}
