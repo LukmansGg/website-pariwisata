@@ -6,7 +6,7 @@ import DestinationDashboard from "./destination-dashboard";
 
 type PageProps = {
 	params: Promise<{ slug: string }>;
-	searchParams: Promise<{ qr?: string | string[] }>;
+	searchParams: Promise<{ qr?: string | string[]; game?: string | string[] }>;
 };
 
 export default function DestinationPage({ params, searchParams }: PageProps) {
@@ -53,5 +53,6 @@ async function DestinationContent({ params, searchParams }: PageProps) {
 	}
 
 	const initialQrCode = Array.isArray(query.qr) ? query.qr[0] : query.qr;
-	return <DestinationDashboard destination={destination} initialQrCode={initialQrCode} />;
+	const initialGame = Array.isArray(query.game) ? query.game[0] : query.game;
+	return <DestinationDashboard destination={destination} initialQrCode={initialQrCode} initialGame={initialGame} />;
 }

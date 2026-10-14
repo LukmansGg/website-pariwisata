@@ -193,6 +193,10 @@ export async function createDestinationAction(
 		.split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 15);
 	const allowedMinigames = new Set(["find_friends", "photobox"]);
 	const additionalMinigames = [...new Set(formData.getAll("additional_minigames").map(String).filter((game) => allowedMinigames.has(game)))];
+	const photoboxAccessMode = value(formData, "photobox_access_mode", 32) === "mission_reward" ? "mission_reward" : "standalone";
+	if (photoboxAccessMode === "mission_reward" && (!additionalMinigames.includes("find_friends") || !additionalMinigames.includes("photobox"))) {
+		return { error: "Photobox sebagai hadiah memerlukan Find Our Friends dan Photobox aktif." };
+	}
 	const wantsPublication = formData.get("is_published") === "on";
 	const isPublished = wantsPublication && hasValidCoordinates && Boolean(imageUrl);
 
@@ -206,7 +210,7 @@ export async function createDestinationAction(
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk menginput data." };
 
-	const { error } = await staff.supabase.rpc("save_destination_with_qr", {
+	const { data: saved, error } = await staff.supabase.rpc("save_destination_with_qr", {
 		p_destination_id: null,
 		p_qr_point_id: null,
 		p_slug: slug,
@@ -231,6 +235,11 @@ export async function createDestinationAction(
 	if (error) {
 		return { error: error.code === "23505" ? "Slug wisata atau kode QR sudah dipakai. Periksa kembali lalu coba lagi." : "Wisata dan titik QR belum tersimpan. Jalankan migration fitur QR utama di Supabase, lalu coba lagi." };
 	}
+	const savedDestinationId = Array.isArray(saved) ? saved[0]?.destination_id : saved?.destination_id;
+	if (!savedDestinationId) return { error: "Wisata tersimpan, tetapi pengaturan hadiah Photobox belum dapat diterapkan." };
+	const { error: gameConfigError } = await staff.supabase.from("destinations")
+		.update({ photobox_access_mode: photoboxAccessMode }).eq("id", savedDestinationId);
+	if (gameConfigError) return { error: "Wisata dan QR tersimpan, tetapi mode hadiah Photobox gagal. Jalankan migration minigame di Supabase lalu simpan ulang." };
 
 	refreshWorkspace({ destinations: true });
 	return { success: isPublished ? "Destinasi dan QR utama berhasil disimpan; wisata sudah diterbitkan." : wantsPublication ? "Destinasi dan QR utama tersimpan sebagai draft. Lengkapi foto sampul sebelum tayang." : "Destinasi dan QR utama berhasil disimpan sebagai draft." };
@@ -259,6 +268,10 @@ export async function updateDestinationAction(
 	const tags = value(formData, "tags", 500).split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 15);
 	const allowedMinigames = new Set(["find_friends", "photobox"]);
 	const additionalMinigames = [...new Set(formData.getAll("additional_minigames").map(String).filter((game) => allowedMinigames.has(game)))];
+	const photoboxAccessMode = value(formData, "photobox_access_mode", 32) === "mission_reward" ? "mission_reward" : "standalone";
+	if (photoboxAccessMode === "mission_reward" && (!additionalMinigames.includes("find_friends") || !additionalMinigames.includes("photobox"))) {
+		return { error: "Photobox sebagai hadiah memerlukan Find Our Friends dan Photobox aktif." };
+	}
 	const wantsPublication = formData.get("is_published") === "on";
 	const isPublished = wantsPublication && hasValidCoordinates && Boolean(imageUrl);
 	if (!id || !name || !hasValidDescriptionLength(description) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (hasCoordinateInput && coordinates === null) || !hasValidCoordinates || !qrCoordinates || qrCoordinates.latitude === null || qrCoordinates.longitude === null || !qrName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(qrCode) || (imageUrlRaw && !imageUrl)) {
@@ -289,6 +302,9 @@ export async function updateDestinationAction(
 		p_qr_longitude: qrCoordinates.longitude,
 	});
 	if (error) return { error: error.code === "23505" ? "Link wisata atau kode QR sudah digunakan." : "Perubahan wisata dan QR belum tersimpan. Periksa migration serta akses Supabase." };
+	const { error: gameConfigError } = await staff.supabase.from("destinations")
+		.update({ photobox_access_mode: photoboxAccessMode }).eq("id", id);
+	if (gameConfigError) return { error: "Wisata dan QR tersimpan, tetapi mode hadiah Photobox gagal. Jalankan migration minigame di Supabase lalu simpan ulang." };
 	refreshWorkspace({ destinations: true });
 	return { success: isPublished ? "Wisata dan QR utama diperbarui; wisata sudah tayang." : wantsPublication ? "Perubahan dan QR tersimpan sebagai draft. Lengkapi foto sampul sebelum tayang." : "Perubahan wisata dan QR utama berhasil disimpan." };
 }
@@ -302,22 +318,59 @@ export async function createQrPointAction(
 	const name = value(formData, "name", 120);
 	const address = value(formData, "address", 500);
 	const coordinates = parseCoordinates(formData);
-	if (!destinationId || !name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(code) || !coordinates) {
+	const missionOrderRaw = value(formData, "mission_order", 8);
+	const scanRadiusMeters = Number(value(formData, "scan_radius_meters", 8) || "150");
+	if (!destinationId || !name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(code) || !coordinates || coordinates.latitude === null || coordinates.longitude === null) {
 		return { error: "Lengkapi destinasi, nama titik, kode QR, dan pasangan koordinat yang valid." };
+	}
+	if (!Number.isInteger(scanRadiusMeters) || scanRadiusMeters < 25 || scanRadiusMeters > 2000 || (missionOrderRaw && (!/^\d+$/.test(missionOrderRaw) || Number(missionOrderRaw) < 1 || Number(missionOrderRaw) > 30))) {
+		return { error: "Radius scan harus 25–2.000 meter dan urutan misi 1–30." };
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola titik QR." };
+	const { data: destination, error: destinationError } = await staff.supabase.from("destinations")
+		.select("additional_minigames").eq("id", destinationId).maybeSingle();
+	if (destinationError || !destination) return { error: "Destinasi belum dapat diperiksa." };
+	const isMissionPoint = Boolean(missionOrderRaw) || destination.additional_minigames?.includes("find_friends") === true;
+	if (isMissionPoint && !destination.additional_minigames?.includes("find_friends")) {
+		return { error: "Aktifkan Find Our Friends pada data wisata sebelum memasukkan QR ke rangkaian misi." };
+	}
+	let missionOrder = missionOrderRaw ? Number(missionOrderRaw) : null;
+	if (isMissionPoint && missionOrder === null) {
+		const { data: existing } = await staff.supabase.from("qr_points").select("mission_order")
+			.eq("destination_id", destinationId).not("mission_order", "is", null).order("mission_order", { ascending: false }).limit(1);
+		missionOrder = (existing?.[0]?.mission_order ?? 0) + 1;
+	}
+	if (missionOrder !== null) {
+		const { data: route } = await staff.supabase.from("qr_points")
+			.select("mission_order, latitude, longitude").eq("destination_id", destinationId)
+			.not("mission_order", "is", null).order("mission_order", { ascending: true });
+		if (route?.some((point) => point.mission_order === missionOrder)) return { error: `Urutan ${missionOrder} sudah dipakai. Pilih langkah berikutnya atau gunakan otomatis.` };
+		const previous = route?.filter((point) => (point.mission_order ?? 0) < missionOrder!).at(-1);
+		const next = route?.find((point) => (point.mission_order ?? 0) > missionOrder!);
+		for (const neighbor of [previous, next]) {
+			if (!neighbor || neighbor.latitude === null || neighbor.longitude === null) continue;
+			const lat1 = neighbor.latitude * Math.PI / 180;
+			const lat2 = coordinates.latitude! * Math.PI / 180;
+			const dLat = lat2 - lat1;
+			const dLng = (coordinates.longitude! - neighbor.longitude) * Math.PI / 180;
+			const distance = 6371000 * 2 * Math.asin(Math.sqrt(Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2));
+			if (distance > 2000) return { error: `Titik ini berjarak sekitar ${Math.round(distance)} m dari langkah ${neighbor.mission_order}. Rute dibatasi 2 km antar langkah.` };
+		}
+	}
 	const { error } = await staff.supabase.from("qr_points").insert({
 		destination_id: destinationId,
 		name,
 		code,
 		address: address || null,
 		...coordinates,
+		mission_order: missionOrder,
+		scan_radius_meters: scanRadiusMeters,
 		created_by: staff.userId,
 	});
-	if (error) return { error: error.code === "23505" ? "Kode QR sudah digunakan." : "Titik QR belum tersimpan. Periksa pilihan destinasi dan migrasi database." };
+	if (error) return { error: error.code === "23505" ? "Kode QR atau urutan misi sudah digunakan." : "Titik QR belum tersimpan. Periksa pilihan destinasi dan migrasi database." };
 	refreshWorkspace();
-	return { success: "Titik QR berhasil disimpan." };
+	return { success: missionOrder ? `Titik QR berhasil disimpan sebagai langkah ${missionOrder} Find Our Friends.` : "Titik QR berhasil disimpan." };
 }
 
 export async function createPartnerAction(
@@ -426,13 +479,24 @@ export async function createPromotionAction(
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola promosi." };
 	const [{ data: partner }, { data: qrPoint }] = await Promise.all([
 		staff.supabase.from("tourism_partners").select("destination_id").eq("id", partnerId).maybeSingle(),
-		staff.supabase.from("qr_points").select("destination_id").eq("id", qrPointId).maybeSingle(),
+		staff.supabase.from("qr_points").select("destination_id, mission_order").eq("id", qrPointId).maybeSingle(),
 	]);
 	if (!partner?.destination_id) {
 		return { error: "Mitra ini belum ditautkan ke wisata lokal. Lengkapi data keterkaitan mitra terlebih dahulu." };
 	}
 	if (!qrPoint || qrPoint.destination_id !== partner.destination_id) {
 		return { error: "Pilih titik QR yang berada di wisata lokal yang ditautkan ke mitra ini." };
+	}
+	if (experienceType === "minigame" && qrPoint.mission_order === null) {
+		return { error: "Kampanye minigame harus ditautkan ke QR yang sudah menjadi langkah Find Our Friends." };
+	}
+	const { data: destination } = await staff.supabase.from("destinations")
+		.select("additional_minigames").eq("id", partner.destination_id).maybeSingle();
+	if (experienceType === "minigame" && !destination?.additional_minigames?.includes("find_friends")) {
+		return { error: "Aktifkan Find Our Friends pada wisata sebelum membuat campaign tantangan scan." };
+	}
+	if (experienceType === "photobox" && destination?.additional_minigames?.length && !destination.additional_minigames.includes("photobox")) {
+		return { error: "Aktifkan Photobox pada wisata ini sebelum membuat campaign Photobox." };
 	}
 	const { error } = await staff.supabase.from("promotion_campaigns").insert({
 		partner_id: partnerId,

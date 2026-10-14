@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import MinigameEngine from "./minigame-engine";
+import NearbyCampaignPopup from "./nearby-campaign-popup";
 
 type Destination = {
 	id: string; slug: string; name: string; description: string;
@@ -54,7 +55,7 @@ function Icon({ name, className = "" }: { name: "back" | "sun" | "moon" | "pin" 
 	return <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-export default function DestinationDashboard({ destination, initialQrCode }: { destination: Destination; initialQrCode?: string }) {
+export default function DestinationDashboard({ destination, initialQrCode, initialGame }: { destination: Destination; initialQrCode?: string; initialGame?: string }) {
 	const [dark, setDark] = useState(false);
 	const [visitorName, setVisitorName] = useState("Teman");
 	const [nameInput, setNameInput] = useState("");
@@ -78,8 +79,13 @@ export default function DestinationDashboard({ destination, initialQrCode }: { d
 	const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
 	const categories = destination.categories?.length ? destination.categories : destination.category ? [destination.category] : [];
 	const tags = destination.tags ?? [];
-	const minigames = destination.additional_minigames ?? [];
+	const configuredMinigames = destination.additional_minigames ?? [];
+	const minigames = configuredMinigames.length ? configuredMinigames : ["photobox"];
+	const routeGameEnabled = configuredMinigames.includes("find_friends");
 	const sessionIsActive = session?.status === "active" && new Date(session.expires_at).getTime() > Date.now();
+	useEffect(() => {
+		if ((initialQrCode && routeGameEnabled) || initialGame === "photobox") setShowMinigame(true);
+	}, [initialGame, initialQrCode, routeGameEnabled]);
 
 	const startSession = useCallback(async () => {
 		setSessionLoading(true);
@@ -303,6 +309,7 @@ export default function DestinationDashboard({ destination, initialQrCode }: { d
 			<div className="mt-5 max-h-[55vh] space-y-3 overflow-y-auto pr-1">{GUIDE_ITEMS.map((item, index) => <article key={item.title} className="rounded-2xl border border-[#84B3CE]/30 bg-white/65 p-4 transition hover:-translate-y-0.5"><h3 className="flex items-center gap-2 font-extrabold text-[#16587B]"><span className="text-xl">{item.icon}</span>{index + 1}. {item.title}</h3><p className="mt-2 text-sm leading-6 text-[#16587B]/75">{item.text}</p></article>)}</div>
 			<button type="button" onClick={() => setShowGuideModal(false)} className="mt-5 min-h-12 w-full rounded-2xl bg-[#16587B] px-5 font-black text-white shadow-lg transition hover:-translate-y-0.5">Tutup Panduan</button>
 		</section></div>}
-		{showMinigame && <MinigameEngine destinationSlug={destination.slug} destinationName={destination.name} games={minigames.filter((game) => game === "find_friends" || game === "photobox")} initialQrCode={initialQrCode} onClose={() => setShowMinigame(false)} />}
+		{showMinigame && !sessionLoading && <MinigameEngine destinationSlug={destination.slug} destinationName={destination.name} destinationDescription={destination.short_description || destination.description} destinationAddress={destination.address} destinationTags={tags} games={minigames.filter((game) => game === "find_friends" || game === "photobox")} initialQrCode={initialQrCode} initialGame={initialGame === "photobox" ? "photobox" : undefined} onClose={() => setShowMinigame(false)} />}
+		<NearbyCampaignPopup destinationSlug={destination.slug} active={Boolean(sessionIsActive && !showNameModal && !showGuideModal && !showSessionModal)} />
 	</div>;
 }
