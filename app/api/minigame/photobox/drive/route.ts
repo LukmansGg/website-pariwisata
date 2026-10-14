@@ -8,7 +8,6 @@ import {
 	refreshDriveAccessToken,
 } from "@/src/server/storage/google-drive";
 
-export const runtime = "nodejs";
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 function originIsAllowed(request: Request) {

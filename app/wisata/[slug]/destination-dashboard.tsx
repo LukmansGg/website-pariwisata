@@ -270,8 +270,8 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 							<p className="mt-1.5 text-right text-[10px] tabular-nums text-[#16587B]/50">{message.length} / 600</p>
 						</div>
 					</section>
-)}
 				</aside>
+				)}
 			</div>
 
 			<section className="tourism-glass relative mt-14 flex flex-col items-center gap-5 overflow-hidden rounded-[2rem] p-6 sm:mt-20 sm:flex-row sm:gap-8 sm:rounded-[2.5rem] sm:p-9" aria-labelledby="explore-title"><div aria-hidden="true" className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-[#84B3CE]/20 blur-3xl" />
