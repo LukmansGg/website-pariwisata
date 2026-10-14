@@ -1,9 +1,11 @@
 import { createClient } from "@/src/infrastructure/supabase/server";
 import { notFound, redirect } from "next/navigation";
+import { connection } from "next/server";
 
 type PageProps = { params: Promise<{ code: string }> };
 
 export default async function QrDestinationPage({ params }: PageProps) {
+	await connection();
 	const { code } = await params;
 	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(code)) notFound();
 
