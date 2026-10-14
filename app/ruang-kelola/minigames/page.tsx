@@ -1,10 +1,19 @@
+import { Suspense } from "react";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import MinigamesConsole, { type MinigameConsoleData } from "./minigames-console";
 
-export default async function MinigamesPage() {
+export default function MinigamesPage() {
+	return <Suspense fallback={<MinigamesLoading />}><MinigamesContent /></Suspense>;
+}
+
+function MinigamesLoading() {
+	return <main className="min-h-dvh bg-[#F5EEDD] p-4 text-[#16587B] sm:p-8"><div className="mx-auto max-w-7xl animate-pulse"><div className="h-4 w-44 rounded bg-[#84B3CE]/30" /><div className="mt-7 h-10 w-64 rounded-xl bg-[#84B3CE]/30" /><div className="mt-3 h-5 w-full max-w-2xl rounded bg-[#84B3CE]/20" /><div className="mt-8 h-40 rounded-[2rem] bg-white/70" /><div className="mt-5 h-64 rounded-[2rem] bg-white/70" /></div></main>;
+}
+
+async function MinigamesContent() {
 	await connection();
 	const supabase = await createClient();
 	const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
