@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import MinigameEngine from "./minigame-engine";
 
 type Destination = {
 	id: string; slug: string; name: string; description: string;
@@ -11,10 +12,16 @@ type Destination = {
 	image_url?: string | null; tags?: string[] | null; additional_minigames?: string[] | null;
 };
 type VisitorSession = { id: string; destination_id: string | null; started_at: string; expires_at: string; status: "active" | "expired" | "ended" };
-type ChatMessage = { role: "user" | "model"; text: string };
+type ChatMessage = { role: "user" | "model"; text: string; local?: boolean };
 
 const MASCOT_FRAMES = ["/maskot/frame_0.png", "/maskot/frame_1.png", "/maskot/frame_2.png", "/maskot/frame_3.png", "/maskot/frame_4.png", "/maskot/frame_5.png"];
 const QUICK_PROMPTS = ["Ceritakan daya tarik tempat ini", "Apa informasi yang tercatat?", "Di mana lokasinya?"];
+const GREETINGS = [
+	"Hai, {name}! Senang kamu mampir ke {destination}. Mau mulai dengan melihat daya tariknya?",
+	"Halo, {name}! Selamat datang di {destination}. Aku siap menemani kamu menjelajah.",
+	"Hai, {name}! Petualangan di {destination} dimulai. Ada yang ingin kamu ketahui?",
+	"Selamat datang, {name}! Semoga betah di {destination}. Yuk, tanya apa saja tentang tempat ini.",
+];
 const GUIDE_ITEMS = [
 	{ icon: "📷", title: "Scan QR di lokasi", text: "Pindai kode QR yang tersedia di spot wisata untuk membuka cerita dan informasi menarik." },
 	{ icon: "🧭", title: "Tanya pemandu wisata", text: "Tanyakan lokasi, daya tarik, dan informasi yang tercatat. Jawaban pemandu bersumber dari data pengelola." },
@@ -47,13 +54,14 @@ function Icon({ name, className = "" }: { name: "back" | "sun" | "moon" | "pin" 
 	return <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-export default function DestinationDashboard({ destination }: { destination: Destination }) {
+export default function DestinationDashboard({ destination, initialQrCode }: { destination: Destination; initialQrCode?: string }) {
 	const [dark, setDark] = useState(false);
 	const [visitorName, setVisitorName] = useState("Teman");
 	const [nameInput, setNameInput] = useState("");
 	const [showNameModal, setShowNameModal] = useState(false);
 	const [showGuideModal, setShowGuideModal] = useState(false);
 	const [showSessionModal, setShowSessionModal] = useState(false);
+	const [showMinigame, setShowMinigame] = useState(false);
 	const [session, setSession] = useState<VisitorSession | null>(null);
 	const [sessionLoading, setSessionLoading] = useState(true);
 	const [sessionError, setSessionError] = useState("");
@@ -63,6 +71,7 @@ export default function DestinationDashboard({ destination }: { destination: Des
 	const [chatError, setChatError] = useState("");
 	const [isSpeaking, setIsSpeaking] = useState(false);
 	const chatEndRef = useRef<HTMLDivElement>(null);
+	const chatStorageKey = "mt_tourism_chat_v1:" + destination.slug;
 	const location = destination.address?.trim();
 	const latitude = Number(destination.latitude);
 	const longitude = Number(destination.longitude);
@@ -91,9 +100,31 @@ export default function DestinationDashboard({ destination }: { destination: Des
 		const savedName = sessionStorage.getItem("mt_visitor_name");
 		if (savedName) setVisitorName(savedName);
 		else if (!sessionStorage.getItem("mt_visitor_started")) setShowNameModal(true);
-		setChatHistory([{ role: "model", text: "Halo bestie! Selamat datang di " + destination.name + ". Aku pemandu MadiunTrip. Mau tahu apa tentang tempat ini?" }]);
+		const cachedChat = sessionStorage.getItem(chatStorageKey);
+		let restored: ChatMessage[] | null = null;
+		if (cachedChat) {
+			try {
+				const parsed: unknown = JSON.parse(cachedChat);
+				if (Array.isArray(parsed) && parsed.length <= 14 && parsed.every((item) =>
+					item && typeof item === "object" &&
+					((item as ChatMessage).role === "user" || (item as ChatMessage).role === "model") &&
+					typeof (item as ChatMessage).text === "string" &&
+					(item as ChatMessage).text.length <= 1200
+				)) restored = parsed as ChatMessage[];
+			} catch { sessionStorage.removeItem(chatStorageKey); }
+		}
+		if (restored?.length) {
+			setChatHistory(restored);
+		} else {
+			const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)]
+				.replace("{name}", savedName || "Teman")
+				.replace("{destination}", destination.name);
+			const initialChat: ChatMessage[] = [{ role: "model", text: greeting, local: true }];
+			setChatHistory(initialChat);
+			sessionStorage.setItem(chatStorageKey, JSON.stringify(initialChat));
+		}
 		void startSession();
-	}, [destination.name, startSession]);
+	}, [chatStorageKey, destination.name, startSession]);
 
 	useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [chatHistory, isTyping]);
 	useEffect(() => {
@@ -106,14 +137,43 @@ export default function DestinationDashboard({ destination }: { destination: Des
 	async function sendPrompt(prompt: string) {
 		const question = prompt.trim();
 		if (!question || isTyping) return;
-		const history = chatHistory.slice(-6);
-		setChatHistory((current) => [...current, { role: "user", text: question }]);
-		setMessage(""); setChatError(""); setIsTyping(true);
+		const normalized = question.toLocaleLowerCase("id");
+		let localReply = "";
+		if (normalized.includes("daya tarik")) {
+			localReply = destination.short_description?.trim() || destination.description?.trim().slice(0, 480) || "Informasi daya tarik belum dicatat oleh pengelola.";
+		} else if (normalized.includes("informasi yang tercatat")) {
+			const facts = [
+				categories.length ? "Kategori: " + categories.join(", ") : "",
+				tags.length ? "Tag: " + tags.slice(0, 6).join(", ") : "",
+				location ? "Lokasi: " + location : "",
+				destination.short_description ? "Ringkasan: " + destination.short_description.slice(0, 220) : "",
+			].filter(Boolean);
+			localReply = facts.length ? facts.join("\n") : "Belum ada ringkasan tambahan yang dicatat pengelola.";
+		} else if (normalized.includes("lokasinya")) {
+			localReply = location || "Alamat belum dicatat oleh pengelola.";
+			if (hasCoordinates) localReply += "\nKoordinat: " + latitude.toFixed(5) + ", " + longitude.toFixed(5);
+		}
+		const userTurn: ChatMessage = { role: "user", text: question, ...(localReply ? { local: true } : {}) };
+		const nextHistory = [...chatHistory, userTurn].slice(-14);
+		setChatHistory(nextHistory);
+		setMessage("");
+		setChatError("");
+		if (localReply) {
+			const updated = [...nextHistory, { role: "model" as const, text: localReply, local: true }].slice(-14);
+			setChatHistory(updated);
+			sessionStorage.setItem(chatStorageKey, JSON.stringify(updated));
+			return;
+		}
+		sessionStorage.setItem(chatStorageKey, JSON.stringify(nextHistory));
+		const history = chatHistory.filter((item) => !item.local).slice(-4).map(({ role, text }) => ({ role, text }));
+		setIsTyping(true);
 		try {
 			const response = await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ destinationSlug: destination.slug, message: question, history }) });
 			const result = await response.json();
 			if (!response.ok || typeof result.reply !== "string") throw new Error(result.error || "Jawaban belum tersedia.");
-			setChatHistory((current) => [...current, { role: "model", text: result.reply as string }].slice(-14));
+			const updated = [...nextHistory, { role: "model" as const, text: result.reply as string }].slice(-14);
+			setChatHistory(updated);
+			sessionStorage.setItem(chatStorageKey, JSON.stringify(updated));
 		} catch (error) { setChatError(error instanceof Error ? error.message : "Pemandu belum dapat menjawab. Coba lagi."); }
 		finally { setIsTyping(false); }
 	}
@@ -191,12 +251,12 @@ export default function DestinationDashboard({ destination }: { destination: Des
 							</div>
 						</div>
 					</div>
-					{minigames.length > 0 && <section className="relative overflow-hidden rounded-[2rem] bg-[#16587B] p-6 text-white shadow-[0_22px_50px_-20px_rgba(22,88,123,.65)] sm:rounded-[2.5rem] sm:p-9" aria-labelledby="mission-title"><div aria-hidden="true" className="absolute -right-12 -top-20 h-64 w-64 rounded-full border border-white/20" /><div aria-hidden="true" className="absolute bottom-0 right-12 h-32 w-32 rounded-full bg-[#84B3CE]/30 blur-3xl" />
+						{minigames.some((game) => game === "find_friends" || game === "photobox") && <section className="relative overflow-hidden rounded-[2rem] bg-[#16587B] p-6 text-white shadow-[0_22px_50px_-20px_rgba(22,88,123,.65)] sm:rounded-[2.5rem] sm:p-9" aria-labelledby="mission-title"><div aria-hidden="true" className="absolute -right-12 -top-20 h-64 w-64 rounded-full border border-white/20" /><div aria-hidden="true" className="absolute bottom-0 right-12 h-32 w-32 rounded-full bg-[#84B3CE]/30 blur-3xl" />
 						<div className="relative z-10 flex items-center justify-between gap-3"><span className="rounded-xl border border-white/30 bg-white/15 px-3 py-2 text-[10px] font-black uppercase tracking-[.18em]">MISI PERJALANAN</span><span className="text-xs font-bold text-white/75">{minigames.length} misi tersedia</span></div>
 						<h2 id="mission-title" className="relative z-10 mt-5 text-3xl font-black sm:text-4xl">{minigames.includes("find_friends") ? "Find Our Friends! 🦊" : "Misi Seru Menantimu! ✨"}</h2>
 						<p className="relative z-10 mt-3 max-w-lg leading-7 text-white/80">{minigames.includes("find_friends") ? "Beberapa teman maskot bersembunyi di sekitar sini. Temukan mereka sambil menjelajahi spot wisata!" : "Abadikan momen dan jelajahi tantangan pilihan pengelola di destinasi ini."}</p>
 						<div className="relative z-10 mt-5 flex flex-wrap gap-2">{minigames.map((game) => <span key={game} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold">{game === "find_friends" ? "🦊 Cari teman maskot" : game === "photobox" ? "📸 Photobox" : game}</span>)}</div>
-						<Link href="/scan" className="relative z-10 mt-7 inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#F5EEDD] px-6 py-3 font-black text-[#16587B] shadow-lg transition hover:-translate-y-0.5 hover:bg-white">Mulai Misi Sekarang <span className="ml-2">→</span></Link>
+						<button type="button" onClick={() => setShowMinigame(true)} className="relative z-10 mt-7 inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#F5EEDD] px-6 py-3 font-black text-[#16587B] shadow-lg transition hover:-translate-y-0.5 hover:bg-white">Buka Papan Petualangan <span className="ml-2">→</span></button>
 					</section>}
 				</section>
 
@@ -243,5 +303,6 @@ export default function DestinationDashboard({ destination }: { destination: Des
 			<div className="mt-5 max-h-[55vh] space-y-3 overflow-y-auto pr-1">{GUIDE_ITEMS.map((item, index) => <article key={item.title} className="rounded-2xl border border-[#84B3CE]/30 bg-white/65 p-4 transition hover:-translate-y-0.5"><h3 className="flex items-center gap-2 font-extrabold text-[#16587B]"><span className="text-xl">{item.icon}</span>{index + 1}. {item.title}</h3><p className="mt-2 text-sm leading-6 text-[#16587B]/75">{item.text}</p></article>)}</div>
 			<button type="button" onClick={() => setShowGuideModal(false)} className="mt-5 min-h-12 w-full rounded-2xl bg-[#16587B] px-5 font-black text-white shadow-lg transition hover:-translate-y-0.5">Tutup Panduan</button>
 		</section></div>}
+		{showMinigame && <MinigameEngine destinationSlug={destination.slug} destinationName={destination.name} games={minigames.filter((game) => game === "find_friends" || game === "photobox")} initialQrCode={initialQrCode} onClose={() => setShowMinigame(false)} />}
 	</div>;
 }

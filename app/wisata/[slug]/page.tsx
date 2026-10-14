@@ -6,9 +6,10 @@ import DestinationDashboard from "./destination-dashboard";
 
 type PageProps = {
 	params: Promise<{ slug: string }>;
+	searchParams: Promise<{ qr?: string | string[] }>;
 };
 
-export default function DestinationPage({ params }: PageProps) {
+export default function DestinationPage({ params, searchParams }: PageProps) {
 	return (
 		<Suspense
 			fallback={
@@ -16,7 +17,7 @@ export default function DestinationPage({ params }: PageProps) {
 					<p>Memuat dashboard wisata...</p>
 				</main>
 			}>
-			<DestinationContent params={params} />
+			<DestinationContent params={params} searchParams={searchParams} />
 		</Suspense>
 	);
 }
@@ -24,7 +25,7 @@ export default function DestinationPage({ params }: PageProps) {
 async function DestinationContent({ params }: PageProps) {
 	await connection();
 
-	const { slug } = await params;
+	const [{ slug }, query] = await Promise.all([params, searchParams]);
 	const supabase = await createClient();
 
 	const { data: destination, error } = await supabase
@@ -51,5 +52,6 @@ async function DestinationContent({ params }: PageProps) {
 		notFound();
 	}
 
-	return <DestinationDashboard destination={destination} />;
+	const initialQrCode = Array.isArray(query.qr) ? query.qr[0] : query.qr;
+	return <DestinationDashboard destination={destination} initialQrCode={initialQrCode} />;
 }
