@@ -152,19 +152,16 @@ export function DashboardWorkspace({ data, logoutAction }: { data: WorkspaceData
 
 function MagicBackgrounds() {
 	const particles = useMemo(() => {
-		const random = (seed: number, max: number) => {
-			const value = Math.sin(seed * 12.9898) * 43758.5453;
-			return ((value - Math.floor(value)) * max);
-		};
+		const random = (seed: number, max: number) => (seed * 9301 + 49297) % 233280 % max;
 		return {
-			stars: Array.from({ length: 80 }, (_, index) => { const seed = index + 1; return { left: random(seed, 100), top: random(seed + 100, 100), size: random(seed + 200, 3), duration: random(seed + 300, 3) + 2, delay: random(seed + 400, 5) }; }),
-			zzz: Array.from({ length: 10 }, (_, index) => { const seed = index + 500; return { left: random(seed, 100), top: random(seed + 100, 100), duration: random(seed + 200, 3) + 3, delay: random(seed + 300, 5) }; }),
-			sparkles: Array.from({ length: 15 }, (_, index) => { const seed = index + 700; return { left: random(seed, 100), top: random(seed + 100, 100), duration: random(seed + 200, 2) + 2, delay: random(seed + 300, 2) }; }),
+			stars: Array.from({ length: 80 }, (_, index) => { const seed = index + 1; return { left: random(seed, 100), top: random(seed + 100, 100), size: random(seed + 200, 3) + 1, duration: random(seed + 300, 3000) + 2000, delay: random(seed + 400, 5000) }; }),
+			zzz: Array.from({ length: 10 }, (_, index) => { const seed = index + 500; return { left: random(seed, 100), top: random(seed + 100, 100), duration: random(seed + 200, 3000) + 3000, delay: random(seed + 300, 5000) }; }),
+			sparkles: Array.from({ length: 15 }, (_, index) => { const seed = index + 700; return { left: random(seed, 100), top: random(seed + 100, 100), duration: random(seed + 200, 2000) + 2000, delay: random(seed + 300, 2000) }; }),
 		};
 	}, []);
 	return <>
-		<div className="bg-light-magic" aria-hidden="true"><div className="cloud c1"/><div className="cloud c2"/><div className="cloud c3"/><div className="sparkle-container">{particles.sparkles.map((sparkle, index) => <div key={index} className="sparkle animate-sparkle-rotate" style={{ left: `${sparkle.left}vw`, top: `${sparkle.top}vh`, animationDuration: `${sparkle.duration}s`, animationDelay: `${sparkle.delay}s` }}>✦</div>)}</div></div>
-		<div className="bg-dark-magic" aria-hidden="true"><div className="stars-container"><div className="aurora"/><div className="moon"/>{particles.stars.map((star, index) => <div key={`star-${index}`} className="star animate-twinkle" style={{ width: `${star.size}px`, height: `${star.size}px`, left: `${star.left}vw`, top: `${star.top}vh`, animationDuration: `${star.duration}s`, animationDelay: `${star.delay}s` }} />)}{particles.zzz.map((item, index) => <div key={`zzz-${index}`} className="zzz animate-float-zzz" style={{ left: `${item.left}vw`, top: `${item.top}vh`, animationDuration: `${item.duration}s`, animationDelay: `${item.delay}s` }}>Zzz</div>)}</div></div>
+		<div className="bg-light-magic" aria-hidden="true"><div className="cloud c1"/><div className="cloud c2"/><div className="cloud c3"/><div className="sparkle-container">{particles.sparkles.map((sparkle, index) => <div key={index} className="sparkle animate-sparkle-rotate" style={{ left: `${sparkle.left}vw`, top: `${sparkle.top}vh`, animationDuration: `${sparkle.duration}ms`, animationDelay: `${sparkle.delay}ms` }}>✦</div>)}</div></div>
+		<div className="bg-dark-magic" aria-hidden="true"><div className="stars-container"><div className="aurora"/><div className="moon"/>{particles.stars.map((star, index) => <div key={`star-${index}`} className="star animate-twinkle" style={{ width: `${star.size}px`, height: `${star.size}px`, left: `${star.left}vw`, top: `${star.top}vh`, animationDuration: `${star.duration}ms`, animationDelay: `${star.delay}ms` }} />)}{particles.zzz.map((item, index) => <div key={`zzz-${index}`} className="zzz animate-float-zzz" style={{ left: `${item.left}vw`, top: `${item.top}vh`, animationDuration: `${item.duration}ms`, animationDelay: `${item.delay}ms` }}>Zzz</div>)}</div></div>
 	</>;
 }
 

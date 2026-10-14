@@ -3,8 +3,6 @@ import { createClient } from "@/src/infrastructure/supabase/server";
 import { answerTourismQuestion } from "@/src/server/ai/gemini";
 import { checkAiChatLimit } from "@/src/server/ai/rate-limit";
 
-export const runtime = "nodejs";
-
 type ChatTurn = { role: "user" | "model"; text: string };
 
 function validHistory(value: unknown): ChatTurn[] | null {
