@@ -6,11 +6,14 @@ import Image from "next/image";
 import { useTheme } from "@/src/components/theme-provider";
 
 const MOODS = [
-	{ id: 1, name: "Healing Alam", icon: "🍃" },
-	{ id: 2, name: "Kuliner Malam", icon: "🍜" },
-	{ id: 3, name: "Spot Foto", icon: "📸" },
-	{ id: 4, name: "Sejarah & Budaya", icon: "🏛️" },
-	{ id: 5, name: "Adrenalin", icon: "🚴" },
+	{ name: "Alam", icon: "🍃" },
+	{ name: "Kuliner", icon: "🍜" },
+	{ name: "Spot Foto", icon: "📸" },
+	{ name: "Sejarah & Budaya", icon: "🏛️" },
+	{ name: "Petualangan & Aktivitas", icon: "🚴" },
+	{ name: "Rekreasi", icon: "🎡" },
+	{ name: "Religi", icon: "🕌" },
+	{ name: "Lainnya", icon: "✨" },
 ];
 
 type DestinationRow = {
@@ -19,6 +22,8 @@ type DestinationRow = {
 	name: string;
 	description?: string | null;
 	category?: string | null;
+	categories?: string[] | null;
+	short_description?: string | null;
 	image_url?: string | null;
 	image?: string | null;
 	cover_image?: string | null;
@@ -36,6 +41,8 @@ type DestinationCard = {
 	title: string;
 	description: string;
 	category: string;
+	categories: string[];
+	shortDescription: string;
 	image?: string;
 	rating?: number;
 	reviews?: number;
@@ -55,7 +62,7 @@ function projectMapPoint(longitude: number, latitude: number) {
 	};
 }
 function tourismMarkerStyle(destination: DestinationCard) {
-	const category = destination.category.toLocaleLowerCase("id");
+	const category = destination.categories.join(" ").toLocaleLowerCase("id") || destination.category.toLocaleLowerCase("id");
 	if (category.includes("alam") || category.includes("air")) return { shape: "leaf", color: "#059669" } as const;
 	if (category.includes("budaya") || category.includes("sejarah")) return { shape: "star", color: "#7c3aed" } as const;
 	if (category.includes("kuliner") || category.includes("makan")) return { shape: "diamond", color: "#ea580c" } as const;
@@ -71,7 +78,9 @@ function toDestinationCard(row: DestinationRow): DestinationCard {
 		slug: row.slug,
 		title: row.name,
 		description: row.description ?? "",
-		category: row.category ?? "Wisata Madiun",
+		category: (Array.isArray(row.categories) && row.categories.length ? row.categories.join(" · ") : row.category) ?? "Wisata Madiun",
+		categories: Array.isArray(row.categories) && row.categories.length ? row.categories : (row.category ? row.category.split(", ") : []),
+		shortDescription: row.short_description ?? "",
 		...(image ? { image } : {}),
 		...(typeof row.rating === "number" ? { rating: row.rating } : {}),
 		...(typeof row.reviews === "number" ? { reviews: row.reviews } : {}),
@@ -91,14 +100,6 @@ function destinationHasRequiredMediaAndLocation(row: DestinationRow) {
 		Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
 		Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
 }
-
-const MOOD_TERMS: Record<number, string[]> = {
-	1: ["alam", "hutan", "waduk", "air terjun"],
-	2: ["kuliner", "makanan", "pecel", "malam"],
-	3: ["spot foto", "foto", "pemandangan", "view"],
-	4: ["sejarah", "budaya", "monumen", "museum"],
-	5: ["petualangan", "adrenalin", "aktivitas", "rekreasi", "camping", "sepeda", "trail"],
-};
 
 // Reusable SVG Icons to avoid external dependencies
 const IconSearch = () => (
@@ -389,7 +390,7 @@ const GlobalStyles = () => (
 const HOME_SECTIONS = [
 	{ id: "beranda", label: "Beranda" },
 	{ id: "peta", label: "Jelajah peta" },
-	{ id: "kuliner", label: "Pilih suasana" },
+	{ id: "kuliner", label: "Kategori" },
 	{ id: "destinasi", label: "Destinasi" },
 	{ id: "promo", label: "Promo" },
 	{ id: "tentang", label: "Tentang" },
@@ -797,37 +798,32 @@ const DiscoveryMap = ({
 };
 
 const MoodCategories = ({
-	selectedMood,
+	selectedCategories,
 	onSelect,
+	compact = false,
 }: {
-	selectedMood: number | null;
-	onSelect: (id: number | null) => void;
+	selectedCategories: string[];
+	onSelect: (categories: string[]) => void;
+	compact?: boolean;
 }) => (
-	<section id="kuliner" className="py-20 px-6 max-w-7xl mx-auto">
-		<div className="text-center mb-12 animate-fade-up">
-			<h2 className="text-3xl font-extrabold text-[var(--home-ink)] mb-4">
-				Jelajahi Sesuai Mood
-			</h2>
-			<p className="text-[var(--home-ink)]/70">
-				Pilih suasana hati dan temukan destinasi yang pas buat kamu.
-			</p>
-		</div>
+	<section id="kuliner" className={`mx-auto max-w-7xl px-6 ${compact ? "sticky top-16 z-30 mt-16 py-3" : "py-20"}`}>
+		{!compact && <div className="mb-12 animate-fade-up text-center"><h2 className="mb-4 text-3xl font-extrabold text-[var(--home-ink)]">Pilih kategori</h2><p className="text-[var(--home-ink)]/70">Pilih satu atau beberapa kategori untuk menyaring destinasi.</p></div>}
 
-		<div className="flex flex-wrap justify-center gap-4 animate-fade-up delay-200">
+		<div className={`flex flex-wrap gap-2 animate-fade-up ${compact ? "justify-start rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-2 shadow-lg backdrop-blur-xl" : "justify-center gap-3 delay-200"}`}>
 			{MOODS.map((mood) => (
 				<button
-					key={mood.id}
+					key={mood.name}
 					type="button"
-					aria-pressed={selectedMood === mood.id}
-					onClick={() => onSelect(selectedMood === mood.id ? null : mood.id)}
-					style={{ animationDelay: `${mood.id * 180}ms` }}
-					className={`glass-panel mood-float flex items-center gap-3 px-6 py-4 rounded-2xl shadow-sm hover:shadow-md hover:border-[var(--home-accent)] hover:-translate-y-1 transition-all group ${selectedMood === mood.id ? "!bg-[var(--home-accent)]/20 !border-[var(--home-accent)]" : ""}`}>
-					<span className="text-2xl group-hover:scale-110 transition-transform">
+					aria-pressed={selectedCategories.includes(mood.name)}
+					onClick={() => onSelect(selectedCategories.includes(mood.name) ? selectedCategories.filter((item) => item !== mood.name) : [...selectedCategories, mood.name])}
+					className={`group flex items-center gap-2 rounded-full border transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--home-accent)] hover:shadow-md ${compact ? "px-3 py-2 text-xs" : "glass-panel mood-float px-5 py-3.5 text-sm"} ${selectedCategories.includes(mood.name) ? "!border-[var(--home-accent)] !bg-[var(--home-accent)]/20" : ""}`}>
+					<span className={`${compact ? "text-sm" : "text-xl"} transition-transform group-hover:scale-110`}>
 						{mood.icon}
 					</span>
 					<span className="font-bold text-[var(--home-ink)]">{mood.name}</span>
 				</button>
 			))}
+			{selectedCategories.length > 0 && <button type="button" onClick={() => onSelect([])} className="rounded-full px-3 py-2 text-xs font-bold text-[var(--home-ink)]/65 underline underline-offset-4">Reset</button>}
 		</div>
 	</section>
 );
@@ -839,6 +835,7 @@ const Highlights = ({
 	onClearFilters,
 	hasActiveFilters,
 	incompleteCount,
+	compact = false,
 }: {
 	destinations: DestinationCard[];
 	loading: boolean;
@@ -846,9 +843,10 @@ const Highlights = ({
 	onClearFilters: () => void;
 	hasActiveFilters: boolean;
 	incompleteCount: number;
+	compact?: boolean;
 }) => (
-	<section id="destinasi" className="py-20 px-6 max-w-7xl mx-auto">
-		<div className="flex justify-between items-end mb-12 animate-fade-up">
+	<section id="destinasi" className={`mx-auto max-w-7xl px-6 ${compact ? "py-6" : "py-20"}`}>
+		<div className={`flex justify-between items-end animate-fade-up ${compact ? "mb-6" : "mb-12"}`}>
 			<div>
 				<p className="mb-3 text-xs font-black uppercase tracking-[.22em] text-[var(--home-primary)]">Curated for your next story</p>
 				<h2 className="text-3xl font-extrabold text-[var(--home-ink)] mb-2">
@@ -919,14 +917,14 @@ const Highlights = ({
 								</div>
 							)}
 							<div className="absolute inset-0 bg-gradient-to-t from-slate-950/45 via-transparent to-transparent pointer-events-none" />
-							<span className="absolute bottom-3 left-3 rounded-full border border-white/35 bg-white/85 px-3 py-1.5 text-xs font-bold text-slate-900 shadow-sm backdrop-blur-md">{dest.category}</span>
+							<span title={dest.category} className="absolute bottom-3 left-3 max-w-[82%] truncate rounded-full border border-white/35 bg-white/85 px-3 py-1.5 text-xs font-bold text-slate-900 shadow-sm backdrop-blur-md">{dest.category}</span>
 						</div>
 						<div className="px-3 pb-3">
 							<h3 className="text-lg font-bold text-[var(--home-ink)] mb-2 line-clamp-1 group-hover:text-[var(--home-primary)] transition-colors">
 								{dest.title}
 							</h3>
 							<p className="min-h-10 text-sm leading-relaxed text-[var(--home-ink)]/70 line-clamp-2">
-								{dest.description || "Lihat informasi destinasi wisata ini."}
+								{dest.shortDescription || dest.description || "Lihat informasi destinasi wisata ini."}
 							</p>
 							<div className="mt-4 flex items-center justify-between border-t border-[var(--home-glass-border)] pt-3 text-sm font-bold text-[var(--home-primary)]"><span>Kenali spot ini</span><span className="transition-transform group-hover:translate-x-1"><IconArrowRight /></span></div>
 						</div>
@@ -1230,7 +1228,7 @@ export default function MadiunTripApp() {
 	const [destinationError, setDestinationError] = useState("");
 	const [incompleteDestinationCount, setIncompleteDestinationCount] = useState(0);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedMood, setSelectedMood] = useState<number | null>(null);
+	const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -1278,18 +1276,20 @@ export default function MadiunTripApp() {
 
 	const visibleDestinations = destinations.filter((destination) => {
 		const searchable =
-			`${destination.title} ${destination.description} ${destination.category} ${destination.tags.join(" ")}`.toLocaleLowerCase(
+			`${destination.title} ${destination.shortDescription} ${destination.description} ${destination.category} ${destination.tags.join(" ")}`.toLocaleLowerCase(
 				"id",
 			);
 		const matchesSearch = searchable.includes(
 			searchQuery.trim().toLocaleLowerCase("id"),
 		);
-		const terms = selectedMood ? MOOD_TERMS[selectedMood] : undefined;
-		const matchesMood =
-			!terms || terms.some((term) => searchable.includes(term));
-		return matchesSearch && matchesMood;
+		const matchesCategory = !selectedCategories.length || selectedCategories.some((category) => destination.categories.some((item) => item.toLocaleLowerCase("id") === category.toLocaleLowerCase("id")));
+		return matchesSearch && matchesCategory;
 	});
-	const hasActiveFilters = Boolean(searchQuery.trim()) || selectedMood !== null;
+	const hasActiveFilters = Boolean(searchQuery.trim()) || selectedCategories.length > 0;
+	const categoryFocused = selectedCategories.length > 0;
+	useEffect(() => {
+		if (categoryFocused) window.scrollTo({ top: 0, behavior: "smooth" });
+	}, [categoryFocused]);
 
 	return (
 		<>
@@ -1299,34 +1299,23 @@ export default function MadiunTripApp() {
 				<Navbar isDark={isDark} onToggleTheme={toggleTheme} />
 
 				<main className="relative z-10">
-					<HeroSection />
-					<DiscoveryMap
-						searchQuery={searchQuery}
-						onSearchChange={(query) => { setSearchQuery(query); if (query.trim()) setSelectedMood(null); }}
-						destinations={visibleDestinations}
-					/>
-					<MoodCategories
-						selectedMood={selectedMood}
-						onSelect={setSelectedMood}
-					/>
-					<Highlights
-						destinations={visibleDestinations}
-						loading={loadingDestinations}
-						error={destinationError}
-						hasActiveFilters={hasActiveFilters}
-						incompleteCount={incompleteDestinationCount}
-						onClearFilters={() => {
-							setSearchQuery("");
-							setSelectedMood(null);
-						}}
-					/>
+					{categoryFocused ? <>
+						<MoodCategories selectedCategories={selectedCategories} onSelect={setSelectedCategories} compact />
+						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={() => { setSearchQuery(""); setSelectedCategories([]); }} compact />
+						<DiscoveryMap searchQuery={searchQuery} onSearchChange={setSearchQuery} destinations={visibleDestinations} />
+					</> : <>
+						<HeroSection />
+						<DiscoveryMap searchQuery={searchQuery} onSearchChange={setSearchQuery} destinations={visibleDestinations} />
+						<MoodCategories selectedCategories={selectedCategories} onSelect={setSelectedCategories} />
+						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={() => { setSearchQuery(""); setSelectedCategories([]); }} />
+					</>}
 					<PromotionalSection />
 				</main>
 
 				<AssistantTirta
 					onSearch={(query) => {
 						setSearchQuery(query);
-						setSelectedMood(null);
+						setSelectedCategories([]);
 					}}
 				/>
 				<Footer />

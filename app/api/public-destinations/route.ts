@@ -8,7 +8,7 @@ export async function GET(request: Request) {
 		const search = new URL(request.url).searchParams.get("q")?.trim().slice(0, 80).toLocaleLowerCase("id") ?? "";
 		const filteredData = search
 			? data.filter((destination) => {
-				const searchable = [destination.name, destination.description, destination.category, ...(Array.isArray(destination.tags) ? destination.tags : [])]
+				const searchable = [destination.name, destination.short_description, destination.description, destination.category, ...(Array.isArray(destination.categories) ? destination.categories : []), ...(Array.isArray(destination.tags) ? destination.tags : [])]
 					.filter((value): value is string => typeof value === "string")
 					.join(" ")
 					.toLocaleLowerCase("id");

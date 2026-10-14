@@ -14,6 +14,7 @@ type DestinationRow = {
 	description?: string | null;
 	summary?: string | null;
 	category?: string | null;
+	categories?: string[] | null;
 	image_url?: string | null;
 	photo_url?: string | null;
 	cover_image?: string | null;
@@ -204,7 +205,7 @@ export default function ScanPage() {
 			setPreview({
 				slug: row.slug,
 				name: row.name,
-				category: row.category ?? null,
+				category: row.categories?.length ? row.categories.join(" · ") : row.category ?? null,
 				description: row.description ?? row.summary ?? "Belum ada deskripsi untuk destinasi ini.",
 				image: row.image_url ?? row.photo_url ?? row.cover_image ?? row.image ?? null,
 			});

@@ -29,7 +29,7 @@ async function DestinationContent({ params }: PageProps) {
 
 	const { data: destination, error } = await supabase
 		.from("destinations")
-		.select("id, slug, name, description")
+		.select("id, slug, name, description, short_description, category, categories, address, latitude, longitude, image_url, tags, additional_minigames")
 		.eq("slug", slug)
 		.eq("is_published", true)
 		.not("image_url", "is", null)

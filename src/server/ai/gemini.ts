@@ -8,7 +8,7 @@ type GeminiResponse = {
 };
 
 export async function answerTourismQuestion(input: {
-	destination: { name: string; category: string | null; address: string | null; description: string | null; tags: string[] | null };
+	destination: { name: string; category: string | null; categories?: string[] | null; short_description?: string | null; address: string | null; description: string | null; tags: string[] | null };
 	history: ChatTurn[];
 	message: string;
 }) {
@@ -20,8 +20,9 @@ export async function answerTourismQuestion(input: {
 	const { destination } = input;
 	const facts = [
 		`Nama: ${destination.name}`,
-		destination.category ? `Kategori: ${destination.category}` : "",
+		destination.categories?.length ? `Kategori: ${destination.categories.join(", ")}` : destination.category ? `Kategori: ${destination.category}` : "",
 		destination.address ? `Area: ${destination.address}` : "",
+		destination.short_description ? `Ringkasan destinasi: ${destination.short_description}` : "",
 		destination.description ? `Deskripsi terverifikasi dari pengelola: ${destination.description}` : "",
 		destination.tags?.length ? `Tag: ${destination.tags.join(", ")}` : "",
 	].filter(Boolean).join("\n");

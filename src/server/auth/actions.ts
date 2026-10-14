@@ -178,7 +178,8 @@ export async function createDestinationAction(
 	const slug = value(formData, "slug", 100).toLowerCase();
 	const name = value(formData, "name", 160);
 	const description = value(formData, "description", 10000);
-	const category = value(formData, "category", 80);
+	const categories = [...new Set(formData.getAll("categories").map((item) => String(item).trim()).filter((item) => ["Alam", "Kuliner", "Spot Foto", "Sejarah & Budaya", "Petualangan & Aktivitas", "Rekreasi", "Religi", "Lainnya"].includes(item)))];
+	const shortDescription = value(formData, "short_description", 180);
 	const address = value(formData, "address", 500);
 	const imageUrlRaw = value(formData, "image_url", 2048);
 	const imageUrl = optionalUrl(imageUrlRaw);
@@ -211,7 +212,8 @@ export async function createDestinationAction(
 		p_slug: slug,
 		p_name: name,
 		p_description: description,
-		p_category: category || null,
+		p_categories: categories,
+		p_short_description: shortDescription,
 		p_address: address || null,
 		p_latitude: coordinates.latitude,
 		p_longitude: coordinates.longitude,
@@ -242,7 +244,8 @@ export async function updateDestinationAction(
 	const slug = value(formData, "slug", 100).toLowerCase();
 	const name = value(formData, "name", 160);
 	const description = value(formData, "description", 10000);
-	const category = value(formData, "category", 80);
+	const categories = [...new Set(formData.getAll("categories").map((item) => String(item).trim()).filter((item) => ["Alam", "Kuliner", "Spot Foto", "Sejarah & Budaya", "Petualangan & Aktivitas", "Rekreasi", "Religi", "Lainnya"].includes(item)))];
+	const shortDescription = value(formData, "short_description", 180);
 	const address = value(formData, "address", 500);
 	const imageUrlRaw = value(formData, "image_url", 2048);
 	const imageUrl = optionalUrl(imageUrlRaw);
@@ -269,7 +272,8 @@ export async function updateDestinationAction(
 		p_slug: slug,
 		p_name: name,
 		p_description: description,
-		p_category: category || null,
+		p_categories: categories,
+		p_short_description: shortDescription,
 		p_address: address || null,
 		p_latitude: coordinates.latitude,
 		p_longitude: coordinates.longitude,

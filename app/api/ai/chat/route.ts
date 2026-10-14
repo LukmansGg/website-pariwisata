@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 		const supabase = await createClient();
 		const { data: destination, error } = await supabase
 			.from("destinations")
-			.select("name, category, address, description, tags")
+			.select("name, category, categories, short_description, address, description, tags")
 			.eq("slug", destinationSlug)
 			.eq("is_published", true)
 			.not("image_url", "is", null)
