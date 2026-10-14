@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { MediaUploadField } from "@/app/ruang-kelola/media-upload-field";
 import {
 	configureTourismMinigameAssignmentAction,
@@ -13,7 +14,7 @@ type ComponentKey = "find_friends" | "photobox" | "chat_ai";
 type LayoutKey = "single" | "strip2" | "grid6";
 type RatioKey = "portrait" | "story" | "square";
 type Template = { id: string; name: string; layout: LayoutKey; ratio: RatioKey; frameUrl: string; enabled: boolean };
-type Program = { id: string; name: string; slug: string; is_enabled: boolean; components: ComponentKey[]; required_components: ComponentKey[]; created_at: string };
+type Program = { id: string; name: string; slug: string; is_enabled: boolean; components: ComponentKey[]; required_components: ComponentKey[]; default_photobox_access_mode?: "standalone" | "mission_reward"; created_at: string; updated_at: string };
 type Assignment = { id: string; program_id: string; destination_id: string; is_enabled: boolean; components: ComponentKey[]; required_components: ComponentKey[]; photobox_access_mode: "standalone" | "mission_reward"; photobox_templates: Template[]; caption_template: string; max_caption_length: number; max_dependency_distance_meters: number };
 type Destination = { id: string; name: string; slug: string; is_published: boolean };
 type QrPoint = { id: string; destination_id: string; name: string; code: string; is_active: boolean };
@@ -41,25 +42,49 @@ function Feedback({ state }: { state: WorkspaceActionState }) {
 
 function ProgramForm({ program, destinations, selectedDestinationIds = [] }: { program?: Program; destinations: Destination[]; selectedDestinationIds?: string[] }) {
 	const [state, action, pending] = useActionState(saveTourismMinigameProgramAction, initialActionState);
+	const router = useRouter();
+	const refreshedAfterSave = useRef(false);
 	const [name, setName] = useState(program?.name ?? "");
 	const [slug, setSlug] = useState(program?.slug ?? "");
 	const [slugEdited, setSlugEdited] = useState(Boolean(program));
 	const [components, setComponents] = useState<ComponentKey[]>(program?.components ?? ["chat_ai"]);
 	const [required, setRequired] = useState<ComponentKey[]>(program?.required_components ?? []);
+	const [photoboxAccessMode, setPhotoboxAccessMode] = useState<"standalone" | "mission_reward">(program?.default_photobox_access_mode ?? "standalone");
+	const [selectedDestinations, setSelectedDestinations] = useState<string[]>(selectedDestinationIds);
+	const [enabled, setEnabled] = useState(program?.is_enabled ?? false);
+	useEffect(() => {
+		setName(program?.name ?? "");
+		setSlug(program?.slug ?? "");
+		setSlugEdited(Boolean(program));
+		setComponents(program?.components ?? ["chat_ai"]);
+		setRequired(program?.required_components ?? []);
+		setPhotoboxAccessMode(program?.default_photobox_access_mode ?? "standalone");
+		setSelectedDestinations(selectedDestinationIds);
+		setEnabled(program?.is_enabled ?? false);
+	}, [program?.id, program?.updated_at, selectedDestinationIds.join(",")]);
+	useEffect(() => {
+		if (!state.success || refreshedAfterSave.current) return;
+		refreshedAfterSave.current = true;
+		router.refresh();
+	}, [state, router]);
 	const slugify = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 100);
 	function toggleComponent(key: ComponentKey) {
+		const removing = components.includes(key);
 		setComponents((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
 		if (key === "chat_ai") return;
 		setRequired((current) => current.filter((item) => item !== key));
+		if (removing && key === "photobox") setPhotoboxAccessMode("standalone");
 	}
 	function toggleRequired(key: ComponentKey) { setRequired((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]); }
-	return <form action={action} className="space-y-5">
+	return <form action={action} onSubmit={() => { refreshedAfterSave.current = false; }} className="space-y-5">
 		{program && <input type="hidden" name="program_id" value={program.id} />}
+		<input type="hidden" name="default_photobox_access_mode" value={components.includes("find_friends") && components.includes("photobox") ? photoboxAccessMode : "standalone"} />
 		<div className="grid gap-4 sm:grid-cols-2"><label className="block"><span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#16587B]/70">Nama program *</span><input required maxLength={120} name="program_name" value={name} onChange={(event) => { setName(event.currentTarget.value); if (!slugEdited) setSlug(slugify(event.currentTarget.value)); }} placeholder="Petualangan TILOC" className="w-full rounded-xl border border-[#84B3CE]/40 bg-white px-4 py-3 text-sm outline-none focus:border-[#16587B] focus:ring-4 focus:ring-[#84B3CE]/20" /></label><label className="block"><span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-[#16587B]/70">ID program *</span><div className="flex rounded-xl border border-[#84B3CE]/40 bg-white"><span className="self-center pl-3 text-xs text-[#16587B]/45">/minigame/</span><input required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={100} name="program_slug" value={slug} onChange={(event) => { setSlugEdited(true); setSlug(slugify(event.currentTarget.value)); }} placeholder="petualangan-tiloc" className="min-w-0 flex-1 rounded-xl bg-transparent px-2 py-3 text-sm outline-none" /></div></label></div>
 		<fieldset><legend className="mb-2 text-xs font-bold uppercase tracking-wide text-[#16587B]/70">Komponen program</legend><div className="grid gap-3 md:grid-cols-3">{(Object.keys(componentMeta) as ComponentKey[]).map((key) => <label key={key} className={`flex cursor-pointer gap-3 rounded-2xl border p-4 transition ${components.includes(key) ? "border-sky-400 bg-sky-50 shadow-sm" : "border-[#84B3CE]/25 bg-white/65"}`}><input type="checkbox" name="components" value={key} checked={components.includes(key)} onChange={() => toggleComponent(key)} className="mt-1 h-4 w-4 accent-[#16587B]" /><span><strong className="block text-sm text-[#16587B]">{componentMeta[key].icon} {componentMeta[key].label}</strong><span className="mt-1 block text-xs leading-5 text-[#16587B]/65">{componentMeta[key].note}</span></span></label>)}</div></fieldset>
+			{components.includes("find_friends") && components.includes("photobox") && <label className="block max-w-2xl rounded-2xl border border-fuchsia-200 bg-fuchsia-50/70 p-4"><span className="block text-sm font-black text-fuchsia-950">🎁 Photobox sebagai hadiah</span><span className="mt-1 block text-xs leading-5 text-fuchsia-950/70">Pilih apakah pengunjung perlu menyelesaikan Find Our Friends sebelum membuka Photobox. Pengaturan ini menjadi default untuk destinasi baru; tiap destinasi tetap bisa disesuaikan.</span><select value={photoboxAccessMode} onChange={(event) => setPhotoboxAccessMode(event.currentTarget.value as "standalone" | "mission_reward")} className="mt-3 w-full rounded-xl border border-fuchsia-200 bg-white px-3 py-2.5 text-sm font-semibold text-[#16587B]"><option value="standalone">Bebas dibuka</option><option value="mission_reward">Hadiah setelah misi Find Our Friends</option></select></label>}
 		<fieldset><legend className="mb-2 text-xs font-bold uppercase tracking-wide text-[#16587B]/70">Syarat program tuntas</legend><div className="flex flex-wrap gap-2">{(["find_friends", "photobox"] as ComponentKey[]).filter((key) => components.includes(key)).map((key) => <label key={key} className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold ${required.includes(key) ? "border-amber-300 bg-amber-50 text-amber-900" : "border-[#84B3CE]/30 bg-white/70 text-[#16587B]/70"}`}><input name="required_components" type="checkbox" value={key} checked={required.includes(key)} onChange={() => toggleRequired(key)} className="h-3.5 w-3.5 accent-amber-600" />{componentMeta[key].label} wajib</label>)}{!components.some((key) => key !== "chat_ai") && <span className="text-xs text-[#16587B]/55">Chat AI tidak menjadi syarat tuntas.</span>}</div></fieldset>
-		<div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#16587B]/70">Destinasi yang memakai program</p><div className="grid max-h-52 gap-2 overflow-y-auto rounded-2xl border border-[#84B3CE]/25 bg-white/65 p-3 sm:grid-cols-2">{destinations.map((destination) => <label key={destination.id} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-sky-50"><input type="checkbox" name="destination_ids" value={destination.id} defaultChecked={selectedDestinationIds.includes(destination.id)} className="h-4 w-4 accent-[#16587B]" />{destination.name}{!destination.is_published && <span className="ml-auto text-[10px] text-amber-700">Draft</span>}</label>)}</div><p className="mt-1 text-[11px] text-[#16587B]/55">Centang semua destinasi yang memakai program ini. Konfigurasi tiap destinasi tetap dapat diatur terpisah.</p></div>
-		<label className="flex items-center gap-2 text-sm font-bold text-[#16587B]"><input type="checkbox" name="is_enabled" defaultChecked={program?.is_enabled ?? false} className="h-4 w-4 accent-emerald-600" /> Aktifkan program untuk pengunjung</label>
+		<div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#16587B]/70">Destinasi yang memakai program</p><div className="grid max-h-52 gap-2 overflow-y-auto rounded-2xl border border-[#84B3CE]/25 bg-white/65 p-3 sm:grid-cols-2">{destinations.map((destination) => <label key={destination.id} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-sky-50"><input type="checkbox" name="destination_ids" value={destination.id} checked={selectedDestinations.includes(destination.id)} onChange={(event) => { const checked = event.currentTarget.checked; setSelectedDestinations((current) => checked ? [...current, destination.id] : current.filter((id) => id !== destination.id)); }} className="h-4 w-4 accent-[#16587B]" />{destination.name}{!destination.is_published && <span className="ml-auto text-[10px] text-amber-700">Draft</span>}</label>)}</div><p className="mt-1 text-[11px] text-[#16587B]/55">Centang semua destinasi yang memakai program ini. Konfigurasi tiap destinasi tetap dapat diatur terpisah.</p></div>
+		<label className="flex items-center gap-2 text-sm font-bold text-[#16587B]"><input type="checkbox" name="is_enabled" checked={enabled} onChange={(event) => setEnabled(event.currentTarget.checked)} className="h-4 w-4 accent-emerald-600" /> Aktifkan program untuk pengunjung</label>
 		<Feedback state={state} /><button type="submit" disabled={pending} className="min-h-12 rounded-xl bg-[#16587B] px-6 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-60">{pending ? "Menyimpan…" : program ? "Simpan program" : "Buat program minigame"}</button>
 	</form>;
 }

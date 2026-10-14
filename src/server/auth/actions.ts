@@ -521,6 +521,8 @@ export async function saveTourismMinigameProgramAction(
 	const components = [...new Set(formData.getAll("components").map(String).filter((item) => MINIGAME_COMPONENTS.has(item)))];
 	const requiredComponents = [...new Set(formData.getAll("required_components").map(String).filter((item) => ["find_friends", "photobox"].includes(item) && components.includes(item)))];
 	const destinationIds = [...new Set(formData.getAll("destination_ids").map(String).filter((item) => /^[0-9a-f-]{36}$/i.test(item)))];
+	const requestedPhotoboxMode = value(formData, "default_photobox_access_mode", 32);
+	const defaultPhotoboxAccessMode = components.includes("find_friends") && components.includes("photobox") && requestedPhotoboxMode === "mission_reward" ? "mission_reward" : "standalone";
 	if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !components.length) {
 		return { error: "Isi nama dan ID program, lalu aktifkan minimal satu komponen." };
 	}
@@ -534,9 +536,15 @@ export async function saveTourismMinigameProgramAction(
 		p_components: components,
 		p_required_components: requiredComponents,
 		p_destination_ids: destinationIds,
+		p_default_photobox_access_mode: defaultPhotoboxAccessMode,
 	});
-	if (error) return { error: "Program belum tersimpan. Jalankan migration minigame programs di Supabase." };
+	if (error) {
+		console.error("Minigame program save failed", { code: error.code, message: error.message });
+		if (error.code === "PGRST202" || error.code === "42883") return { error: "Fitur pengaturan Photobox gift belum tersedia di database. Jalankan migration minigame gift default di Supabase." };
+		return { error: "Program belum tersimpan. Periksa koneksi dan pastikan ID program belum dipakai program lain." };
+	}
 	if (data?.error) return { error: minigameErrorMessage(String(data.error)) };
+	if (!data?.programId) return { error: "Database belum mengonfirmasi penyimpanan program. Muat ulang halaman dan coba lagi." };
 	revalidatePath("/ruang-kelola/minigames");
 	revalidatePath("/ruang-kelola");
 	revalidatePath("/");

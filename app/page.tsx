@@ -933,11 +933,6 @@ const Highlights = ({
 			</div>
 		) : null}
 
-		<Link
-			href="/scan"
-			className="md:hidden w-full mt-8 flex items-center justify-center gap-2 text-[var(--home-ink)] font-bold py-4 rounded-xl border-2 border-[var(--home-ink)]/10 hover:bg-[var(--home-primary)]/5 transition-colors">
-			Scan QR Destinasi <IconArrowRight />
-		</Link>
 	</section>
 );
 
@@ -1148,7 +1143,7 @@ const Footer = () => {
 	return (
 	<footer id="tentang" className="bg-[var(--home-glass)] pt-20 pb-10 px-6 border-t border-[var(--home-glass-border)]">
 		<div className="max-w-7xl mx-auto">
-			<div className="mb-12 flex flex-col items-start justify-between gap-6 border-b border-[var(--home-glass-border)] pb-10 md:flex-row md:items-center"><div><h3 className="mb-2 text-2xl font-bold text-[var(--home-ink)]">Mau mulai dari mana?</h3><p className="text-[var(--home-ink)]/65">Pilih cara eksplorasi yang paling cocok buat trip-mu.</p></div><div className="flex flex-wrap gap-3"><a href="#peta" className="rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] px-5 py-3 font-bold text-[var(--home-ink)] transition hover:-translate-y-0.5 hover:border-[var(--home-accent)]">Jelajah peta</a><a href="#kuliner" className="rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] px-5 py-3 font-bold text-[var(--home-ink)] transition hover:-translate-y-0.5 hover:border-[var(--home-accent)]">Pilih mood</a><Link href="/scan" className="rounded-full bg-[var(--home-primary)] px-5 py-3 font-bold text-white transition hover:-translate-y-0.5">Scan QR</Link></div></div>
+			<div className="mb-12 flex flex-col items-start justify-between gap-6 border-b border-[var(--home-glass-border)] pb-10 md:flex-row md:items-center"><div><h3 className="mb-2 text-2xl font-bold text-[var(--home-ink)]">Mau mulai dari mana?</h3><p className="text-[var(--home-ink)]/65">Pilih cara eksplorasi yang paling cocok buat trip-mu.</p></div><div className="flex flex-wrap gap-3"><a href="#peta" className="rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] px-5 py-3 font-bold text-[var(--home-ink)] transition hover:-translate-y-0.5 hover:border-[var(--home-accent)]">Jelajah peta</a><a href="#kuliner" className="rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] px-5 py-3 font-bold text-[var(--home-ink)] transition hover:-translate-y-0.5 hover:border-[var(--home-accent)]">Pilih mood</a><a href="#destinasi" className="rounded-full bg-[var(--home-primary)] px-5 py-3 font-bold text-white transition hover:-translate-y-0.5">Lihat spot pilihan</a></div></div>
 		<div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
 			<div className="md:col-span-2">
 				<div className="flex items-center gap-2 mb-6">

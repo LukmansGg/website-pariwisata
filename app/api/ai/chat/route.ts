@@ -68,9 +68,11 @@ export async function POST(request: Request) {
 	} catch (error) {
 		if (error instanceof Error && error.name === "TimeoutError") return NextResponse.json({ error: "Asisten sedang lambat merespons. Coba lagi sebentar." }, { status: 504 });
 		const reason = error instanceof Error ? error.message : "";
-		if (reason === "AI_PROVIDER_NOT_CONFIGURED") return NextResponse.json({ error: "AI belum aktif. Tambahkan kunci Gemini di environment server." }, { status: 503 });
-		if (reason === "AI_PROVIDER_RATE_LIMITED") return NextResponse.json({ error: "Kuota AI sedang penuh. Coba lagi sebentar." }, { status: 429 });
-		if (reason === "AI_PROVIDER_UNAVAILABLE") return NextResponse.json({ error: "Layanan AI sedang tidak tersedia. Coba lagi nanti." }, { status: 503 });
+		if (reason === "AI_PROVIDER_NOT_CONFIGURED") return NextResponse.json({ error: "AI belum aktif. Tambahkan GEMINI_API_KEY atau OPENROUTER_API_KEY di environment server." }, { status: 503 });
+		if (reason === "OPENROUTER_FALLBACK_LIMIT_REACHED") return NextResponse.json({ error: "Kuota cadangan AI gratis hari ini sudah tercapai. Coba lagi besok." }, { status: 429, headers: { "Retry-After": "86400" } });
+		if (reason === "AI_FALLBACK_GUARD_UNAVAILABLE") return NextResponse.json({ error: "Layanan AI sedang tidak tersedia. Coba lagi nanti." }, { status: 503 });
+		if (reason === "OPENROUTER_FREE_MODEL_REQUIRED") return NextResponse.json({ error: "Model fallback harus memakai model gratis OpenRouter (:free)." }, { status: 503 });
+		if (reason === "AI_PROVIDERS_UNAVAILABLE" || reason === "OPENROUTER_REQUEST_FAILED" || reason === "OPENROUTER_EMPTY_RESPONSE") return NextResponse.json({ error: "Layanan AI sedang tidak tersedia. Coba lagi nanti." }, { status: 503 });
 		console.error("Tourism AI request failed", error);
 		return NextResponse.json({ error: "Jawaban belum dapat dibuat. Coba lagi nanti." }, { status: 502 });
 	}
