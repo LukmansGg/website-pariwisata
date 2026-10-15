@@ -7,7 +7,7 @@ import NearbyCampaignPopup from "@/app/wisata/[slug]/nearby-campaign-popup";
 
 type Layout = "single" | "strip2" | "grid6";
 type Ratio = "portrait" | "story" | "square";
-type Template = { id: string; name: string; layout: Layout; ratio: Ratio; frameUrl: string; enabled: boolean };
+type Template = { id: string; name: string; layout: Layout; ratio: Ratio; frameUrl: string; enabled: boolean; isGift?: boolean };
 type Program = { assignmentId: string; programSlug: string; programName: string; components: string[]; photoboxAccessMode: "standalone" | "mission_reward"; photoboxTemplates: Template[]; captionTemplate: string; maxCaptionLength: number; progress: { completedComponents: string[] } };
 type State = { destinationName: string; destinationAddress?: string | null; destinationTags?: string[]; programs: Program[] };
 type Destination = { slug: string; name: string; description: string | null; address: string | null; tags: string[] | null; mascot_mode: "tiloc" | "custom"; mascot_image_url: string | null };
@@ -71,7 +71,7 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 	}, [destination.slug]);
 	useEffect(() => { void refresh().catch((error) => setStatus(error instanceof Error ? error.message : "Photobox belum dapat dimuat.")); }, [refresh]);
 	const program = state?.programs.find((item) => item.programSlug === programSlug);
-	const templates = useMemo(() => (program?.photoboxTemplates ?? []).filter((template) => template.enabled), [program]);
+	const templates = useMemo(() => (program?.photoboxTemplates ?? []).filter((template) => template.enabled && (program?.photoboxAccessMode !== "mission_reward" || template.isGift !== false)), [program]);
 	const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? templates[0];
 	const slotCount = selectedTemplate?.layout === "grid6" ? 6 : selectedTemplate?.layout === "strip2" ? 2 : 1;
 	const locked = program?.photoboxAccessMode === "mission_reward" && !program.progress.completedComponents.includes("find_friends");

@@ -552,7 +552,7 @@ export async function saveTourismMinigameProgramAction(
 }
 
 type FindPointConfiguration = { qrPointId: string; isRequired: boolean; requires: string[]; friendName?: string; friendImageUrl?: string };
-type PhotoboxTemplateConfiguration = { id: string; name: string; layout: "single" | "strip2" | "grid6"; ratio: "portrait" | "story" | "square"; frameUrl: string; enabled: boolean };
+type PhotoboxTemplateConfiguration = { id: string; name: string; layout: "single" | "strip2" | "grid6"; ratio: "portrait" | "story" | "square"; frameUrl: string; enabled: boolean; isGift?: boolean; source?: "preset" | "custom" };
 
 export async function configureTourismMinigameAssignmentAction(
 	_previousState: WorkspaceActionState,
@@ -562,6 +562,7 @@ export async function configureTourismMinigameAssignmentAction(
 	const components = [...new Set(formData.getAll("assignment_components").map(String).filter((item) => MINIGAME_COMPONENTS.has(item)))];
 	const requiredComponents = [...new Set(formData.getAll("assignment_required_components").map(String).filter((item) => ["find_friends", "photobox"].includes(item) && components.includes(item)))];
 	const maxDependencyDistance = Number(value(formData, "max_dependency_distance_meters", 8) || "1000");
+	const photoboxAccessMode = components.includes("find_friends") && components.includes("photobox") && value(formData, "photobox_access_mode", 32) === "mission_reward" ? "mission_reward" : "standalone";
 	let points: FindPointConfiguration[] = [];
 	let templates: PhotoboxTemplateConfiguration[] = [];
 	try {
@@ -585,6 +586,8 @@ export async function configureTourismMinigameAssignmentAction(
 				ratio: ["portrait", "story", "square"].includes(item.ratio) ? item.ratio : "portrait",
 				frameUrl: typeof item.frameUrl === "string" ? item.frameUrl.slice(0, 2048) : "",
 				enabled: item.enabled !== false,
+				isGift: item.isGift !== false,
+				source: item.source === "custom" ? "custom" : "preset",
 			}));
 	} catch {
 		return { error: "Data grup QR atau template Photobox tidak terbaca." };
@@ -598,6 +601,7 @@ export async function configureTourismMinigameAssignmentAction(
 		return { error: "Pastikan setiap template memiliki nama dan gambar frame yang valid." };
 	}
 	if (components.includes("photobox") && !templates.some((item) => item.enabled)) return { error: "Aktifkan setidaknya satu template Photobox." };
+	if (photoboxAccessMode === "mission_reward" && !templates.some((item) => item.enabled && item.isGift)) return { error: "Pilih setidaknya satu frame aktif sebagai hadiah misi." };
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola minigame." };
 	const { data, error } = await staff.supabase.rpc("configure_tourism_minigame_assignment", {
@@ -605,7 +609,7 @@ export async function configureTourismMinigameAssignmentAction(
 		p_is_enabled: formData.get("assignment_enabled") === "on",
 		p_components: components,
 		p_required_components: requiredComponents,
-		p_photobox_access_mode: components.includes("find_friends") && components.includes("photobox") && value(formData, "photobox_access_mode", 32) === "mission_reward" ? "mission_reward" : "standalone",
+		p_photobox_access_mode: photoboxAccessMode,
 		p_photobox_templates: templates,
 		p_caption_template: value(formData, "caption_template", 500),
 		p_max_caption_length: Number(value(formData, "max_caption_length", 8) || "280"),
