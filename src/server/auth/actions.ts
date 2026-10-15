@@ -557,7 +557,7 @@ export async function saveTourismMinigameProgramAction(
 }
 
 type FindPointConfiguration = { qrPointId: string; isRequired: boolean; requires: string[]; friendName?: string; friendImageUrl?: string };
-type PhotoboxTemplateConfiguration = { id: string; name: string; layout: "single" | "strip2" | "grid6"; ratio: "portrait" | "story" | "square"; frameUrl: string; enabled: boolean; source?: "preset" | "custom" };
+type PhotoboxTemplateConfiguration = { id: string; name: string; layout: "single" | "strip2" | "grid6" | "travel_strip" | "memory_triptych"; ratio: "portrait" | "story" | "square"; frameUrl: string; enabled: boolean; source?: "preset" | "custom" };
 
 export async function configureTourismMinigameAssignmentAction(
 	_previousState: WorkspaceActionState,
@@ -588,7 +588,7 @@ export async function configureTourismMinigameAssignmentAction(
 			.map((item) => ({
 				id: item.id.slice(0, 80),
 				name: typeof item.name === "string" ? item.name.trim().slice(0, 80) : "Template",
-				layout: ["single", "strip2", "grid6"].includes(item.layout) ? item.layout : "single",
+				layout: ["single", "strip2", "grid6", "travel_strip", "memory_triptych"].includes(item.layout) ? item.layout : "single",
 				ratio: ["portrait", "story", "square"].includes(item.ratio) ? item.ratio : "portrait",
 				frameUrl: typeof item.frameUrl === "string" ? item.frameUrl.slice(0, 2048) : "",
 				enabled: item.enabled !== false,

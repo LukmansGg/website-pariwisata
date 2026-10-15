@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import NearbyCampaignPopup from "@/app/wisata/[slug]/nearby-campaign-popup";
 
-type Layout = "single" | "strip2" | "grid6";
+type Layout = "single" | "strip2" | "grid6" | "travel_strip" | "memory_triptych";
 type Ratio = "portrait" | "story" | "square";
 type Template = { id: string; name: string; layout: Layout; ratio: Ratio; frameUrl: string; enabled: boolean };
 type Program = { assignmentId: string; programSlug: string; programName: string; components: string[]; requiredComponents: string[]; photoboxAccessMode: "standalone" | "mission_reward"; photoboxTemplates: Template[]; captionTemplate: string; maxCaptionLength: number; progress: { completedComponents: string[]; completed: boolean } };
@@ -18,6 +18,12 @@ type ImageSize = { width: number; height: number };
 type PhotoDrag = { slot: number; pointerId: number; startX: number; startY: number; width: number; height: number; offsetX: number; offsetY: number };
 const DEFAULT_PHOTO_TRANSFORM: PhotoTransform = { zoom: 1, x: 0, y: 0 };
 type IconName = "back" | "sun" | "moon" | "camera" | "flip" | "flashOn" | "flashOff" | "upload" | "check" | "download" | "share" | "close" | "lock" | "trash";
+
+function templateAspectRatio(template: Template) {
+	if (template.layout === "travel_strip") return "1 / 3";
+	if (template.layout === "memory_triptych") return "9 / 16";
+	return template.ratio === "story" ? "9 / 16" : template.ratio === "square" ? "1 / 1" : "4 / 5";
+}
 
 function Icon({ name, className = "" }: { name: IconName; className?: string }) {
 	const paths: Record<IconName, ReactNode> = {
@@ -54,6 +60,16 @@ function AtmosphereLayer({ dark }: { dark: boolean }) {
 }
 
 function slotRects(layout: Layout, width: number, height: number) {
+	if (layout === "travel_strip") return [
+		{ x: width * (64 / 600), y: height * (192 / 1800), w: width * (476 / 600), h: height * (420 / 1800) },
+		{ x: width * (62 / 600), y: height * (635 / 1800), w: width * (475 / 600), h: height * (421 / 1800) },
+		{ x: width * (60 / 600), y: height * (1079 / 1800), w: width * (475 / 600), h: height * (421 / 1800) },
+	];
+	if (layout === "memory_triptych") return [
+		{ x: width * (418 / 1080), y: height * (62 / 1920), w: width * (550 / 1080), h: height * (361 / 1920) },
+		{ x: width * (226 / 1080), y: height * (427 / 1920), w: width * (628 / 1080), h: height * (595 / 1920) },
+		{ x: width * (100 / 1080), y: height * (1436 / 1920), w: width * (733 / 1080), h: height * (438 / 1920) },
+	];
 	const pad = width * .0611;
 	const top = height * .1185;
 	const bottom = height * .8963;
@@ -123,13 +139,13 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 	const program = state?.programs.find((item) => item.programSlug === programSlug);
 	const templates = useMemo(() => (program?.photoboxTemplates ?? []).filter((template) => template.enabled), [program]);
 	const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? templates[0];
-	const slotCount = selectedTemplate?.layout === "grid6" ? 6 : selectedTemplate?.layout === "strip2" ? 2 : 1;
+	const slotCount = selectedTemplate?.layout === "grid6" ? 6 : selectedTemplate?.layout === "strip2" ? 2 : selectedTemplate?.layout === "travel_strip" || selectedTemplate?.layout === "memory_triptych" ? 3 : 1;
 	const locked = program?.photoboxAccessMode === "mission_reward" && !program.progress.completed;
 	const mascot = destination.mascot_mode === "custom" && destination.mascot_image_url ? destination.mascot_image_url : "/maskot/frame_0.png";
 	const completedSlots = photos.slice(0, slotCount).filter(Boolean).length;
 	const allSlotsFilled = slotCount > 0 && completedSlots === slotCount;
-	const frameWidth = 1080;
-	const frameHeight = selectedTemplate?.ratio === "story" ? 1920 : selectedTemplate?.ratio === "square" ? 1080 : 1350;
+	const frameWidth = selectedTemplate?.layout === "travel_strip" ? 600 : 1080;
+	const frameHeight = selectedTemplate?.layout === "travel_strip" ? 1800 : selectedTemplate?.layout === "memory_triptych" ? 1920 : selectedTemplate?.ratio === "story" ? 1920 : selectedTemplate?.ratio === "square" ? 1080 : 1350;
 	const previewRects = selectedTemplate ? slotRects(selectedTemplate.layout, frameWidth, frameHeight) : [];
 	const activeTransform = photoTransforms[activeSlot] ?? DEFAULT_PHOTO_TRANSFORM;
 
@@ -367,9 +383,9 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 			const frame = new window.Image(); frame.crossOrigin = "anonymous";
 			await new Promise<void>((resolve, reject) => { frame.onload = () => resolve(); frame.onerror = () => reject(new Error("Frame custom tidak dapat dirender. Gunakan URL gambar yang mengizinkan akses lintas situs.")); frame.src = selectedTemplate.frameUrl; });
 			context.drawImage(frame, 0, 0, canvas.width, canvas.height);
-			context.fillStyle = "rgba(22,88,123,.82)"; context.font = "bold 22px Arial"; context.textAlign = "center";
+			context.fillStyle = "rgba(22,88,123,.82)"; context.font = `bold ${Math.max(14, canvas.width * (22 / 1080))}px Arial`; context.textAlign = "center";
 			const place = destination.address || state?.destinationAddress || destination.name;
-			context.fillText(place.slice(0, 70), 540, canvas.height - 30);
+			context.fillText(place.slice(0, 70), canvas.width / 2, canvas.height - canvas.width * (30 / 1080));
 			const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", .92));
 			if (!blob) throw new Error("Gambar hasil belum dapat dibuat.");
 		if (outputUrlRef.current) URL.revokeObjectURL(outputUrlRef.current);
@@ -437,7 +453,7 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 	const btnSolid = dark ? "bg-[#38BDF8] text-[#0F172A] hover:brightness-105" : "bg-[#0F2C59] text-white hover:bg-[#173d75]";
 	const btnSecondary = dark ? "border-white/20 bg-white/5 text-white hover:bg-white/10" : "border-black/15 bg-white/80 text-[#0F2C59] hover:bg-black/5";
 	const atmosphereStyle = ".photobox-cloud{animation:photobox-drift 34s ease-in-out infinite alternate}.photobox-sun-glow{animation:photobox-glow 14s ease-in-out infinite alternate}.photobox-star{animation:photobox-twinkle 3.4s ease-in-out infinite alternate}.photobox-aurora{animation:photobox-aurora 18s ease-in-out infinite alternate}@keyframes photobox-drift{from{transform:translate3d(-2%,0,0)}to{transform:translate3d(3%,2%,0)}}@keyframes photobox-glow{from{transform:scale(.96);opacity:.55}to{transform:scale(1.08);opacity:.9}}@keyframes photobox-twinkle{from{opacity:.28;transform:scale(.75)}to{opacity:1;transform:scale(1.25)}}@keyframes photobox-aurora{from{transform:translateX(-4%) rotate(-12deg);opacity:.5}to{transform:translateX(5%) rotate(-7deg);opacity:.9}}.hide-scrollbar::-webkit-scrollbar{display:none}.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}@media(prefers-reduced-motion:reduce){.photobox-cloud,.photobox-sun-glow,.photobox-star,.photobox-aurora{animation:none!important}}";
-	const frameHeightVh = step === 1 ? 42 : 48;
+	const frameHeightVh = step === 1 ? 42 : selectedTemplate?.layout === "travel_strip" ? 62 : 48;
 	const previewWidth = "min(100%, " + (frameWidth / frameHeight * frameHeightVh) + "dvh, " + (frameWidth / frameHeight * 560) + "px)";
 
 	if (!state) return <main className={"relative isolate grid min-h-dvh place-items-center overflow-hidden p-5 " + ink}><AtmosphereLayer dark={dark} /><style>{atmosphereStyle}</style><section className={"relative z-10 w-full max-w-md rounded-[2rem] border p-8 text-center backdrop-blur-xl " + glassPanel}><Icon name="camera" className="mx-auto h-10 w-10 text-sky-500" /><h1 className="mt-4 text-2xl font-black">{status || "Menyiapkan Photobox…"}</h1><p className={"mt-2 text-sm " + muted}>{status ? "Periksa koneksi lalu coba lagi." : "Memuat frame dan pengaturan destinasi."}</p>{status && <button type="button" onClick={() => { setStatus(""); void refresh().catch((error) => setStatus(error instanceof Error ? error.message : "Photobox belum dapat dimuat.")); }} className={"mt-5 rounded-xl px-5 py-3 text-xs font-black " + btnSolid}>Coba lagi</button>}</section></main>;
@@ -468,7 +484,7 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 		<section className={"relative z-20 mx-auto max-h-[62dvh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] border-t p-5 pb-[max(2rem,env(safe-area-inset-bottom))] backdrop-blur-xl transition-all duration-500 " + glassPanel}>
 			<div className="mb-3 flex items-center justify-center gap-2" aria-label={"Langkah " + step + " dari 3"}>{[1, 2, 3].map((item) => <span key={item} className={"h-1.5 rounded-full transition-all duration-300 " + (item === step ? "w-8 " + (dark ? "bg-sky-400" : "bg-[#0F2C59]") : "w-3 " + (dark ? "bg-white/20" : "bg-black/15"))} />)}</div>
 
-			{step === 1 && <div className="animate-in slide-in-from-right-8 duration-300"><div className="mb-3 flex items-end justify-between"><div><p className={"text-[9px] font-black uppercase tracking-[.18em] " + muted}>LANGKAH 01</p><h2 className="mt-1 text-xl font-black">Pilih frame</h2></div><span className={"text-[10px] font-bold " + muted}>{templates.length} tersedia</span></div><div className="hide-scrollbar -mx-5 flex snap-x gap-4 overflow-x-auto px-5 pb-4">{templates.map((template) => <button key={template.id} type="button" onClick={() => requestTemplateChange(template.id)} aria-pressed={selectedTemplate?.id === template.id} className={"relative shrink-0 snap-center overflow-hidden rounded-2xl border-[3px] bg-white/20 transition-all duration-300 " + (selectedTemplate?.id === template.id ? (dark ? "scale-100 border-sky-400 shadow-[0_0_18px_rgba(56,189,248,.3)]" : "scale-100 border-[#0F2C59] shadow-xl") : "scale-95 border-transparent opacity-65")} style={{ height: "140px", aspectRatio: (template.ratio === "story" ? "9 / 16" : template.ratio === "square" ? "1 / 1" : "4 / 5") }}><img src={template.frameUrl} className="h-full w-full object-cover" alt={template.name} />{selectedTemplate?.id === template.id && <span className={"absolute bottom-2 right-2 rounded-full p-1 " + (dark ? "bg-sky-400 text-[#0F172A]" : "bg-[#0F2C59] text-white")}><Icon name="check" className="h-3 w-3" /></span>}<span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-6 text-left text-[10px] font-black text-white">{template.name}</span></button>)}{templates.length === 0 && <p className={"py-6 text-sm " + muted}>Belum ada frame aktif.</p>}</div><button type="button" onClick={() => { setStep(2); setActiveSlot(0); }} disabled={!selectedTemplate} className={"w-full rounded-2xl py-4 text-base font-black shadow-lg transition-transform hover:-translate-y-0.5 disabled:opacity-40 " + btnSolid}>Pilih &amp; Lanjut</button></div>}
+			{step === 1 && <div className="animate-in slide-in-from-right-8 duration-300"><div className="mb-3 flex items-end justify-between"><div><p className={"text-[9px] font-black uppercase tracking-[.18em] " + muted}>LANGKAH 01</p><h2 className="mt-1 text-xl font-black">Pilih frame</h2></div><span className={"text-[10px] font-bold " + muted}>{templates.length} tersedia</span></div><div className="hide-scrollbar -mx-5 flex snap-x gap-4 overflow-x-auto px-5 pb-4">{templates.map((template) => <button key={template.id} type="button" onClick={() => requestTemplateChange(template.id)} aria-pressed={selectedTemplate?.id === template.id} className={"relative shrink-0 snap-center overflow-hidden rounded-2xl border-[3px] bg-white/20 transition-all duration-300 " + (selectedTemplate?.id === template.id ? (dark ? "scale-100 border-sky-400 shadow-[0_0_18px_rgba(56,189,248,.3)]" : "scale-100 border-[#0F2C59] shadow-xl") : "scale-95 border-transparent opacity-65")} style={{ height: "140px", aspectRatio: templateAspectRatio(template) }}><img src={template.frameUrl} className="h-full w-full object-cover" alt={template.name} />{selectedTemplate?.id === template.id && <span className={"absolute bottom-2 right-2 rounded-full p-1 " + (dark ? "bg-sky-400 text-[#0F172A]" : "bg-[#0F2C59] text-white")}><Icon name="check" className="h-3 w-3" /></span>}<span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-6 text-left text-[10px] font-black text-white">{template.name}</span></button>)}{templates.length === 0 && <p className={"py-6 text-sm " + muted}>Belum ada frame aktif.</p>}</div><button type="button" onClick={() => { setStep(2); setActiveSlot(0); }} disabled={!selectedTemplate} className={"w-full rounded-2xl py-4 text-base font-black shadow-lg transition-transform hover:-translate-y-0.5 disabled:opacity-40 " + btnSolid}>Pilih &amp; Lanjut</button></div>}
 
 			{step === 2 && selectedTemplate && <div className="animate-in slide-in-from-right-8 flex flex-col gap-4 duration-300"><div className="flex items-center justify-between"><div><p className={"text-[9px] font-black uppercase tracking-[.18em] " + muted}>LANGKAH 02</p><h2 className="mt-1 text-xl font-black">Isi bidang fotomu</h2></div><span className={"text-[10px] font-bold " + muted}>{completedSlots}/{slotCount} terisi</span></div><div className="flex w-full justify-center gap-2">{Array.from({ length: slotCount }, (_, index) => <button key={index} type="button" onClick={() => setActiveSlot(index)} className={"max-w-[80px] flex-1 rounded-full border py-2 text-[10px] font-bold transition-all " + (activeSlot === index ? (dark ? "border-sky-400 bg-sky-400 text-[#0F172A]" : "border-[#0F2C59] bg-[#0F2C59] text-white") : photos[index] ? (dark ? "border-transparent bg-white/20 text-white" : "border-transparent bg-black/10 text-[#0F2C59]") : (dark ? "border-white/20 text-white/55" : "border-black/20 text-black/55"))}>Slot {index + 1}{photos[index] ? " ✓" : ""}</button>)}</div>
 {photos[activeSlot] && <div className={"rounded-2xl border p-3 " + (dark ? "border-sky-300/20 bg-sky-300/5" : "border-[#0F2C59]/10 bg-white/55")}>
