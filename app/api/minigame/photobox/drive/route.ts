@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 			await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(driveFileId)}`, {
 				method: "DELETE", cache: "no-store", headers: { Authorization: `Bearer ${accessToken}` },
 			}).catch(() => undefined);
-			return NextResponse.json({ error: data?.error === "PHOTOBOX_LOCKED" ? "Photobox hadiah terbuka setelah Find Our Friends selesai." : "Foto tersimpan belum bisa ditautkan ke progres minigame." }, { status: data?.error === "PHOTOBOX_LOCKED" ? 403 : 400 });
+			return NextResponse.json({ error: data?.error === "PHOTOBOX_LOCKED" ? "Photobox hadiah terbuka setelah semua misi wajib program selesai." : "Foto tersimpan belum bisa ditautkan ke progres minigame." }, { status: data?.error === "PHOTOBOX_LOCKED" ? 403 : 400 });
 		}
 		return NextResponse.json({ status: "saved", photosCreated: data.photosCreated, xp: data.xp }, { headers: { "Cache-Control": "no-store" } });
 	} catch {

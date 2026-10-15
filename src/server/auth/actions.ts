@@ -489,6 +489,8 @@ export async function createPromotionAction(
 }
 
 const MINIGAME_COMPONENTS = new Set(["find_friends", "photobox", "chat_ai"]);
+const NON_MISSION_COMPONENTS = new Set(["photobox", "chat_ai"]);
+const isMinigameMission = (component: string) => MINIGAME_COMPONENTS.has(component) && !NON_MISSION_COMPONENTS.has(component);
 
 function minigameErrorMessage(code: string | undefined) {
 	const messages: Record<string, string> = {
@@ -498,7 +500,7 @@ function minigameErrorMessage(code: string | undefined) {
 		PROGRAM_NOT_FOUND: "Program minigame tidak ditemukan.",
 		ASSIGNMENT_NOT_FOUND: "Penerapan minigame tidak ditemukan.",
 		INVALID_ASSIGNMENT: "Periksa komponen, template foto, dan batas caption.",
-		PHOTOBOX_REWARD_REQUIRES_FIND_FRIENDS: "Photobox sebagai hadiah memerlukan Find Our Friends aktif.",
+		PHOTOBOX_REWARD_REQUIRES_REQUIRED_MISSION: "Pilih setidaknya satu game wajib sebelum Photobox dijadikan hadiah.",
 		PHOTOBOX_REQUIRES_ENABLED_TEMPLATE: "Aktifkan setidaknya satu template Photobox.",
 		FIND_FRIENDS_REQUIRES_QR_POINTS: "Pilih minimal satu titik QR untuk Find Our Friends.",
 		FIND_FRIENDS_REQUIRES_REQUIRED_POINT: "Tandai setidaknya satu titik QR sebagai wajib agar misi dapat diselesaikan.",
@@ -519,12 +521,15 @@ export async function saveTourismMinigameProgramAction(
 	const name = value(formData, "program_name", 120);
 	const slug = value(formData, "program_slug", 100).toLowerCase();
 	const components = [...new Set(formData.getAll("components").map(String).filter((item) => MINIGAME_COMPONENTS.has(item)))];
-	const requiredComponents = [...new Set(formData.getAll("required_components").map(String).filter((item) => ["find_friends", "photobox"].includes(item) && components.includes(item)))];
+	const requiredComponents = [...new Set(formData.getAll("required_components").map(String).filter((item) => isMinigameMission(item) && components.includes(item)))];
 	const destinationIds = [...new Set(formData.getAll("destination_ids").map(String).filter((item) => /^[0-9a-f-]{36}$/i.test(item)))];
 	const requestedPhotoboxMode = value(formData, "default_photobox_access_mode", 32);
-	const defaultPhotoboxAccessMode = components.includes("find_friends") && components.includes("photobox") && requestedPhotoboxMode === "mission_reward" ? "mission_reward" : "standalone";
+	const defaultPhotoboxAccessMode = components.includes("photobox") && requestedPhotoboxMode === "mission_reward" && requiredComponents.length > 0 ? "mission_reward" : "standalone";
 	if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !components.length) {
 		return { error: "Isi nama dan ID program, lalu aktifkan minimal satu komponen." };
+	}
+	if (components.includes("photobox") && requestedPhotoboxMode === "mission_reward" && !requiredComponents.length) {
+		return { error: "Pilih setidaknya satu game wajib sebelum Photobox dijadikan hadiah." };
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola minigame." };
@@ -540,7 +545,7 @@ export async function saveTourismMinigameProgramAction(
 	});
 	if (error) {
 		console.error("Minigame program save failed", { code: error.code, message: error.message });
-		if (error.code === "PGRST202" || error.code === "42883") return { error: "Fitur pengaturan Photobox gift belum tersedia di database. Jalankan migration minigame gift default di Supabase." };
+		if (error.code === "PGRST202" || error.code === "42883") return { error: "Pengaturan minigame belum tersedia di database. Jalankan migration minigame terbaru di Supabase." };
 		return { error: "Program belum tersimpan. Periksa koneksi dan pastikan ID program belum dipakai program lain." };
 	}
 	if (data?.error) return { error: minigameErrorMessage(String(data.error)) };
@@ -552,7 +557,7 @@ export async function saveTourismMinigameProgramAction(
 }
 
 type FindPointConfiguration = { qrPointId: string; isRequired: boolean; requires: string[]; friendName?: string; friendImageUrl?: string };
-type PhotoboxTemplateConfiguration = { id: string; name: string; layout: "single" | "strip2" | "grid6"; ratio: "portrait" | "story" | "square"; frameUrl: string; enabled: boolean; isGift?: boolean; source?: "preset" | "custom" };
+type PhotoboxTemplateConfiguration = { id: string; name: string; layout: "single" | "strip2" | "grid6"; ratio: "portrait" | "story" | "square"; frameUrl: string; enabled: boolean; source?: "preset" | "custom" };
 
 export async function configureTourismMinigameAssignmentAction(
 	_previousState: WorkspaceActionState,
@@ -560,9 +565,10 @@ export async function configureTourismMinigameAssignmentAction(
 ): Promise<WorkspaceActionState> {
 	const assignmentId = value(formData, "assignment_id", 64);
 	const components = [...new Set(formData.getAll("assignment_components").map(String).filter((item) => MINIGAME_COMPONENTS.has(item)))];
-	const requiredComponents = [...new Set(formData.getAll("assignment_required_components").map(String).filter((item) => ["find_friends", "photobox"].includes(item) && components.includes(item)))];
+	const requiredComponents = [...new Set(formData.getAll("assignment_required_components").map(String).filter((item) => isMinigameMission(item) && components.includes(item)))];
 	const maxDependencyDistance = Number(value(formData, "max_dependency_distance_meters", 8) || "1000");
-	const photoboxAccessMode = components.includes("find_friends") && components.includes("photobox") && value(formData, "photobox_access_mode", 32) === "mission_reward" ? "mission_reward" : "standalone";
+	const requestedPhotoboxAccessMode = value(formData, "photobox_access_mode", 32);
+	const photoboxAccessMode = components.includes("photobox") && requestedPhotoboxAccessMode === "mission_reward" && requiredComponents.length > 0 ? "mission_reward" : "standalone";
 	let points: FindPointConfiguration[] = [];
 	let templates: PhotoboxTemplateConfiguration[] = [];
 	try {
@@ -586,7 +592,6 @@ export async function configureTourismMinigameAssignmentAction(
 				ratio: ["portrait", "story", "square"].includes(item.ratio) ? item.ratio : "portrait",
 				frameUrl: typeof item.frameUrl === "string" ? item.frameUrl.slice(0, 2048) : "",
 				enabled: item.enabled !== false,
-				isGift: item.isGift !== false,
 				source: item.source === "custom" ? "custom" : "preset",
 			}));
 	} catch {
@@ -595,13 +600,15 @@ export async function configureTourismMinigameAssignmentAction(
 	if (!/^[0-9a-f-]{36}$/i.test(assignmentId) || !components.length || (components.includes("find_friends") && !points.length)) {
 		return { error: "Penerapan harus memiliki komponen aktif dan titik QR bila memakai Find Our Friends." };
 	}
+	if (components.includes("photobox") && requestedPhotoboxAccessMode === "mission_reward" && !requiredComponents.length) {
+		return { error: "Pilih setidaknya satu game wajib sebelum Photobox dijadikan hadiah." };
+	}
 	if (components.includes("find_friends") && !points.some((point) => point.isRequired)) return { error: "Tandai setidaknya satu titik QR sebagai wajib agar misi dapat diselesaikan." };
 	if (!Number.isInteger(maxDependencyDistance) || maxDependencyDistance < 100 || maxDependencyDistance > 10000) return { error: "Batas jarak antartitik harus antara 100 dan 10.000 meter." };
 	if (templates.some((item) => !item.id || !item.name || !item.frameUrl || !(item.frameUrl.startsWith("/") || optionalUrl(item.frameUrl)))) {
 		return { error: "Pastikan setiap template memiliki nama dan gambar frame yang valid." };
 	}
 	if (components.includes("photobox") && !templates.some((item) => item.enabled)) return { error: "Aktifkan setidaknya satu template Photobox." };
-	if (photoboxAccessMode === "mission_reward" && !templates.some((item) => item.enabled && item.isGift)) return { error: "Pilih setidaknya satu frame aktif sebagai hadiah misi." };
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola minigame." };
 	const { data, error } = await staff.supabase.rpc("configure_tourism_minigame_assignment", {

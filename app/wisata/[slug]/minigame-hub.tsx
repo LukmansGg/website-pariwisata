@@ -72,7 +72,7 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 					const seen = new Set(seenIds);
 					const candidates = state.programs.flatMap((program) => program.findPoints.filter((point) => point.code === initialQrCode).flatMap((point) => point.campaigns.map((item) => ({ ...item, programSlug: program.programSlug, program }))))
 						.filter((item) => !seen.has(item.id) && Math.random() * 100 < item.displayChance)
-						.filter((item) => item.experienceType !== "photobox" || item.program.photoboxAccessMode === "standalone" || item.program.progress.completedComponents.includes("find_friends"));
+						.filter((item) => item.experienceType !== "photobox" || item.program.photoboxAccessMode === "standalone" || item.program.progress.completed);
 					const selected = candidates[0];
 					if (selected) {
 						seen.add(selected.id);
@@ -96,11 +96,10 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 			const found = foundIds(program);
 			const requiredPoints = program.findPoints.filter((point) => point.isRequired);
 			const foundRequired = requiredPoints.filter((point) => found.has(point.id)).length;
-			const findComplete = program.progress.completedComponents.includes("find_friends");
-			const photoboxLocked = program.photoboxAccessMode === "mission_reward" && !findComplete;
+			const photoboxLocked = program.photoboxAccessMode === "mission_reward" && !program.progress.completed;
 			return <article key={program.assignmentId} className="rounded-3xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[9px] font-black uppercase tracking-[.16em] text-cyan-100/70">PROGRAM MINIGAME</p><h3 className="mt-1 text-xl font-black">{program.programName}</h3></div><span className="rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold">{program.progress.xp} XP</span></div><div className="mt-3 flex flex-wrap gap-2">{program.components.map((key) => <span key={key} className="rounded-full bg-black/10 px-2.5 py-1 text-[10px] font-bold">{key === "find_friends" ? "🐾 Find Our Friends" : key === "photobox" ? "📸 Photobox" : "✨ Pemandu AI"}</span>)}</div>
 				{program.components.includes("find_friends") && <div className="mt-4 rounded-2xl bg-black/10 p-3"><div className="flex items-center justify-between gap-3 text-xs"><strong>🐾 Teman ditemukan</strong><span className="font-black tabular-nums">{foundRequired}/{requiredPoints.length}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-amber-300 transition-all" style={{ width: `${requiredPoints.length ? foundRequired / requiredPoints.length * 100 : 0}%` }}/></div><p className="mt-2 text-[10px] leading-4 text-white/70">Scan QR grup di lokasi. Titik dengan prasyarat akan terbuka otomatis setelah teman yang dibutuhkan ditemukan.</p></div>}
-				{program.components.includes("photobox") && <p className="mt-3 text-xs text-white/75">📸 {photoboxLocked ? "Photobox hadiah terbuka setelah grup wajib selesai." : `${program.progress.photosCreated} kenangan dibuat · pilih template dan ambil foto.`}</p>}
+				{program.components.includes("photobox") && <p className="mt-3 text-xs text-white/75">📸 {photoboxLocked ? "Photobox terbuka setelah semua misi wajib program selesai." : `${program.progress.photosCreated} kenangan dibuat · pilih template dan ambil foto.`}</p>}
 				<div className="mt-4 flex flex-wrap gap-2">{program.components.includes("find_friends") && <Link href={`/minigame/${encodeURIComponent(program.programSlug)}/${encodeURIComponent(destinationSlug)}`} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-[#F5EEDD] px-4 py-2 text-xs font-black text-[#16587B] shadow-sm hover:-translate-y-0.5">Lanjutkan grup misi →</Link>}{program.components.includes("photobox") && !photoboxLocked && <Link href={`/photobox/${encodeURIComponent(program.programSlug)}/${encodeURIComponent(destinationSlug)}`} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-xs font-black text-white hover:bg-white/20">Buka Photobox ↗</Link>}</div>
 			</article>;
 		})}</div>}

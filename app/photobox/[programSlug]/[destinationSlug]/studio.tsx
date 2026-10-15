@@ -7,8 +7,8 @@ import NearbyCampaignPopup from "@/app/wisata/[slug]/nearby-campaign-popup";
 
 type Layout = "single" | "strip2" | "grid6";
 type Ratio = "portrait" | "story" | "square";
-type Template = { id: string; name: string; layout: Layout; ratio: Ratio; frameUrl: string; enabled: boolean; isGift?: boolean };
-type Program = { assignmentId: string; programSlug: string; programName: string; components: string[]; photoboxAccessMode: "standalone" | "mission_reward"; photoboxTemplates: Template[]; captionTemplate: string; maxCaptionLength: number; progress: { completedComponents: string[] } };
+type Template = { id: string; name: string; layout: Layout; ratio: Ratio; frameUrl: string; enabled: boolean };
+type Program = { assignmentId: string; programSlug: string; programName: string; components: string[]; requiredComponents: string[]; photoboxAccessMode: "standalone" | "mission_reward"; photoboxTemplates: Template[]; captionTemplate: string; maxCaptionLength: number; progress: { completedComponents: string[]; completed: boolean } };
 type State = { destinationName: string; destinationAddress?: string | null; destinationTags?: string[]; programs: Program[] };
 type Destination = { slug: string; name: string; description: string | null; address: string | null; tags: string[] | null; mascot_mode: "tiloc" | "custom"; mascot_image_url: string | null };
 type PhotoSlot = { url: string; file: File } | null;
@@ -71,10 +71,10 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 	}, [destination.slug]);
 	useEffect(() => { void refresh().catch((error) => setStatus(error instanceof Error ? error.message : "Photobox belum dapat dimuat.")); }, [refresh]);
 	const program = state?.programs.find((item) => item.programSlug === programSlug);
-	const templates = useMemo(() => (program?.photoboxTemplates ?? []).filter((template) => template.enabled && (program?.photoboxAccessMode !== "mission_reward" || template.isGift !== false)), [program]);
+	const templates = useMemo(() => (program?.photoboxTemplates ?? []).filter((template) => template.enabled), [program]);
 	const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? templates[0];
 	const slotCount = selectedTemplate?.layout === "grid6" ? 6 : selectedTemplate?.layout === "strip2" ? 2 : 1;
-	const locked = program?.photoboxAccessMode === "mission_reward" && !program.progress.completedComponents.includes("find_friends");
+	const locked = program?.photoboxAccessMode === "mission_reward" && !program.progress.completed;
 	const mascot = destination.mascot_mode === "custom" && destination.mascot_image_url ? destination.mascot_image_url : "/maskot/frame_0.png";
 
 	useEffect(() => { if (selectedTemplate && selectedTemplate.id !== selectedTemplateId) setSelectedTemplateId(selectedTemplate.id); }, [selectedTemplate, selectedTemplateId]);
@@ -224,7 +224,7 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 	const downloadName = `${destination.slug}-${selectedTemplate?.id ?? "photobox"}.jpg`;
 
 	if (status.startsWith("Program ini belum") || (state && !program)) return <main className="grid min-h-dvh place-items-center bg-[#f5eedd] p-5 text-[#16587b]"><section className="max-w-lg rounded-3xl bg-white p-7 shadow-xl"><h1 className="text-2xl font-black">Photobox belum aktif</h1><p className="mt-2 text-sm">Program ini belum menerapkan Photobox ke destinasi ini.</p><Link href={`/wisata/${encodeURIComponent(destination.slug)}`} className="mt-5 inline-flex rounded-xl bg-[#16587b] px-4 py-3 text-sm font-bold text-white">Kembali ke wisata</Link></section></main>;
-	if (locked) return <main className="grid min-h-dvh place-items-center bg-[linear-gradient(145deg,#f5eedd,#eaf7fb)] p-5 text-[#16587b]"><section className="w-full max-w-lg rounded-[2rem] border border-white bg-white/85 p-7 text-center shadow-xl"><div className="mx-auto relative h-28 w-28"><Image src={mascot} alt="Maskot" fill unoptimized className="object-contain" /></div><p className="mt-3 text-4xl">🔒</p><h1 className="mt-2 text-2xl font-black">Photobox hadiah belum terbuka</h1><p className="mt-2 text-sm leading-6 text-[#16587b]/70">Selesaikan grup Find Our Friends di {destination.name} untuk membuka studio kenangan.</p><Link href={`/minigame/${encodeURIComponent(programSlug)}/${encodeURIComponent(destination.slug)}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#16587b] px-5 py-3 text-xs font-black text-white">Kembali ke grup misi</Link></section></main>;
+	if (locked) return <main className="grid min-h-dvh place-items-center bg-[linear-gradient(145deg,#f5eedd,#eaf7fb)] p-5 text-[#16587b]"><section className="w-full max-w-lg rounded-[2rem] border border-white bg-white/85 p-7 text-center shadow-xl"><div className="mx-auto relative h-28 w-28"><Image src={mascot} alt="Maskot" fill unoptimized className="object-contain" /></div><p className="mt-3 text-4xl">🔒</p><h1 className="mt-2 text-2xl font-black">Photobox hadiah belum terbuka</h1><p className="mt-2 text-sm leading-6 text-[#16587b]/70">Selesaikan semua misi wajib program di {destination.name} untuk membuka studio kenangan.</p><Link href={`/minigame/${encodeURIComponent(programSlug)}/${encodeURIComponent(destination.slug)}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#16587b] px-5 py-3 text-xs font-black text-white">Kembali ke program misi</Link></section></main>;
 
 	return <main className="min-h-dvh bg-[#121923] text-white"><header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between gap-3 border-b border-white/10 bg-[#101720]/75 px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur-xl sm:px-7"><Link href={`/wisata/${encodeURIComponent(destination.slug)}`} aria-label="Tutup Photobox" className="grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-white/5 text-xl">×</Link><div className="min-w-0 text-center"><p className="truncate text-[9px] font-black uppercase tracking-[.18em] text-cyan-200/70">RETRO PHOTO STUDIO</p><h1 className="truncate text-sm font-black sm:text-base">{destination.name}</h1></div><span className="rounded-full bg-white/10 px-3 py-2 text-[10px] font-black">{selectedTemplate ? selectedTemplate.layout === "single" ? "1 FRAME" : selectedTemplate.layout === "strip2" ? "2 FRAME" : "2×3 FRAME" : "MEMUAT"}</span></header>
 		<div className="mx-auto grid min-h-dvh max-w-7xl gap-5 px-3 pb-8 pt-20 sm:px-6 sm:pt-24 lg:grid-cols-[minmax(0,1.3fr)_minmax(330px,.7fr)] lg:items-start">
