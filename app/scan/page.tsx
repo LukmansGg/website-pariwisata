@@ -400,6 +400,16 @@ export default function ScanPage() {
 			});
 			const result = (await response.json()) as { error?: string };
 			if (!response.ok) throw new Error(result.error ?? "Sesi pengunjung gagal dibuat.");
+			const scanIntent = new URLSearchParams(window.location.search);
+			const gameSlug = scanIntent.get("game")?.trim().toLowerCase() ?? "";
+			const gameDestination = scanIntent.get("destination")?.trim().toLowerCase() ?? "";
+			if (scannedQrCode && gameSlug && gameDestination === scannedSlug && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(gameSlug)) {
+				const gameUrl = new URL(`/minigame/${encodeURIComponent(gameSlug)}/${encodeURIComponent(scannedSlug)}`, window.location.origin);
+				gameUrl.searchParams.set("qr", scannedQrCode);
+				gameUrl.searchParams.set("source", "camera");
+				router.push(gameUrl.pathname + gameUrl.search);
+				return;
+			}
 			const destinationUrl = new URL(`/wisata/${encodeURIComponent(scannedSlug)}`, window.location.origin);
 			if (scannedQrCode) {
 				destinationUrl.searchParams.set("qr", scannedQrCode);

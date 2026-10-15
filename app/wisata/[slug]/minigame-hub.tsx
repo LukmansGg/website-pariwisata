@@ -46,18 +46,29 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 	}, [destinationSlug]);
 
 	useEffect(() => {
-		if (!initialQrCode || requestKey.current === initialQrCode) return;
-		requestKey.current = initialQrCode;
+		if (!initialQrCode) return;
+		const key = `${destinationSlug}:${initialQrCode}:${source}`;
+		if (requestKey.current === key) return;
+		requestKey.current = key;
 		let cancelled = false;
 		void fetch("/api/qr/visit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: initialQrCode, source }) })
 			.then(async (response) => {
-				const result = await response.json() as { error?: string; status?: string; pointName?: string; minigames?: { name?: string; completed?: boolean; foundRequiredCount?: number; requiredCount?: number }[] };
+				const result = await response.json() as { error?: string; status?: string; pointName?: string; minigames?: { name?: string; error?: string; completed?: boolean; foundRequiredCount?: number; requiredCount?: number }[] };
 				if (!response.ok) throw new Error(result.error || "Scan QR belum dapat dicatat.");
 				if (cancelled) return;
 				const name = result.pointName ? ` · ${result.pointName}` : "";
 				const games = result.minigames ?? [];
-				const progressText = games.length ? ` · ${games.map((item) => `${item.foundRequiredCount ?? 0}/${item.requiredCount ?? 0} titik misi`).join(" / ")}` : "";
-				setNotice(`${result.status === "already_visited" ? "Titik ini sudah tercatat" : "Titik berhasil dicatat"}${name}${progressText}`);
+				const gameErrors = games.filter((item) => item.error);
+				const progressText = games.length && !gameErrors.length ? ` · ${games.map((item) => `${item.foundRequiredCount ?? 0}/${item.requiredCount ?? 0} titik misi`).join(" / ")}` : "";
+				const visitText = result.status === "already_visited" ? "Kunjungan QR ini sudah tercatat" : "Kunjungan QR berhasil dicatat";
+				const missionText = gameErrors.some((item) => item.error === "QR_NOT_IN_MISSION")
+					? "QR ini belum dimasukkan ke grup Find Our Friends. Minta admin menambahkannya ke grup misi."
+					: gameErrors.length
+						? "Kunjungan tercatat, tetapi progres misi belum dapat diperbarui. Coba buka grup misi dan scan ulang."
+						: games.length === 0
+							? "Destinasi ini belum memiliki grup Find Our Friends yang aktif untuk QR tersebut."
+							: "";
+				setNotice(`${missionText || `${visitText}${name}${progressText}`}`);
 				window.setTimeout(() => { if (!cancelled) setNotice(""); }, 6500);
 				const stateResponse = await fetch(`/api/minigame/state?destinationSlug=${encodeURIComponent(destinationSlug)}`, { cache: "no-store" });
 				const state = await stateResponse.json() as Snapshot;
@@ -82,7 +93,12 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 				}
 			})
 			.catch((caught) => { if (!cancelled) setNotice(caught instanceof Error ? caught.message : "Scan QR belum dapat dicatat."); });
-		return () => { cancelled = true; };
+		return () => {
+			cancelled = true;
+			// QR visit and mission scans are idempotent, so an effect replay can retry
+			// without losing the progress refresh in React Strict Mode.
+			if (requestKey.current === key) requestKey.current = "";
+		};
 	}, [destinationSlug, initialQrCode, source]);
 
 	if (error) return <section className="rounded-3xl border border-amber-200 bg-amber-50/80 p-5 text-sm text-amber-900"><strong>Minigame belum tersambung.</strong><p className="mt-1">{error}</p></section>;

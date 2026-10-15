@@ -16,7 +16,7 @@ type VisitorSession = { id: string; destination_id: string | null; started_at: s
 type ChatMessage = { role: "user" | "model"; text: string; local?: boolean };
 
 const MASCOT_FRAMES = Array.from({ length: 6 }, () => "/maskot/frame_0.png");
-const QUICK_PROMPTS = ["Ceritakan daya tarik tempat ini", "Apa informasi yang tercatat?", "Di mana lokasinya?"];
+const QUICK_PROMPTS = ["Ceritakan daya tarik tempat ini", "Beri ide aktivitas di sini", "Bantu susun rencana kunjungan"];
 const GREETINGS = [
 	"Hai, {name}! Senang kamu mampir ke {destination}. Mau mulai dengan melihat daya tariknya?",
 	"Halo, {name}! Selamat datang di {destination}. Aku siap menemani kamu menjelajah.",
@@ -25,9 +25,28 @@ const GREETINGS = [
 ];
 const GUIDE_ITEMS = [
 	{ icon: "📷", title: "Scan QR di lokasi", text: "Pindai kode QR yang tersedia di spot wisata untuk membuka cerita dan informasi menarik." },
-	{ icon: "🧭", title: "Tanya pemandu wisata", text: "Tanyakan lokasi, daya tarik, dan informasi yang tercatat. Jawaban pemandu bersumber dari data pengelola." },
+	{ icon: "🧭", title: "Tanya pemandu wisata", text: "Tanyakan tentang destinasi, ide aktivitas, budaya, atau rencana perjalanan. Info resmi dan saran umum akan dibedakan dengan jelas." },
 	{ icon: "✨", title: "Selesaikan misi perjalanan", text: "Cari teman maskot atau gunakan photobox jika misi tersebut tersedia di destinasi ini." },
 ];
+
+function getDestinationSummary(value: string | null | undefined) {
+	const description = value?.replace(/\s+/g, " ").trim();
+	if (!description) return "Temukan pesona destinasi ini dan nikmati pengalaman baru di Madiun.";
+	const maxLength = 420;
+	const sentenceEnds = [...description.matchAll(/\.(?=\s|$)/g)].map((match) => match.index!);
+	const firstFewSentences = sentenceEnds[2] === undefined ? description : description.slice(0, sentenceEnds[2] + 1);
+	if (firstFewSentences.length <= maxLength) return firstFewSentences;
+
+	const lastPeriod = firstFewSentences.lastIndexOf(".", maxLength);
+	if (lastPeriod >= 0) return firstFewSentences.slice(0, lastPeriod + 1).trim();
+
+	const nextPeriod = firstFewSentences.indexOf(".", maxLength);
+	if (nextPeriod >= 0) return firstFewSentences.slice(0, nextPeriod + 1).trim();
+
+	const excerpt = firstFewSentences.slice(0, maxLength);
+	const lastSpace = excerpt.lastIndexOf(" ");
+	return excerpt.slice(0, lastSpace > 0 ? lastSpace : maxLength).trimEnd() + "…";
+}
 
 function MascotCrew({ group, imageUrl }: { group: "upper" | "lower"; imageUrl?: string | null }) {
 	const indexes = group === "upper" ? [0, 1, 2] : [3, 4, 5];
@@ -70,6 +89,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	const [isTyping, setIsTyping] = useState(false);
 	const [chatError, setChatError] = useState("");
 	const [isSpeaking, setIsSpeaking] = useState(false);
+	const [currentTime, setCurrentTime] = useState(0);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const chatStorageKey = "mt_tourism_chat_v1:" + destination.slug;
 	const location = destination.address?.trim();
@@ -78,7 +98,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
 	const categories = destination.categories?.length ? destination.categories : destination.category ? [destination.category] : [];
 	const tags = destination.tags ?? [];
-	const sessionIsActive = session?.status === "active" && new Date(session.expires_at).getTime() > Date.now();
+	const sessionIsActive = session?.status === "active" && (currentTime === 0 || new Date(session.expires_at).getTime() > currentTime);
 
 	const startSession = useCallback(async () => {
 		setSessionLoading(true);
@@ -96,6 +116,16 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	}, [destination.slug]);
 
 	useEffect(() => {
+		const frame = window.requestAnimationFrame(() => setCurrentTime(Date.now()));
+		const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000);
+		return () => {
+			window.cancelAnimationFrame(frame);
+			window.clearInterval(timer);
+		};
+	}, []);
+
+	useEffect(() => {
+		const hydrationTimer = window.setTimeout(() => {
 		const savedName = sessionStorage.getItem("mt_visitor_name");
 		if (savedName) setVisitorName(savedName);
 		else if (!sessionStorage.getItem("mt_visitor_started")) setShowNameModal(true);
@@ -123,6 +153,8 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			sessionStorage.setItem(chatStorageKey, JSON.stringify(initialChat));
 		}
 		void startSession();
+		}, 0);
+		return () => window.clearTimeout(hydrationTimer);
 	}, [chatStorageKey, destination.name, startSession]);
 
 	useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [chatHistory, isTyping]);
@@ -147,33 +179,11 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	async function sendPrompt(prompt: string) {
 		const question = prompt.trim();
 		if (!question || isTyping) return;
-		const normalized = question.toLocaleLowerCase("id");
-		let localReply = "";
-		if (normalized.includes("daya tarik")) {
-			localReply = destination.short_description?.trim() || destination.description?.trim().slice(0, 480) || "Informasi daya tarik belum dicatat oleh pengelola.";
-		} else if (normalized.includes("informasi yang tercatat")) {
-			const facts = [
-				categories.length ? "Kategori: " + categories.join(", ") : "",
-				tags.length ? "Tag: " + tags.slice(0, 6).join(", ") : "",
-				location ? "Lokasi: " + location : "",
-				destination.short_description ? "Ringkasan: " + destination.short_description.slice(0, 220) : "",
-			].filter(Boolean);
-			localReply = facts.length ? facts.join("\n") : "Belum ada ringkasan tambahan yang dicatat pengelola.";
-		} else if (normalized.includes("lokasinya")) {
-			localReply = location || "Alamat belum dicatat oleh pengelola.";
-			if (hasCoordinates) localReply += "\nKoordinat: " + latitude.toFixed(5) + ", " + longitude.toFixed(5);
-		}
-		const userTurn: ChatMessage = { role: "user", text: question, ...(localReply ? { local: true } : {}) };
+		const userTurn: ChatMessage = { role: "user", text: question };
 		const nextHistory = [...chatHistory, userTurn].slice(-14);
 		setChatHistory(nextHistory);
 		setMessage("");
 		setChatError("");
-		if (localReply) {
-			const updated = [...nextHistory, { role: "model" as const, text: localReply, local: true }].slice(-14);
-			setChatHistory(updated);
-			sessionStorage.setItem(chatStorageKey, JSON.stringify(updated));
-			return;
-		}
 		sessionStorage.setItem(chatStorageKey, JSON.stringify(nextHistory));
 		const history = chatHistory.filter((item) => !item.local).slice(-4).map(({ role, text }) => ({ role, text }));
 		setIsTyping(true);
@@ -253,7 +263,8 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 					<div className="tourism-glass rounded-[2rem] p-6 sm:rounded-[2.5rem] sm:p-9">
 						<p className="mb-3 text-[10px] font-black uppercase tracking-[.2em] text-[#16587B]/65">KENALI DESTINASI</p><h1 className="text-3xl font-black leading-tight tracking-tight text-[#16587B] sm:text-5xl">{destination.name}</h1>
 						{tags.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{tags.map((tag) => <span key={tag} className="rounded-xl border border-[#84B3CE]/50 bg-[#84B3CE]/15 px-3.5 py-1.5 text-xs font-bold text-[#16587B]">#{tag}</span>)}</div>}
-						<p className="mt-6 text-base font-medium leading-8 text-[#16587B]/80">{destination.description || destination.short_description || "Temukan pesona destinasi ini dan nikmati pengalaman baru di Madiun."}</p>
+						<p className="mt-6 text-base font-medium leading-8 text-[#16587B]/80">{getDestinationSummary(destination.short_description || destination.description)}</p>
+						{chatAiEnabled && <button type="button" onClick={() => { document.getElementById("tourism-chat-input")?.focus({ preventScroll: true }); document.getElementById("guide-chat-title")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} className="mt-3 inline-flex items-center gap-2 text-sm font-extrabold text-[#16587B] underline decoration-[#84B3CE] decoration-2 underline-offset-4 transition hover:text-[#10445f]">Ingin tahu lebih banyak? Tanya TiLoc Guide <span aria-hidden="true">↗</span></button>}
 						<div className="mt-7 flex items-start gap-4 rounded-3xl border border-[#84B3CE]/45 bg-white/60 p-4 shadow-inner sm:p-5"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#16587B] text-white shadow-lg shadow-[#16587B]/20"><Icon name="pin" className="h-6 w-6" /></span>
 							<div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#16587B]/65">LOKASI TERCATAT</p><p className="mt-1 font-bold leading-6 text-[#16587B]">{location || "Lokasi akan diperbarui oleh pengelola."}</p>
 								{hasCoordinates && <p className="mt-2 inline-flex rounded-lg border border-[#84B3CE]/35 bg-[#F5EEDD]/75 px-2.5 py-1 font-mono text-xs text-[#16587B]/75">{latitude.toFixed(5)}, {longitude.toFixed(5)}</p>}
@@ -270,13 +281,13 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 						<div className="mb-4 flex items-center justify-between gap-3 border-b border-[#84B3CE]/35 pb-4"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#16587B] text-xl text-white shadow-lg">✦</span><div><p className="text-[9px] font-black uppercase tracking-[.2em] text-[#16587B]/65">PEMANDU AI</p><h2 id="guide-chat-title" className="mt-0.5 text-lg font-black text-[#16587B] sm:text-xl">TiLoc Guide</h2></div></div>
 							<button type="button" onClick={speakLastReply} aria-label={isSpeaking ? "Sedang membacakan jawaban" : "Dengarkan jawaban terakhir"} title="Dengarkan jawaban terakhir" className={"grid h-10 w-10 shrink-0 place-items-center rounded-2xl border transition " + (isSpeaking ? "border-[#16587B] bg-[#16587B] text-white" : "border-[#84B3CE]/40 bg-white/80 text-[#16587B] hover:bg-[#84B3CE]/20")}><Icon name="sound" className="h-5 w-5" /></button>
 						</div>
-						<p className="mb-4 text-xs leading-5 text-[#16587B]/70">Tanyakan apa saja tentang <strong>{destination.name}</strong>. Jawaban merujuk pada informasi dari pengelola.</p>
+						<p className="mb-4 text-xs leading-5 text-[#16587B]/70">Tanyakan apa saja tentang <strong>{destination.name}</strong>, ide kegiatan, budaya, atau rencana perjalanan. Fakta resmi dibedakan dari saran dan pengetahuan umum.</p>
 						<div aria-live="polite" aria-relevant="additions" className="tourism-chat-scroll flex-1 space-y-4 overflow-y-auto pr-1">
-							{chatHistory.map((item, index) => <div key={index} className={"flex flex-col " + (item.role === "user" ? "items-end" : "items-start")}><div className={"max-w-[88%] rounded-3xl px-4 py-3 text-sm font-medium leading-6 " + (item.role === "user" ? "rounded-br-md bg-[#16587B] text-white shadow-lg shadow-[#16587B]/15" : "rounded-bl-md border border-[#84B3CE]/30 bg-white/85 text-[#16587B] shadow-sm")}>{item.text}</div>{item.role === "model" && index === chatHistory.length - 1 && <span className="mt-1.5 px-2 text-[9px] font-bold uppercase tracking-wider text-[#16587B]/55">ⓘ Berdasarkan data pengelola</span>}</div>)}
+							{chatHistory.map((item, index) => <div key={index} className={"flex flex-col " + (item.role === "user" ? "items-end" : "items-start")}><div className={"max-w-[88%] rounded-3xl px-4 py-3 text-sm font-medium leading-6 " + (item.role === "user" ? "rounded-br-md bg-[#16587B] text-white shadow-lg shadow-[#16587B]/15" : "rounded-bl-md border border-[#84B3CE]/30 bg-white/85 text-[#16587B] shadow-sm")}>{item.text}</div>{item.role === "model" && index === chatHistory.length - 1 && <span className="mt-1.5 px-2 text-[9px] font-bold uppercase tracking-wider text-[#16587B]/55">ⓘ Panduan AI · fakta resmi dan ide umum</span>}</div>)}
 							{isTyping && <div className="flex items-center gap-1.5 rounded-3xl rounded-bl-md border border-[#84B3CE]/30 bg-white/85 px-4 py-4"><span className="h-2 w-2 animate-bounce rounded-full bg-[#16587B]" /><span className="h-2 w-2 animate-bounce rounded-full bg-[#84B3CE] [animation-delay:120ms]" /><span className="h-2 w-2 animate-bounce rounded-full bg-[#16587B] [animation-delay:240ms]" /><span className="ml-2 text-xs text-[#16587B]/65">Pemandu sedang berpikir…</span></div>}<div ref={chatEndRef} />
 						</div>
 						{chatError && <p role="alert" className="mt-3 rounded-xl border border-[#84B3CE]/40 bg-[#F5EEDD] px-3 py-2 text-xs font-semibold leading-5 text-[#16587B]">{chatError}</p>}
-						<div className="mt-4 border-t border-[#84B3CE]/35 pt-4"><p className="mb-3 text-center text-[9px] font-black uppercase tracking-[.16em] text-[#16587B]/65">TANYA AKU SOAL TEMPAT INI</p><div className="flex flex-wrap justify-center gap-2">{QUICK_PROMPTS.map((prompt) => <button key={prompt} type="button" onClick={() => void sendPrompt(prompt)} disabled={isTyping} className="rounded-2xl border border-[#84B3CE]/50 bg-white/75 px-3 py-2 text-[11px] font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#84B3CE]/20 disabled:opacity-50">{prompt}</button>)}</div>
+						<div className="mt-4 border-t border-[#84B3CE]/35 pt-4"><p className="mb-3 text-center text-[9px] font-black uppercase tracking-[.16em] text-[#16587B]/65">TANYA SOAL DESTINASI & IDE PERJALANAN</p><div className="flex flex-wrap justify-center gap-2">{QUICK_PROMPTS.map((prompt) => <button key={prompt} type="button" onClick={() => void sendPrompt(prompt)} disabled={isTyping} className="rounded-2xl border border-[#84B3CE]/50 bg-white/75 px-3 py-2 text-[11px] font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#84B3CE]/20 disabled:opacity-50">{prompt}</button>)}</div>
 							<form onSubmit={submitChat} className="mt-3 flex gap-2 rounded-2xl border border-[#84B3CE]/50 bg-white/75 p-1.5 focus-within:border-[#16587B] focus-within:ring-2 focus-within:ring-[#84B3CE]/30"><label htmlFor="tourism-chat-input" className="sr-only">Tulis pertanyaan untuk pemandu</label><input id="tourism-chat-input" value={message} onChange={(event) => setMessage(event.currentTarget.value.slice(0, 600))} maxLength={600} disabled={isTyping} placeholder="Tulis pertanyaan…" className="min-w-0 flex-1 bg-transparent px-3 text-sm text-[#16587B] outline-none placeholder:text-[#16587B]/45 disabled:opacity-60" /><button type="submit" disabled={isTyping || !message.trim()} aria-label="Kirim pertanyaan" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#16587B] text-white transition hover:bg-[#10445f] disabled:opacity-45"><Icon name="send" className="h-4 w-4" /></button></form>
 							<p className="mt-1.5 text-right text-[10px] tabular-nums text-[#16587B]/50">{message.length} / 600</p>
 						</div>
