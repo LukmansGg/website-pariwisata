@@ -32,7 +32,7 @@ async function MinigamesContent() {
 	]);
 	const migrationError = [programsResult, assignmentsResult, groupPointsResult, dependenciesResult].find((result) => result.error)?.error;
 	if (migrationError) {
-			return <main className="min-h-dvh bg-[#F5EEDD] p-4 text-[#16587B] sm:p-8"><div className="mx-auto max-w-3xl rounded-3xl border border-amber-200 bg-white p-6 shadow-xl sm:p-10"><Link href="/ruang-kelola" className="text-sm font-bold text-[#16587B]">← Kembali ke ruang pengelola</Link><p className="mt-8 text-xs font-black uppercase tracking-[.18em] text-amber-700">Database perlu diperbarui</p><h1 className="mt-2 text-3xl font-black">Minigames belum siap dibuka</h1><p className="mt-3 leading-7 text-[#16587B]/75">Jalankan migration <code>20261018000000_minigame_programs.sql</code> di Supabase SQL Editor, lalu muat ulang halaman ini.</p></div></main>;
+			return <main className="min-h-dvh bg-[#F5EEDD] p-4 text-[#16587B] sm:p-8"><div className="mx-auto max-w-3xl rounded-3xl border border-amber-200 bg-white p-6 shadow-xl sm:p-10"><Link href="/ruang-kelola" className="text-sm font-bold text-[#16587B]">← Kembali ke ruang pengelola</Link><p className="mt-8 text-xs font-black uppercase tracking-[.18em] text-amber-700">Database perlu diperbarui</p><h1 className="mt-2 text-3xl font-black">Minigames belum siap dibuka</h1><p className="mt-3 leading-7 text-[#16587B]/75">Jalankan migration minigame secara berurutan di Supabase SQL Editor, termasuk <code>20261024000000_minigame_progress_configuration_hash.sql</code>, lalu muat ulang halaman ini.</p></div></main>;
 	}
 	const data: MinigameConsoleData = {
 		role: role.role as "admin" | "editor",

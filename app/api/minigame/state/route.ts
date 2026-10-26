@@ -24,11 +24,14 @@ export async function GET(request: Request) {
 		if (data?.error === "DESTINATION_NOT_FOUND") {
 			return NextResponse.json({ error: "Destinasi tidak ditemukan." }, { status: 404 });
 		}
+		if (data?.engineVersion !== 2) {
+			return NextResponse.json({ error: "Engine minigame perlu diperbarui. Jalankan migration 20261024000000_minigame_progress_configuration_hash.sql di Supabase." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+		}
 		if (!Array.isArray(data?.programs)) {
 			return NextResponse.json({ error: "Minigame sedang disiapkan untuk destinasi ini. Silakan coba lagi nanti." }, { status: 503, headers: { "Cache-Control": "no-store" } });
 		}
 		return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
 	} catch {
-		return NextResponse.json({ error: "Data petualangan belum dapat dimuat. Pastikan migration minigame sudah diterapkan." }, { status: 503 });
+		return NextResponse.json({ error: "Data petualangan belum dapat dimuat. Periksa migration minigame terbaru di Supabase." }, { status: 503 });
 	}
 }

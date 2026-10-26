@@ -5,6 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import { checkLoginLimit } from "@/src/server/auth/rate-limit";
+import { isMinigameComponentKey, minigameComponentRegistry } from "@/src/features/minigames/registry";
 
 export type LoginState = {
 	error?: string;
@@ -488,9 +489,9 @@ export async function createPromotionAction(
 	return { success: "Kampanye promosi berhasil disimpan." };
 }
 
-const MINIGAME_COMPONENTS = new Set(["find_friends", "photobox", "chat_ai"]);
-const NON_MISSION_COMPONENTS = new Set(["photobox", "chat_ai"]);
-const isMinigameMission = (component: string) => MINIGAME_COMPONENTS.has(component) && !NON_MISSION_COMPONENTS.has(component);
+const MINIGAME_COMPONENTS = new Set(Object.keys(minigameComponentRegistry));
+const isMinigameMission = (component: string) =>
+	isMinigameComponentKey(component) && minigameComponentRegistry[component].role === "mission";
 
 function minigameErrorMessage(code: string | undefined) {
 	const messages: Record<string, string> = {
@@ -553,7 +554,7 @@ export async function saveTourismMinigameProgramAction(
 	revalidatePath("/ruang-kelola/minigames");
 	revalidatePath("/ruang-kelola");
 	revalidatePath("/");
-	return { success: "Program minigame dan penerapan destinasi berhasil disimpan." };
+	return { success: "Program tersimpan. Lanjutkan dengan checklist pengaturan di setiap destinasi." };
 }
 
 type FindPointConfiguration = { qrPointId: string; isRequired: boolean; requires: string[]; friendName?: string; friendImageUrl?: string };
