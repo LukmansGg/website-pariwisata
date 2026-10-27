@@ -88,6 +88,7 @@ const GlobalStyles = () => (
       --badge-bg: rgba(15,23,42,.8); --badge-border: rgba(125,183,224,.28); --barcode-blend: screen;
       --lock-overlay: rgba(2,6,23,.96); --stars-opacity: 1; --cloud-opacity: 0; --day-sparkle-opacity: 0; --cutout-color: #070c18;
     }
+    .login-page.theme-dark { --ambient-2: rgba(56,189,248,.22); }
 
     .login-page .theme-transition { transition: all .75s cubic-bezier(.2,.8,.2,1); }
     .login-page .star-anim { position:absolute; border-radius:50%; background:#fff; box-shadow:0 0 8px rgba(147,197,253,.9); animation:loginTwinkle 3.2s ease-in-out infinite; }

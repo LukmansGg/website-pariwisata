@@ -13,7 +13,7 @@ export default function DestinationPage({ params, searchParams }: PageProps) {
 	return (
 		<Suspense
 			fallback={
-				<main className="flex min-h-screen items-center justify-center bg-[#F5EEDD]">
+				<main className="flex min-h-screen items-center justify-center bg-[#EAF6FC] dark:bg-[#06172A]">
 					<p>Memuat dashboard wisata...</p>
 				</main>
 			}>

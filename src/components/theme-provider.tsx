@@ -9,6 +9,10 @@ type ThemeContextValue = { theme: Theme; isDark: boolean; toggleTheme: () => voi
 const STORAGE_KEY = "tiloc-home-theme";
 const LEGACY_STORAGE_KEY = "madiuntrip-home-theme";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const applyThemeChrome = (next: Theme) => {
+	const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+	if (meta) meta.content = next === "dark" ? "#06172a" : "#eaf6fc";
+};
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
 	const [theme, setTheme] = useState<Theme>("light");
@@ -18,6 +22,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 		root.dataset.theme = next;
 		root.classList.toggle("dark", next === "dark");
 		root.classList.toggle("light", next === "light");
+		applyThemeChrome(next);
 		window.localStorage.setItem(STORAGE_KEY, next);
 	}, []);
 
@@ -31,6 +36,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 			root.dataset.theme = next;
 			root.classList.toggle("dark", next === "dark");
 			root.classList.toggle("light", next === "light");
+			applyThemeChrome(next);
 		};
 		setInitialTheme(initialTheme);
 

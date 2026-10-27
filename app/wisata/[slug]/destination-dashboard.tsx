@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useTheme } from "@/src/components/theme-provider";
 import MinigameHub from "./minigame-hub";
 import NearbyCampaignPopup from "./nearby-campaign-popup";
 
@@ -15,7 +16,7 @@ type Destination = {
 type VisitorSession = { id: string; destination_id: string | null; started_at: string; expires_at: string; status: "active" | "expired" | "ended" };
 type ChatMessage = { role: "user" | "model"; text: string; local?: boolean };
 
-const MASCOT_FRAMES = Array.from({ length: 6 }, () => "/maskot/frame_0.png");
+const MASCOT_FRAMES = Array.from({ length: 6 }, (_, index) => `/maskot/frame_${index}.png`);
 const QUICK_PROMPTS = ["Ceritakan daya tarik tempat ini", "Beri ide aktivitas di sini", "Bantu susun rencana kunjungan"];
 const GREETINGS = [
 	"Hai, {name}! Senang kamu mampir ke {destination}. Mau mulai dengan melihat daya tariknya?",
@@ -49,14 +50,31 @@ function getDestinationSummary(value: string | null | undefined) {
 }
 
 function MascotCrew({ group, imageUrl }: { group: "upper" | "lower"; imageUrl?: string | null }) {
-	const indexes = group === "upper" ? [0, 1, 2] : [3, 4, 5];
-	return <div aria-label="Maskot TiLoc" className={"mascot-crew " + group}>{indexes.map((frame, index) => <div key={frame} className={"mascot-sprite mascot-sprite--" + index}><Image src={imageUrl || MASCOT_FRAMES[frame]} alt={index === 0 ? "Maskot pemandu TiLoc" : ""} aria-hidden={index > 0} fill sizes="200px" unoptimized className="object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }} /></div>)}</div>;
+	const [frameIndex, setFrameIndex] = useState(0);
+	const firstFrame = group === "upper" ? 0 : 3;
+	useEffect(() => {
+		if (imageUrl || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		for (let index = firstFrame; index < firstFrame + 3; index += 1) {
+			const preload = new window.Image();
+			preload.src = MASCOT_FRAMES[index];
+		}
+		const interval = window.setInterval(() => setFrameIndex((current) => (current + 1) % 3), 2600);
+		return () => window.clearInterval(interval);
+	}, [firstFrame, group, imageUrl]);
+	const src = imageUrl || MASCOT_FRAMES[firstFrame + frameIndex];
+	return <div role="img" aria-label="Maskot pemandu TiLoc" className={`mascot-crew ${group}`}><Image key={src} src={src} alt="" aria-hidden="true" fill sizes="(max-width: 640px) 208px, 256px" unoptimized className="object-contain" onError={(event) => { if (imageUrl) event.currentTarget.src = MASCOT_FRAMES[firstFrame]; }} /></div>;
 }
 
 function MagicBackground({ dark }: { dark: boolean }) {
+	const stars = Array.from({ length: 40 }, (_, index) => {
+		const random = (seed: number) => { const value = Math.sin((index + seed) * 127.1) * 43758.5453; return value - Math.floor(value); };
+		const column = index % 8;
+		const row = Math.floor(index / 8);
+		return { left: ((column + .12 + random(7) * .76) / 8) * 100, top: ((row + .1 + random(23) * .8) / 5) * 100, size: index % 8 === 0 ? 22 : 13 + Math.round(random(41) * 8), delay: (index % 9) * .38 };
+	});
 	return <div aria-hidden="true" className={"tourism-sky " + (dark ? "is-night" : "is-day")}>
 		<div className="sky-pattern" /><div className="sky-glow sky-glow--one" /><div className="sky-glow sky-glow--two" />
-		{Array.from({ length: 24 }, (_, index) => <span key={index} className="sky-star" style={{ top: ((index * 37 + 11) % 93) + "%", left: ((index * 61 + 7) % 97) + "%", fontSize: (10 + (index % 3) * 5) + "px", animationDelay: ((index % 7) * 0.42) + "s" }}>✦</span>)}
+		{stars.map((star, index) => <span key={index} className={`sky-star${index % 8 === 0 ? " is-flare" : ""}`} style={{ top: `${star.top}%`, left: `${star.left}%`, fontSize: `${star.size}px`, animationDelay: `${star.delay}s` }}>✦</span>)}
 		{dark && <><span className="sky-moon" /><span className="sky-aurora" /></>}
 	</div>;
 }
@@ -75,7 +93,7 @@ function Icon({ name, className = "" }: { name: "back" | "sun" | "moon" | "pin" 
 }
 
 export default function DestinationDashboard({ destination, initialQrCode, initialQrSource = "qr_link", chatAiEnabled = true }: { destination: Destination; initialQrCode?: string; initialQrSource?: "qr_link" | "camera"; chatAiEnabled?: boolean }) {
-	const [dark, setDark] = useState(false);
+	const { isDark: dark, toggleTheme } = useTheme();
 	const [visitorName, setVisitorName] = useState("Teman");
 	const [nameInput, setNameInput] = useState("");
 	const [showNameModal, setShowNameModal] = useState(false);
@@ -221,33 +239,32 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 
 	return <div className={"destination-shell " + (dark ? "destination-shell--night" : "")}>
 		<style>{`
-			.destination-shell{--ink:#16587B;--soft:rgba(22,88,123,.72);--accent:#84B3CE;--paper:#F5EEDD;min-height:100vh;position:relative;isolation:isolate;overflow:hidden;background:var(--paper);color:var(--ink);transition:background .5s,color .5s}
-			.destination-shell--night{--ink:#F5EEDD;--soft:rgba(245,238,221,.72);--accent:#84B3CE;--paper:#102F43}
-			.destination-shell--night [class*="text-[#16587B]"]{color:#F5EEDD!important}
-			.destination-shell--night header{background:rgba(16,47,67,.82);border-color:rgba(132,179,206,.27)}
-			.tourism-sky{position:absolute;inset:0;z-index:-2;overflow:hidden;pointer-events:none;background:radial-gradient(ellipse at 12% 0%,rgba(132,179,206,.45),transparent 43%),radial-gradient(ellipse at 88% 35%,rgba(255,255,255,.65),transparent 42%),linear-gradient(145deg,#F5EEDD,#EAF3F4 56%,#D6E8EF)}
-			.destination-shell--night .tourism-sky{background:radial-gradient(ellipse at 15% 15%,rgba(132,179,206,.24),transparent 40%),linear-gradient(145deg,#0D283A,#143C55 55%,#16587B)}
+			.destination-shell{--ink:#16587B;--soft:rgba(22,88,123,.72);--accent:#66bde8;--paper:#EAF6FC;min-height:100vh;position:relative;isolation:isolate;overflow:hidden;background:var(--paper);color:var(--ink);transition:background .5s,color .5s}
+			.destination-shell--night{--ink:#EAF6FF;--soft:rgba(234,246,255,.74);--accent:#8bd9ff;--paper:#06172A}
+			.destination-shell--night [class*="text-[#16587B]"]{color:#EAF6FF!important}
+			.destination-shell--night header{background:rgba(6,23,42,.9);border-color:rgba(132,202,235,.25)}
+			.tourism-sky{position:absolute;inset:0;z-index:-2;overflow:hidden;pointer-events:none;background:radial-gradient(ellipse at 12% 0%,rgba(102,189,232,.42),transparent 43%),radial-gradient(ellipse at 88% 35%,rgba(255,255,255,.72),transparent 42%),linear-gradient(145deg,#EAF6FC,#DDF1FA 56%,#C6E7F6)}
+			.destination-shell--night .tourism-sky{background:radial-gradient(ellipse at 15% 15%,rgba(56,153,204,.22),transparent 40%),linear-gradient(145deg,#06172A,#0A2945 55%,#0D3D63)}
 			.sky-pattern{position:absolute;inset:0;opacity:.4;background-image:radial-gradient(rgba(22,88,123,.13) 1px,transparent 1px);background-size:30px 30px;mask-image:linear-gradient(to bottom,black,transparent 85%)}
-			.destination-shell--night .sky-pattern{opacity:.28;background-image:radial-gradient(rgba(245,238,221,.28) 1px,transparent 1px)}
+			.destination-shell--night .sky-pattern{opacity:.28;background-image:radial-gradient(rgba(194,232,250,.3) 1px,transparent 1px)}
 			.sky-glow{position:absolute;width:25rem;height:25rem;border-radius:50%;filter:blur(72px);background:rgba(132,179,206,.33);animation:sky-drift 18s ease-in-out infinite alternate}
 			.sky-glow--one{top:11%;left:-12rem}.sky-glow--two{right:-12rem;top:47%;animation-delay:-8s;background:rgba(132,179,206,.25)}
-			.sky-star{position:absolute;color:#84B3CE;opacity:.52;animation:twinkle 3.5s ease-in-out infinite;text-shadow:0 0 12px rgba(132,179,206,.7)}
-			.destination-shell--night .sky-star{color:#F5EEDD;opacity:.62}
-			.sky-moon{position:absolute;right:10%;top:7%;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 34% 35%,#fff 0%,#F5EEDD 58%,rgba(132,179,206,.5) 75%,transparent 78%);filter:drop-shadow(0 0 38px rgba(245,238,221,.38))}
-			.sky-aurora{position:absolute;top:-24%;left:-20%;width:140%;height:48%;background:linear-gradient(100deg,transparent,rgba(132,179,206,.16),rgba(245,238,221,.13),transparent);filter:blur(55px);transform:rotate(-9deg);animation:aurora 13s ease-in-out infinite alternate}
-			.tourism-glass{background:linear-gradient(145deg,rgba(255,255,255,.88),rgba(255,255,255,.61));border:1px solid rgba(255,255,255,.86);box-shadow:0 24px 54px -30px rgba(22,88,123,.38),inset 0 1px rgba(255,255,255,.9);backdrop-filter:blur(20px);transition:transform .28s,box-shadow .28s}
-			.destination-shell--night .tourism-glass{background:linear-gradient(145deg,rgba(22,68,94,.88),rgba(16,47,67,.8));border-color:rgba(132,179,206,.27);box-shadow:0 24px 54px -30px rgba(0,0,0,.55),inset 0 1px rgba(245,238,221,.09)}
-			.mascot-crew{position:absolute;inset:0;pointer-events:none}.mascot-sprite{position:absolute;width:55%;height:100%;filter:drop-shadow(0 14px 16px rgba(22,88,123,.2));animation:mascot-float 4s ease-in-out infinite}.mascot-sprite img{width:100%;height:100%;object-fit:contain}
-			.mascot-sprite--0{left:22%;top:0;z-index:2}.mascot-sprite--1{left:0;top:18%;transform:scale(.78);animation-delay:-1.2s;z-index:1}.mascot-sprite--2{right:0;top:17%;transform:scale(.74);animation-delay:-2.4s}
-			.mascot-crew.lower .mascot-sprite{transform:scaleX(-1)}.mascot-crew.lower .mascot-sprite--0{left:22%;top:0;transform:scaleX(-1)}.mascot-crew.lower .mascot-sprite--1{left:0;top:17%;transform:scaleX(-1) scale(.78);animation-delay:-1.5s}.mascot-crew.lower .mascot-sprite--2{right:0;top:15%;transform:scaleX(-1) scale(.75);animation-delay:-2.8s}
+			.sky-star{position:absolute;color:#58a9d2;opacity:.85;animation:twinkle 3.5s ease-in-out infinite;text-shadow:0 0 7px #fff,0 0 18px rgba(56,189,248,.8),0 0 34px rgba(37,133,196,.55);filter:drop-shadow(0 0 4px rgba(56,189,248,.55))}
+			.destination-shell--night .sky-star{color:#eaf8ff;opacity:.9}
+			.sky-star.is-flare{z-index:1;text-shadow:0 0 8px #fff,0 0 24px rgba(56,189,248,.95),0 0 44px rgba(37,133,196,.65)}
+			.sky-moon{position:absolute;right:10%;top:7%;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 34% 35%,#fff 0%,#d6f3ff 58%,rgba(112,204,242,.48) 75%,transparent 78%);filter:drop-shadow(0 0 38px rgba(112,204,242,.52))}
+			.sky-aurora{position:absolute;top:-24%;left:-20%;width:140%;height:48%;background:linear-gradient(100deg,transparent,rgba(70,172,224,.2),rgba(125,211,252,.18),transparent);filter:blur(55px);transform:rotate(-9deg);animation:aurora 13s ease-in-out infinite alternate}
+			.tourism-glass{background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(246,252,255,.9));border:1px solid rgba(255,255,255,.9);box-shadow:0 24px 54px -30px rgba(22,88,123,.38),inset 0 1px rgba(255,255,255,.95);backdrop-filter:blur(22px);transition:transform .28s,box-shadow .28s}
+			.destination-shell--night .tourism-glass{background:linear-gradient(145deg,rgba(8,35,59,.96),rgba(6,23,42,.94));border-color:rgba(132,202,235,.26);box-shadow:0 24px 54px -30px rgba(0,0,0,.55),inset 0 1px rgba(221,245,255,.1)}
+			.mascot-crew{position:absolute;inset:0;pointer-events:none;animation:mascot-float 4.2s ease-in-out infinite}.mascot-crew img{object-fit:contain;filter:drop-shadow(0 14px 18px rgba(22,88,123,.25));animation:mascot-pose-in .58s cubic-bezier(.2,.8,.2,1) both}.mascot-crew.lower img{transform:scaleX(-1)}
 			.tourism-chat-scroll::-webkit-scrollbar{width:6px}.tourism-chat-scroll::-webkit-scrollbar-thumb{background:rgba(132,179,206,.65);border-radius:99px}
-			@keyframes mascot-float{0%,100%{translate:0 0}50%{translate:0 -9px}}@keyframes twinkle{0%,100%{opacity:.24;transform:scale(.8)}50%{opacity:.85;transform:scale(1.15)}}@keyframes sky-drift{to{transform:translate(42px,28px) scale(1.1)}}@keyframes aurora{to{transform:rotate(6deg) translateX(5%);opacity:.65}}
+			@keyframes mascot-float{0%,100%{translate:0 0}50%{translate:0 -9px}}@keyframes mascot-pose-in{from{opacity:.4}to{opacity:1}}@keyframes twinkle{0%,100%{opacity:.58;transform:scale(.86) rotate(0);filter:brightness(.9)}50%{opacity:1;transform:scale(1.18) rotate(45deg);filter:brightness(1.35)}}@keyframes sky-drift{to{transform:translate(42px,28px) scale(1.1)}}@keyframes aurora{to{transform:rotate(6deg) translateX(5%);opacity:.65}}
 			@media(prefers-reduced-motion:reduce){.destination-shell *, .destination-shell *::before,.destination-shell *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 		`}</style>
 		<MagicBackground dark={dark} />
 		<header className="sticky top-0 z-30 border-b border-white/70 bg-white/65 px-4 py-3 shadow-sm backdrop-blur-2xl sm:px-6"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
 			<div className="flex min-w-0 items-center gap-3"><Link href="/" aria-label="Kembali ke beranda" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#84B3CE]/40 bg-white/80 text-[#16587B] shadow-sm transition hover:-translate-x-0.5 hover:bg-white"><Icon name="back" className="h-5 w-5" /></Link><Link href="/" aria-label="TiLoc · Titik Lokasi" className="hidden text-lg font-black tracking-tight text-[#16587B] sm:block">TiLoc</Link></div>
-			<div className="flex items-center gap-2 sm:gap-3"><span className="hidden items-center gap-2 rounded-full border border-[#84B3CE]/45 bg-[#F5EEDD]/85 px-4 py-2 text-[10px] font-black uppercase tracking-[.16em] text-[#16587B] sm:flex"><span className={"h-2 w-2 rounded-full " + (sessionIsActive ? "bg-[#84B3CE] shadow-[0_0_10px_#84B3CE]" : "bg-[#16587B]/35")} />Perjalanan {visitorName}</span><button type="button" onClick={() => setDark((value) => !value)} aria-label={dark ? "Gunakan tema terang" : "Gunakan tema malam"} className="grid h-10 w-10 place-items-center rounded-full border border-[#84B3CE]/35 bg-white/85 text-[#16587B] shadow-sm transition hover:rotate-6 hover:scale-105"><Icon name={dark ? "sun" : "moon"} className="h-5 w-5" /></button></div>
+		<div className="flex items-center gap-2 sm:gap-3"><span className="hidden items-center gap-2 rounded-full border border-[#84B3CE]/45 bg-[#EAF6FC]/85 px-4 py-2 text-[10px] font-black uppercase tracking-[.16em] text-[#16587B] sm:flex"><span className={"h-2 w-2 rounded-full " + (sessionIsActive ? "bg-[#84B3CE] shadow-[0_0_10px_#84B3CE]" : "bg-[#16587B]/35")} />Perjalanan {visitorName}</span><button type="button" onClick={toggleTheme} aria-label={dark ? "Gunakan tema terang" : "Gunakan tema malam"} className="grid h-10 w-10 place-items-center rounded-full border border-[#84B3CE]/35 bg-white/85 text-[#16587B] shadow-sm transition hover:rotate-6 hover:scale-105"><Icon name={dark ? "sun" : "moon"} className="h-5 w-5" /></button></div>
 		</div></header>
 
 		<main className="relative z-10 mx-auto max-w-7xl px-4 pb-10 pt-7 sm:px-6 sm:pt-10">
@@ -267,7 +284,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 						{chatAiEnabled && <button type="button" onClick={() => { document.getElementById("tourism-chat-input")?.focus({ preventScroll: true }); document.getElementById("guide-chat-title")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} className="mt-3 inline-flex items-center gap-2 text-sm font-extrabold text-[#16587B] underline decoration-[#84B3CE] decoration-2 underline-offset-4 transition hover:text-[#10445f]">Ingin tahu lebih banyak? Tanya TiLoc Guide <span aria-hidden="true">↗</span></button>}
 						<div className="mt-7 flex items-start gap-4 rounded-3xl border border-[#84B3CE]/45 bg-white/60 p-4 shadow-inner sm:p-5"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#16587B] text-white shadow-lg shadow-[#16587B]/20"><Icon name="pin" className="h-6 w-6" /></span>
 							<div className="min-w-0 flex-1"><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#16587B]/65">LOKASI TERCATAT</p><p className="mt-1 font-bold leading-6 text-[#16587B]">{location || "Lokasi akan diperbarui oleh pengelola."}</p>
-								{hasCoordinates && <p className="mt-2 inline-flex rounded-lg border border-[#84B3CE]/35 bg-[#F5EEDD]/75 px-2.5 py-1 font-mono text-xs text-[#16587B]/75">{latitude.toFixed(5)}, {longitude.toFixed(5)}</p>}
+								{hasCoordinates && <p className="mt-2 inline-flex rounded-lg border border-[#84B3CE]/35 bg-[#EAF6FC]/75 px-2.5 py-1 font-mono text-xs text-[#16587B]/75">{latitude.toFixed(5)}, {longitude.toFixed(5)}</p>}
 								{hasCoordinates && <a href={"https://www.google.com/maps/search/?api=1&query=" + latitude + "," + longitude} target="_blank" rel="noreferrer" className="mt-3 block w-fit text-xs font-extrabold text-[#16587B] underline decoration-[#84B3CE] decoration-2 underline-offset-4">Buka petunjuk arah ↗</a>}
 							</div>
 						</div>
@@ -286,7 +303,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 							{chatHistory.map((item, index) => <div key={index} className={"flex flex-col " + (item.role === "user" ? "items-end" : "items-start")}><div className={"max-w-[88%] rounded-3xl px-4 py-3 text-sm font-medium leading-6 " + (item.role === "user" ? "rounded-br-md bg-[#16587B] text-white shadow-lg shadow-[#16587B]/15" : "rounded-bl-md border border-[#84B3CE]/30 bg-white/85 text-[#16587B] shadow-sm")}>{item.text}</div>{item.role === "model" && index === chatHistory.length - 1 && <span className="mt-1.5 px-2 text-[9px] font-bold uppercase tracking-wider text-[#16587B]/55">ⓘ Panduan AI · fakta resmi dan ide umum</span>}</div>)}
 							{isTyping && <div className="flex items-center gap-1.5 rounded-3xl rounded-bl-md border border-[#84B3CE]/30 bg-white/85 px-4 py-4"><span className="h-2 w-2 animate-bounce rounded-full bg-[#16587B]" /><span className="h-2 w-2 animate-bounce rounded-full bg-[#84B3CE] [animation-delay:120ms]" /><span className="h-2 w-2 animate-bounce rounded-full bg-[#16587B] [animation-delay:240ms]" /><span className="ml-2 text-xs text-[#16587B]/65">Pemandu sedang berpikir…</span></div>}<div ref={chatEndRef} />
 						</div>
-						{chatError && <p role="alert" className="mt-3 rounded-xl border border-[#84B3CE]/40 bg-[#F5EEDD] px-3 py-2 text-xs font-semibold leading-5 text-[#16587B]">{chatError}</p>}
+						{chatError && <p role="alert" className="mt-3 rounded-xl border border-[#84B3CE]/40 bg-[#EAF6FC] px-3 py-2 text-xs font-semibold leading-5 text-[#16587B]">{chatError}</p>}
 						<div className="mt-4 border-t border-[#84B3CE]/35 pt-4"><p className="mb-3 text-center text-[9px] font-black uppercase tracking-[.16em] text-[#16587B]/65">TANYA SOAL DESTINASI & IDE PERJALANAN</p><div className="flex flex-wrap justify-center gap-2">{QUICK_PROMPTS.map((prompt) => <button key={prompt} type="button" onClick={() => void sendPrompt(prompt)} disabled={isTyping} className="rounded-2xl border border-[#84B3CE]/50 bg-white/75 px-3 py-2 text-[11px] font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#84B3CE]/20 disabled:opacity-50">{prompt}</button>)}</div>
 							<form onSubmit={submitChat} className="mt-3 flex gap-2 rounded-2xl border border-[#84B3CE]/50 bg-white/75 p-1.5 focus-within:border-[#16587B] focus-within:ring-2 focus-within:ring-[#84B3CE]/30"><label htmlFor="tourism-chat-input" className="sr-only">Tulis pertanyaan untuk pemandu</label><input id="tourism-chat-input" value={message} onChange={(event) => setMessage(event.currentTarget.value.slice(0, 600))} maxLength={600} disabled={isTyping} placeholder="Tulis pertanyaan…" className="min-w-0 flex-1 bg-transparent px-3 text-sm text-[#16587B] outline-none placeholder:text-[#16587B]/45 disabled:opacity-60" /><button type="submit" disabled={isTyping || !message.trim()} aria-label="Kirim pertanyaan" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#16587B] text-white transition hover:bg-[#10445f] disabled:opacity-45"><Icon name="send" className="h-4 w-4" /></button></form>
 							<p className="mt-1.5 text-right text-[10px] tabular-nums text-[#16587B]/50">{message.length} / 600</p>
@@ -298,7 +315,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 
 			<section className="tourism-glass relative mt-14 flex flex-col items-center gap-5 overflow-hidden rounded-[2rem] p-6 sm:mt-20 sm:flex-row sm:gap-8 sm:rounded-[2.5rem] sm:p-9" aria-labelledby="explore-title"><div aria-hidden="true" className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-[#84B3CE]/20 blur-3xl" />
 				<div className="relative h-36 w-52 shrink-0 sm:h-44 sm:w-60"><MascotCrew group="lower" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div><div className="relative z-10 flex-1 text-center sm:text-left"><h2 id="explore-title" className="text-2xl font-black text-[#16587B] sm:text-3xl">Jelajahi TiLoc!</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[#16587B]/75 sm:mx-0 sm:text-base">Temukan pesona wisata lokal bersama pemandu cerdas kami. Pindai QR di spot menarik untuk menyambung petualanganmu.</p>
-					<div className="mt-6 flex flex-wrap justify-center gap-3 sm:justify-start"><button type="button" onClick={() => setShowGuideModal(true)} className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#84B3CE]/50 bg-white/70 px-4 py-2.5 font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#84B3CE]/20"><Icon name="book" className="h-5 w-5" /></span>Panduan Wisata</button><button type="button" onClick={() => setShowSessionModal(true)} className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#84B3CE]/50 bg-[#84B3CE]/15 px-4 py-2.5 font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#84B3CE]/25"><span className="relative grid h-9 w-9 place-items-center rounded-xl bg-[#16587B] text-lg text-white"><span className={"absolute right-1 top-1 h-2 w-2 rounded-full ring-2 ring-[#F5EEDD] " + (sessionIsActive ? "bg-[#84B3CE]" : "bg-[#84B3CE]/45")} />◉</span>Status Sesi</button></div>
+					<div className="mt-6 flex flex-wrap justify-center gap-3 sm:justify-start"><button type="button" onClick={() => setShowGuideModal(true)} className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#84B3CE]/50 bg-white/70 px-4 py-2.5 font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-white"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#84B3CE]/20"><Icon name="book" className="h-5 w-5" /></span>Panduan Wisata</button><button type="button" onClick={() => setShowSessionModal(true)} className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#84B3CE]/50 bg-[#84B3CE]/15 px-4 py-2.5 font-bold text-[#16587B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#84B3CE]/25"><span className="relative grid h-9 w-9 place-items-center rounded-xl bg-[#16587B] text-lg text-white"><span className={"absolute right-1 top-1 h-2 w-2 rounded-full ring-2 ring-[#EAF6FC] " + (sessionIsActive ? "bg-[#84B3CE]" : "bg-[#84B3CE]/45")} />◉</span>Status Sesi</button></div>
 				</div>
 			</section>
 			<footer className="pb-5 pt-7 text-center text-xs font-semibold text-[#16587B]/55">© TiLoc · Jelajah dengan nyaman, simpan kenangan indah.</footer>

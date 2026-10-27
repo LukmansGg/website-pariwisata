@@ -210,16 +210,27 @@ const IconEnvelope = () => (
 	</svg>
 );
 
-const STAR_POSITIONS = [
-	[8, 18, 3], [18, 66, 2], [28, 32, 2], [39, 82, 3], [48, 13, 2], [57, 54, 2],
-	[68, 24, 3], [76, 74, 2], [86, 41, 2], [94, 16, 3], [12, 91, 2], [91, 88, 2],
-] as const;
+const STAR_POSITIONS = Array.from({ length: 36 }, (_, index) => {
+	const column = index % 9;
+	const row = Math.floor(index / 9);
+	const jitter = (seed: number) => {
+		const value = Math.sin((index + seed) * 127.1) * 43758.5453;
+		return value - Math.floor(value);
+	};
+	return {
+		left: ((column + 0.14 + jitter(4) * 0.72) / 9) * 100,
+		top: ((row + 0.12 + jitter(19) * 0.76) / 4) * 100,
+		size: index % 9 === 0 ? 7 : 3 + Math.round(jitter(37) * 2),
+		delay: (index % 8) * 410,
+		flare: index % 9 === 0,
+	};
+});
 
 const LIGHT_SPARKLES = [[9, 20], [27, 46], [84, 18], [72, 68], [15, 84], [93, 76], [48, 12], [55, 91]] as const;
 
 function StarParticles({ isDark }: { isDark: boolean }) {
 	return <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-		{(isDark ? STAR_POSITIONS : []).map(([left, top, size], index) => <span key={`star-${index}`} className="home-star" style={{ left: `${left}%`, top: `${top}%`, width: size, height: size, animationDelay: `${(index % 6) * 370}ms` }} />)}
+		{(isDark ? STAR_POSITIONS : []).map((star, index) => <span key={`star-${index}`} className={`home-star${star.flare ? " is-flare" : ""}`} style={{ left: `${star.left}%`, top: `${star.top}%`, width: star.size, height: star.size, animationDelay: `${star.delay}ms`, "--star-size": `${star.size}px` } as React.CSSProperties} />)}
 		{(isDark ? [[71, 18], [94, 39]] as const : LIGHT_SPARKLES).map(([left, top], index) => isDark
 			? <span key={`shooting-${index}`} className="shooting-star" style={{ left: `${left}%`, top: `${top}%`, animationDelay: `${index * 3.8}s` }} />
 			: <span key={`sparkle-${index}`} className="ambient-sparkle" style={{ left: `${left}%`, top: `${top}%`, animationDelay: `${index * 430}ms` }}><IconSparkle /></span>)}
@@ -254,28 +265,28 @@ const GlobalStyles = () => (
       -webkit-font-smoothing: antialiased;
     }
     .home-page.dark {
-      --home-canvas: #070c18;
+      --home-canvas: #07182b;
       --home-ink: #eaf2ff;
-      --home-primary: #15233d;
-      --home-accent: #b99aff;
-      --home-soft: #111b31;
-      --home-glass: rgba(15, 24, 43, 0.78);
-      --home-glass-border: rgba(185, 154, 255, 0.24);
+      --home-primary: #236c9b;
+      --home-accent: #8bd9ff;
+      --home-soft: #102b45;
+      --home-glass: rgba(7, 24, 43, 0.97);
+      --home-glass-border: rgba(139, 217, 255, 0.28);
       --home-on-primary: #ffffff;
-      --home-on-accent: #211638;
-      --home-bloom: rgba(156, 123, 255, 0.32);
+      --home-on-accent: #08243a;
+      --home-bloom: rgba(77, 180, 231, 0.4);
       color-scheme: dark;
       color: var(--home-ink);
-      background: linear-gradient(135deg, #050914 0%, #0a1427 55%, #11152a 100%) !important;
-      background-color: #070c18 !important;
+      background: linear-gradient(135deg, #061426 0%, #09213a 55%, #0c3150 100%) !important;
+      background-color: #07182b !important;
     }
     .home-page:not(.dark) { background-image: linear-gradient(135deg, #e0f2fe 0%, #f5fbff 50%, #c9edff 100%); }
     .home-page .glass-panel {
       background: var(--home-glass);
       border: 1px solid var(--home-glass-border);
       box-shadow: 0 12px 34px -24px var(--home-bloom);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 260ms ease, border-color 260ms ease;
     }
     .home-page .glass-panel:hover {
@@ -284,11 +295,27 @@ const GlobalStyles = () => (
     }
     .home-page .home-star {
       position: absolute;
+      display: block;
       border-radius: 999px;
-      background: var(--home-accent);
-      box-shadow: 0 0 12px var(--home-bloom);
-      animation: homeTwinkle 3.8s ease-in-out infinite;
+      background: radial-gradient(circle, #fff 0%, #effbff 28%, #8bd9ff 58%, rgba(76,184,237,.15) 100%);
+      box-shadow: 0 0 5px 2px rgba(224,248,255,.72), 0 0 16px 4px var(--home-bloom), 0 0 30px 8px rgba(64,166,220,.22);
+      animation: homeTwinkle 4.8s cubic-bezier(.4,0,.2,1) infinite;
+      transform-origin: center;
+      will-change: transform, opacity, filter;
     }
+    .home-page .home-star::before {
+      content: "";
+      position: absolute;
+      left: 50%; top: 50%;
+      width: calc(var(--star-size) * 3.6);
+      height: calc(var(--star-size) * 3.6);
+      transform: translate(-50%, -50%);
+      background: linear-gradient(90deg, transparent 39%, rgba(239,251,255,.82) 49%, transparent 61%), linear-gradient(0deg, transparent 39%, rgba(239,251,255,.82) 49%, transparent 61%);
+      filter: blur(.35px);
+      opacity: .66;
+      pointer-events: none;
+    }
+    .home-page .home-star.is-flare { z-index: 0; }
     .home-page .matrix-cell { animation: matrixPulse 1.8s ease-in-out infinite; }
     .home-page .matrix-cell.is-fixed { animation: none; opacity: 1; }
     .home-page .matrix-qr-stage::after { content: ""; position: absolute; left: 8%; right: 8%; top: 10%; height: 2px; background: var(--home-accent); box-shadow: 0 0 14px var(--home-accent); opacity: .8; animation: qrScan 3.4s ease-in-out infinite; pointer-events: none; }
@@ -302,9 +329,11 @@ const GlobalStyles = () => (
     .home-page .map-control-bar { box-shadow: 0 8px 24px rgba(31, 71, 99, .12), inset 0 1px 0 rgba(255,255,255,.9); }
     .home-page .map-surface { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 28px rgba(50, 112, 145, .08); }
     .home-page .map-activation-halo { animation: mapActivationHalo 3.4s ease-out infinite; }
+    .home-page .map-marker-halo { transform-box: fill-box; transform-origin: center; animation: selectedMarkerAura 2.1s ease-out infinite; }
     @keyframes markerIdle { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
     @keyframes markerBoing { 0% { transform: translateY(0) scale(1); } 45% { transform: translateY(-9px) scale(1.08); } 75% { transform: translateY(2px) scale(.96); } 100% { transform: translateY(0) scale(1); } }
     @keyframes mapActivationHalo { 0% { opacity: .34; transform: scale(.88); } 70%,100% { opacity: 0; transform: scale(1.3); } }
+    @keyframes selectedMarkerAura { 0% { opacity: .95; transform: scale(.78); } 75%,100% { opacity: 0; transform: scale(1.65); } }
     .home-page .animate-envelope-float { animation: envelopeFloat 4.5s ease-in-out infinite; }
     @keyframes fadeInUp {
       from { opacity: 0; transform: translateY(30px); }
@@ -334,7 +363,7 @@ const GlobalStyles = () => (
       70% { box-shadow: 0 0 0 16px transparent; }
       100% { box-shadow: 0 0 0 0 transparent; }
     }
-    @keyframes homeTwinkle { 0%, 100% { opacity: 0.18; transform: scale(0.75); } 50% { opacity: 0.8; transform: scale(1); } }
+    @keyframes homeTwinkle { 0%, 100% { opacity: .46; transform: scale(.82) rotate(0); filter:brightness(.92); } 50% { opacity: 1; transform: scale(1.22) rotate(45deg); filter:brightness(1.28); } }
     @keyframes matrixPulse { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.9; filter: drop-shadow(0 0 5px var(--home-accent)); } }
     @keyframes qrScan { 0%,100% { top: 12%; opacity: .35; } 50% { top: 88%; opacity: .9; } }
     @keyframes envelopeFloat { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-7px) rotate(4deg); } }
@@ -561,15 +590,20 @@ const DiscoveryMap = ({
 	searchQuery,
 	onSearchChange,
 	destinations,
+	selectedDestinationId,
+	onSpotSelected,
+	compact = false,
 }: {
 	searchQuery: string;
 	onSearchChange: (value: string) => void;
 	destinations: DestinationCard[];
+	selectedDestinationId: string | null;
+	onSpotSelected: (destination: DestinationCard | null) => void;
+	compact?: boolean;
 }) => {
 	const [boundaryPaths, setBoundaryPaths] = useState<MapBoundaries | null>(null);
 	const [mapAreas, setMapAreas] = useState<MapArea[]>([]);
 	const [boundaryFailed, setBoundaryFailed] = useState(false);
-	const [selectedDestination, setSelectedDestination] = useState<DestinationCard | null>(null);
 	const [selectedArea, setSelectedArea] = useState<MapArea | null>(null);
 	const [mapActive, setMapActive] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
@@ -647,7 +681,7 @@ const DiscoveryMap = ({
 		const viewport = mapViewportRef.current;
 		const scale = area.id === "city" ? 1.85 : 1.25;
 		setSelectedArea(area);
-		setSelectedDestination(null);
+		onSpotSelected(null);
 		setMapActive(true);
 		setMapScale(scale);
 		if (viewport) {
@@ -675,7 +709,7 @@ const DiscoveryMap = ({
 		const viewport = mapViewportRef.current;
 		const scale = 2.2;
 		setSelectedArea(null);
-		setSelectedDestination(destination);
+		onSpotSelected(destination);
 		setMapActive(true);
 		setMapScale(scale);
 		if (viewport) {
@@ -691,6 +725,7 @@ const DiscoveryMap = ({
 		}
 		setSearchOpen(false);
 		onSearchChange(destination.title);
+		setMapActive(false);
 	};
 	const handleMapPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
 		if (!mapActive || (event.target as HTMLElement).closest("[data-map-control]")) return;
@@ -727,7 +762,7 @@ const DiscoveryMap = ({
 	return (
 		<section
 			id="peta"
-			className="relative px-6 -mt-10 z-20 pb-20 max-w-6xl mx-auto">
+			className={`relative z-20 mx-auto max-w-6xl px-6 pb-20 ${compact ? "order-[30] mt-0" : "order-[20] -mt-10"}`}>
 			<div className="animate-fade-up delay-400">
 				{/* Floating Search Capsule */}
 				<div className="absolute -top-8 left-1/2 -translate-x-1/2 w-full max-w-2xl z-30 px-4">
@@ -742,7 +777,7 @@ const DiscoveryMap = ({
 							value={selectedArea ? selectedArea.name : searchQuery}
 							onFocus={() => setSearchOpen(true)}
 							onBlur={() => window.setTimeout(() => setSearchOpen(false), 140)}
-							onChange={(e) => { setSelectedArea(null); setSelectedDestination(null); onSearchChange(e.target.value); setSearchOpen(true); }}
+							onChange={(e) => { setSelectedArea(null); onSpotSelected(null); onSearchChange(e.target.value); setSearchOpen(true); }}
 							onKeyDown={(event) => { if (event.key === "Enter" && areaSuggestions.length + destinationSuggestions.length === 1) { event.preventDefault(); if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } }}
 						/>
 						<button
@@ -773,8 +808,9 @@ const DiscoveryMap = ({
 							{boundaryPaths?.countyPath && <path d={boundaryPaths.countyPath} fill="none" fillRule="evenodd" stroke="#0284c7" strokeWidth="2.4" strokeDasharray="6 6" vectorEffect="non-scaling-stroke" />}
 							{boundaryPaths?.cityPath && <path d={boundaryPaths.cityPath} fill="none" fillRule="evenodd" stroke="#7c3aed" strokeWidth="2.8" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
 							{selectedArea && (() => { const point = projectMapPoint(selectedArea.longitude, selectedArea.latitude); return <g data-marker className="madiun-marker" aria-label={`Area ${selectedArea.name}`}><circle cx={point.x} cy={point.y} r="12" fill="#f97316" stroke="white" strokeWidth="3"/><circle cx={point.x} cy={point.y} r="4" fill="white"/><text x={point.x + 16} y={point.y - 12} fill="#7c2d12" stroke="white" strokeWidth="4" paintOrder="stroke" fontSize="18" fontWeight="800">{selectedArea.name}</text></g>; })()}
-							<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); return <g key={destination.id} data-marker role="button" tabIndex={0} aria-label={`Buka wisata ${destination.title}`} onClick={(event) => { if (suppressMapClickRef.current) { suppressMapClickRef.current = false; event.stopPropagation(); return; } setSelectedDestination(destination); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedDestination(destination); }} className="madiun-marker cursor-pointer">
+							<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); const isSelected = destination.id === selectedDestinationId; return <g key={destination.id} data-marker role="button" tabIndex={0} aria-pressed={isSelected} aria-label={`Pilih wisata ${destination.title}`} onClick={(event) => { event.stopPropagation(); if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } focusDestination(destination); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusDestination(destination); } }} className={`madiun-marker cursor-pointer${isSelected ? " selected-map-marker" : ""}`}>
 								<title>{destination.title} · {destination.category}</title>
+								{isSelected && <><circle cx={point.x} cy={point.y} r="23" fill="rgba(14,165,233,.18)" stroke="#38bdf8" strokeWidth="2" className="map-marker-halo"/><text x={point.x} y={point.y - 27} textAnchor="middle" fill="#082f49" stroke="white" strokeWidth="5" paintOrder="stroke" fontSize="15" fontWeight="900">{destination.title}</text></>}
 								{marker.shape === "pin" ? <><path d={`M${point.x} ${point.y + 11}S${point.x - 8} ${point.y + 2} ${point.x - 8} ${point.y - 3}a8 8 0 1 1 16 0c0 5-8 14-8 14Z`} fill={marker.color} stroke="white" strokeWidth="2"/><circle cx={point.x} cy={point.y - 3} r="2.5" fill="white"/></> : marker.shape === "star" ? <path d={`m${point.x} ${point.y - 9} 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "diamond" ? <path d={`m${point.x} ${point.y - 9} 8 9-8 9-8-9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "leaf" ? <path d={`M${point.x} ${point.y + 8}C${point.x - 12} ${point.y + 1} ${point.x - 3} ${point.y - 10} ${point.x + 8} ${point.y - 8}C${point.x + 9} ${point.y + 2} ${point.x + 3} ${point.y + 8} ${point.x} ${point.y + 8}M${point.x} ${point.y + 7}l5-8`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : <circle cx={point.x} cy={point.y} r="7" fill={marker.color} stroke="white" strokeWidth="2"/>}
 							</g>; })}</g>
 						</svg>
@@ -783,7 +819,6 @@ const DiscoveryMap = ({
 						<div className="absolute right-3 bottom-3 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600">© OpenStreetMap contributors</div>
 						{!boundaryPaths && <div className="absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">{boundaryFailed ? "Garis batas belum termuat; peta tetap tersedia." : "Memuat garis batas…"}</div>}
 						<div className="absolute bottom-3 left-3 rounded-xl bg-white/90 px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-sm">{markers.length} wisata cocok</div>
-						{selectedDestination && <div className="absolute right-3 bottom-3 z-20 max-w-[250px] rounded-2xl border border-sky-100 bg-white/95 p-3 shadow-lg"><button type="button" onClick={() => setSelectedDestination(null)} className="absolute right-2 top-2 rounded-full px-2 text-slate-400 hover:bg-slate-100" aria-label="Tutup">×</button><p className="pr-5 text-sm font-extrabold text-slate-800">{selectedDestination.title}</p><p className="mt-1 text-xs text-slate-500">{selectedDestination.category}</p><Link href={`/wisata/${selectedDestination.slug}`} className="mt-2 inline-flex text-xs font-bold text-sky-700">Lihat detail →</Link></div>}
 					</div>
 					<div className="mt-4 flex flex-wrap items-center justify-between gap-3">
 						<div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[var(--home-ink)]/65" aria-label="Legenda peta">
@@ -808,7 +843,7 @@ const MoodCategories = ({
 	onSelect: (categories: string[]) => void;
 	compact?: boolean;
 }) => (
-	<section id="kuliner" className={`mx-auto max-w-7xl px-6 ${compact ? "sticky top-16 z-30 mt-16 py-3" : "py-20"}`}>
+	<section id="kuliner" className={`mx-auto max-w-7xl px-6 ${compact ? "order-[10] sticky top-16 z-30 mt-16 py-3" : "order-[30] py-20"}`}>
 		{!compact && <div className="mb-12 animate-fade-up text-center"><h2 className="mb-4 text-3xl font-extrabold text-[var(--home-ink)]">Pilih kategori</h2><p className="text-[var(--home-ink)]/70">Pilih satu atau beberapa kategori untuk menyaring destinasi.</p></div>}
 
 		<div className={`flex flex-wrap gap-2 animate-fade-up ${compact ? "justify-start rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-2 shadow-lg backdrop-blur-xl" : "justify-center gap-3 delay-200"}`}>
@@ -838,6 +873,8 @@ const Highlights = ({
 	hasActiveFilters,
 	incompleteCount,
 	compact = false,
+	selectedMapSpot = null,
+	onClearMapSpot,
 }: {
 	destinations: DestinationCard[];
 	loading: boolean;
@@ -846,8 +883,11 @@ const Highlights = ({
 	hasActiveFilters: boolean;
 	incompleteCount: number;
 	compact?: boolean;
+	selectedMapSpot?: DestinationCard | null;
+	onClearMapSpot?: () => void;
 }) => (
-	<section id="destinasi" className={`mx-auto max-w-7xl px-6 ${compact ? "py-6" : "py-20"}`}>
+	<section id="destinasi" className={`mx-auto max-w-7xl px-6 ${compact ? "order-[20] py-6" : "order-[40] py-20"}`}>
+		{selectedMapSpot && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-300/50 bg-[var(--home-glass)] px-4 py-3 shadow-[0_10px_32px_-22px_var(--home-bloom)] backdrop-blur-xl" role="status"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-300"><IconMapPin /></span><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.16em] text-sky-700 dark:text-sky-300">Spot dipilih dari peta</p><p className="truncate text-sm font-extrabold text-[var(--home-ink)]">{selectedMapSpot.title}</p></div></div>{onClearMapSpot && <button type="button" onClick={onClearMapSpot} className="rounded-full border border-[var(--home-glass-border)] px-4 py-2 text-xs font-bold text-[var(--home-ink)] transition hover:border-sky-400 hover:bg-sky-400/10">Tampilkan semua</button>}</div>}
 		<div className={`flex justify-between items-end animate-fade-up ${compact ? "mb-6" : "mb-12"}`}>
 			<div>
 				<p className="mb-3 text-xs font-black uppercase tracking-[.22em] text-[var(--home-primary)]">Curated for your next story</p>
@@ -903,7 +943,7 @@ const Highlights = ({
 						href={`/wisata/${encodeURIComponent(dest.slug)}`}
 						key={dest.id}
 						style={{ animationDelay: `${Math.min((i + 1) * 100, 500)}ms` }}
-						className="glass-panel group rounded-[1.75rem] p-3 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 animate-fade-up">
+						className={`glass-panel group rounded-[1.75rem] p-3 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-fade-up ${selectedMapSpot?.id === dest.id ? "!border-sky-400 !ring-2 !ring-sky-400/25" : ""}`}>
 						<div className="relative w-full h-56 rounded-[1.25rem] overflow-hidden mb-4 bg-gradient-to-br from-[var(--home-soft)] to-[var(--home-accent)]/50">
 							{dest.image ? (
 								<Image
@@ -1236,6 +1276,8 @@ export default function TiLocApp() {
 	const [incompleteDestinationCount, setIncompleteDestinationCount] = useState(0);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+	const [mapFocusPanelOpen, setMapFocusPanelOpen] = useState(false);
+	const [selectedMapSpot, setSelectedMapSpot] = useState<DestinationCard | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -1294,6 +1336,33 @@ export default function TiLocApp() {
 	});
 	const hasActiveFilters = Boolean(searchQuery.trim()) || selectedCategories.length > 0;
 	const categoryFocused = selectedCategories.length > 0;
+	const compactDiscovery = categoryFocused || mapFocusPanelOpen;
+	const handleMapSearchChange = (value: string) => {
+		setSearchQuery(value);
+		if (!value.trim()) {
+			setMapFocusPanelOpen(false);
+			setSelectedMapSpot(null);
+		}
+	};
+	const handleMapSpotSelected = (destination: DestinationCard | null) => {
+		setSelectedMapSpot(destination);
+		if (!destination) return;
+		setSelectedCategories([]);
+		setMapFocusPanelOpen(true);
+		window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+	};
+	const handleCategorySelect = (categories: string[]) => {
+		setSearchQuery("");
+		setMapFocusPanelOpen(false);
+		setSelectedMapSpot(null);
+		setSelectedCategories(categories);
+	};
+	const clearDiscoveryFilters = () => {
+		setSearchQuery("");
+		setSelectedCategories([]);
+		setMapFocusPanelOpen(false);
+		setSelectedMapSpot(null);
+	};
 	useEffect(() => {
 		if (categoryFocused) window.scrollTo({ top: 0, behavior: "smooth" });
 	}, [categoryFocused]);
@@ -1306,16 +1375,12 @@ export default function TiLocApp() {
 				<Navbar isDark={isDark} onToggleTheme={toggleTheme} />
 
 				<main className="relative z-10">
-					{categoryFocused ? <>
-						<MoodCategories selectedCategories={selectedCategories} onSelect={setSelectedCategories} compact />
-						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={() => { setSearchQuery(""); setSelectedCategories([]); }} compact />
-						<DiscoveryMap searchQuery={searchQuery} onSearchChange={setSearchQuery} destinations={visibleDestinations} />
-					</> : <>
-						<HeroSection />
-						<DiscoveryMap searchQuery={searchQuery} onSearchChange={setSearchQuery} destinations={visibleDestinations} />
-						<MoodCategories selectedCategories={selectedCategories} onSelect={setSelectedCategories} />
-						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={() => { setSearchQuery(""); setSelectedCategories([]); }} />
-					</>}
+					<div className="flex flex-col">
+						{!compactDiscovery && <div className="order-10"><HeroSection /></div>}
+						<MoodCategories selectedCategories={selectedCategories} onSelect={handleCategorySelect} compact={compactDiscovery} />
+						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={clearDiscoveryFilters} compact={compactDiscovery} selectedMapSpot={selectedMapSpot} onClearMapSpot={clearDiscoveryFilters} />
+						<DiscoveryMap searchQuery={searchQuery} onSearchChange={handleMapSearchChange} destinations={visibleDestinations} selectedDestinationId={selectedMapSpot?.id ?? null} onSpotSelected={handleMapSpotSelected} compact={compactDiscovery} />
+					</div>
 					<PromotionalSection />
 					<SystemCampaignPrompt pageKey="home" />
 				</main>
@@ -1324,6 +1389,8 @@ export default function TiLocApp() {
 					onSearch={(query) => {
 						setSearchQuery(query);
 						setSelectedCategories([]);
+						setSelectedMapSpot(null);
+						setMapFocusPanelOpen(Boolean(query.trim()));
 					}}
 				/>
 				<Footer />
