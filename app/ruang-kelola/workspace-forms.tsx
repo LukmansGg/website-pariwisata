@@ -6,19 +6,15 @@ import QRCode from "qrcode";
 import {
 	createDestinationAction,
 	createPartnerAction,
-	createPromotionAction,
 	createQrPointAction,
 	updatePartnerProximityAction,
 	updateDestinationAction,
 	type WorkspaceActionState,
 } from "@/src/server/auth/actions";
 import { MediaUploadField } from "@/app/ruang-kelola/media-upload-field";
-import { getCampaignFormPreset, type CampaignFormPreset } from "@/src/features/campaigns/form-presets";
-import type { CampaignFormBlock, CampaignInputType } from "@/src/features/campaigns/form-schema";
 
 type DestinationOption = { id: string; name: string; slug: string; latitude?: number | null; longitude?: number | null };
-type PartnerOption = { id: string; business_name: string; destination_id: string | null; max_distance_meters: number };
-type QrPointOption = { id: string; name: string; code: string; destination_id: string; destination_name: string };
+type PartnerOption = { id: string; business_name: string; destination_id: string | null; max_distance_meters: number; allow_minigame_integration?: boolean; latitude?: number | null; longitude?: number | null };
 
 const initialState: WorkspaceActionState = {};
 const inputClass = "form-input";
@@ -53,7 +49,7 @@ type EditableDestination = { id: string; name: string; slug: string; category: s
 const DESTINATION_CATEGORIES = ["Alam", "Kuliner", "Spot Foto", "Sejarah & Budaya", "Petualangan & Aktivitas", "Rekreasi", "Religi", "Lainnya"];
 type EditableQrPoint = { id: string; name: string; code: string; address: string | null; latitude: number | null; longitude: number | null };
 
-function QrDownloadCard({ code, ready }: { code: string; ready: boolean }) {
+export function QrDownloadCard({ code, ready }: { code: string; ready: boolean }) {
 	const [qrImage, setQrImage] = useState<{ code: string; dataUrl: string } | null>(null);
 	const dataUrl = qrImage?.code === code ? qrImage.dataUrl : "";
 	const path = `/qr/${encodeURIComponent(code)}`;
@@ -175,24 +171,64 @@ export function PartnerForm({ destinations }: { destinations: DestinationOption[
 	const [businessName, setBusinessName] = useState("");
 	const [slug, setSlug] = useState("");
 	const [slugEdited, setSlugEdited] = useState(false);
+	const [categories, setCategories] = useState<string[]>([]);
+	const [customCategories, setCustomCategories] = useState("");
+	const [destinationId, setDestinationId] = useState("");
+	const [allowMinigame, setAllowMinigame] = useState(false);
+	const [latitude, setLatitude] = useState("");
+	const [longitude, setLongitude] = useState("");
+	const [locationStatus, setLocationStatus] = useState("");
+	const [logoUrl, setLogoUrl] = useState("");
+	const categoryChoices = ["Kuliner", "Penginapan", "Transportasi", "Kerajinan", "Jasa wisata"];
+	const normalizedCategories = [...new Set([...categories, ...customCategories.split(",").map((item) => item.trim()).filter(Boolean)])];
+	const categoryValue = normalizedCategories.join(", ");
+	const destinationsWithCoordinates = destinations.filter((item) => item.latitude !== null && item.latitude !== undefined && item.longitude !== null && item.longitude !== undefined);
+	const bestDestination = (() => {
+		const lat = Number(latitude); const lng = Number(longitude);
+		if (!latitude || !longitude || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+		return destinations.filter((item) => item.latitude !== null && item.longitude !== null).map((item) => {
+			const rad = Math.PI / 180;
+			const a = Math.sin((item.latitude! - lat) * rad / 2) ** 2 + Math.cos(lat * rad) * Math.cos(item.latitude! * rad) * Math.sin((item.longitude! - lng) * rad / 2) ** 2;
+			return { item, distance: Math.round(6371000 * 2 * Math.asin(Math.sqrt(a))) };
+		}).sort((a, b) => a.distance - b.distance)[0] ?? null;
+	})();
+	const linkedDestination = destinationsWithCoordinates.find((item) => item.id === destinationId);
+	const selectedDestinationDistance = linkedDestination && latitude && longitude && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))
+		? Math.round((() => {
+			const radians = Math.PI / 180;
+			const lat = Number(latitude);
+			const lng = Number(longitude);
+			const dLat = (linkedDestination.latitude! - lat) * radians;
+			const dLng = (linkedDestination.longitude! - lng) * radians;
+			const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat * radians) * Math.cos(linkedDestination.latitude! * radians) * Math.sin(dLng / 2) ** 2;
+			return 6371000 * 2 * Math.asin(Math.sqrt(a));
+		})())
+		: null;
 	const slugify = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 100);
+	function useMyLocation() {
+		if (!navigator.geolocation) { setLocationStatus("Browser ini tidak menyediakan lokasi otomatis."); return; }
+		setLocationStatus("Meminta izin lokasi…");
+		navigator.geolocation.getCurrentPosition((position) => {
+			setLatitude(position.coords.latitude.toFixed(6)); setLongitude(position.coords.longitude.toFixed(6));
+			setLocationStatus("Koordinat usaha berhasil diisi dari lokasi perangkat.");
+		}, () => setLocationStatus("Lokasi belum diizinkan. Kamu masih bisa mengisi koordinat secara manual."), { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+	}
 	return <form action={action} className="space-y-5">
+		<input type="hidden" name="business_categories" value={categoryValue} />
 		<div className="grid gap-4 sm:grid-cols-2">
 			<div><label className={labelClass} htmlFor="partner-name">Nama mitra / UMKM *</label><input className={inputClass} id="partner-name" name="business_name" value={businessName} onChange={(event) => { setBusinessName(event.currentTarget.value); if (!slugEdited) setSlug(slugify(event.currentTarget.value)); }} required maxLength={160} placeholder="Warung Pecel Madiun" /></div>
-			<div><label className={labelClass} htmlFor="partner-slug">Slug *</label><input className={inputClass} id="partner-slug" name="slug" value={slug} onChange={(event) => { setSlugEdited(true); setSlug(slugify(event.currentTarget.value)); }} required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={100} placeholder="warung-pecel-madiun" /><p className="mt-1 text-xs text-[#16587B]/55">Terbentuk otomatis dari nama dan tetap bisa diedit.</p></div>
-			<div><label className={labelClass} htmlFor="partner-type">Jenis usaha *</label><select className={inputClass} id="partner-type" name="business_type" required defaultValue=""><option value="" disabled>Pilih jenis usaha</option><option>Kuliner</option><option>Penginapan</option><option>Transportasi</option><option>Kerajinan</option><option>Jasa wisata</option><option>Lainnya</option></select></div>
-			<div><label className={labelClass} htmlFor="partner-address">Alamat</label><input className={inputClass} id="partner-address" name="address" maxLength={500} /></div>
+			<div><label className={labelClass} htmlFor="partner-slug">ID halaman mitra *</label><div className="flex items-center overflow-hidden rounded-xl border border-[#84B3CE]/40 bg-white"><span className="shrink-0 pl-3 text-xs text-[#16587B]/45">/mitra/</span><input className="min-w-0 flex-1 bg-transparent px-2 py-3 text-sm outline-none" id="partner-slug" name="slug" value={slug} onChange={(event) => { setSlugEdited(true); setSlug(slugify(event.currentTarget.value)); }} required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={100} placeholder="warung-pecel-madiun" /></div><p className="mt-1 text-xs text-[#16587B]/55">ID unik di alamat halaman mitra, misalnya <strong>/mitra/warung-pecel</strong>.</p></div>
+			<fieldset className="min-w-0 sm:col-span-2"><legend className={labelClass}>Jenis usaha * · pilih minimal satu</legend><p className="mb-3 text-xs text-[#16587B]/55">Pilih beberapa tag agar mitra lebih mudah ditemukan. Jenis lain bisa ditulis dipisahkan koma.</p><div className="flex flex-wrap gap-2">{categoryChoices.map((category) => { const selected = categories.includes(category); return <label key={category} className={`cursor-pointer rounded-full border px-3.5 py-2 text-xs font-semibold transition ${selected ? "border-sky-500 bg-sky-100 text-sky-900 ring-2 ring-sky-200/60" : "border-[#84B3CE]/35 bg-white/75 text-[#16587B]/75 hover:bg-sky-50"}`}><input className="sr-only" type="checkbox" checked={selected} onChange={() => setCategories((current) => selected ? current.filter((item) => item !== category) : [...current, category])} /><span className="mr-1">{selected ? "✓" : "+"}</span>{category}</label>; })}</div><label className="mt-3 block text-xs font-bold text-[#16587B]" htmlFor="partner-custom-categories">Jenis usaha lainnya<input className={inputClass} id="partner-custom-categories" value={customCategories} onChange={(event) => setCustomCategories(event.currentTarget.value)} placeholder="Contoh: Pemandu sejarah, toko oleh-oleh" /></label><p className="mt-1 text-[11px] text-[#16587B]/55">Pisahkan jenis khusus dengan koma. Tag terpilih: {categoryValue || "belum ada"}.</p></fieldset>
+			<div className="sm:col-span-2"><label className={labelClass} htmlFor="partner-address">Alamat usaha</label><input className={inputClass} id="partner-address" name="address" maxLength={500} placeholder="Nama jalan, area, atau patokan" /></div>
 		</div>
 		<div className="rounded-2xl border border-[#84B3CE]/30 bg-[#E0F2FE]/45 p-4 sm:p-5">
-			<div className="mb-3"><p className="text-xs font-black uppercase tracking-[0.14em] text-[#16587B]">Keterkaitan lokasi · untuk minigame</p><p className="mt-1 text-xs leading-5 text-[#16587B]/65">Pilih destinasi wisata terdekat secara manual. Kampanye mitra hanya dapat memakai QR yang terpasang di destinasi pilihan ini.</p></div>
-			<div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
-				<div><label className={labelClass} htmlFor="partner-destination">Wisata lokal terdekat *</label><select className={inputClass} id="partner-destination" name="destination_id" required defaultValue=""><option value="" disabled>Pilih wisata berkoordinat</option>{destinations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-				<div><label className={labelClass} htmlFor="partner-max-distance">Jarak maksimal dari QR *</label><div className="relative"><input className={`${inputClass} pr-14`} id="partner-max-distance" name="max_distance_meters" type="number" min="50" max="2000" step="50" required defaultValue="500"/><span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-bold text-[#16587B]/50">meter</span></div></div>
-			</div>
-			<p className="mt-2 text-xs leading-5 text-[#16587B]/65">Saran awal 500 m · bisa diatur 50–2.000 m. Ini batas jarak pengunjung dari QR kampanye yang nantinya dipakai minigame. Lokasi fisik mitra tidak dihitung otomatis.</p>
+			<div className="mb-3"><p className="text-xs font-black uppercase tracking-[0.14em] text-[#16587B]">Keterkaitan lokasi · opsional</p><p className="mt-1 text-xs leading-5 text-[#16587B]/65">Mitra tetap bisa terdaftar tanpa ditautkan ke wisata. Jika lokasi diisi, sistem dapat menyarankan wisata dan memeriksa batas jarak tetap 500 m saat dipakai di Find Our Friends.</p></div>
+			<div className="grid gap-4 sm:grid-cols-2"><div><label className={labelClass} htmlFor="partner-destination">Wisata lokal terdekat</label><select className={inputClass} id="partner-destination" name="destination_id" value={destinationId} required={allowMinigame} onChange={(event) => setDestinationId(event.currentTarget.value)}><option value="">Belum ditautkan</option>{destinationsWithCoordinates.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedDestinationDistance !== null && <p className={`mt-2 text-xs font-semibold ${selectedDestinationDistance <= 500 ? "text-emerald-700" : "text-amber-800"}`}>{linkedDestination?.name}: sekitar {selectedDestinationDistance} m dari lokasi mitra{allowMinigame && selectedDestinationDistance > 500 ? " · di luar batas integrasi 500 m" : ""}</p>}{!destinationsWithCoordinates.length && <p className="mt-2 text-xs text-amber-800">Belum ada wisata berkoordinat. Tambahkan koordinat destinasi untuk mengaitkan mitra.</p>}{bestDestination && <button type="button" onClick={() => setDestinationId(bestDestination.item.id)} className="mt-2 text-left text-xs font-bold text-sky-800 underline decoration-dotted underline-offset-2">Saran terdekat: {bestDestination.item.name} · sekitar {(bestDestination.distance / 1000).toFixed(1)} km</button>}</div><div className="rounded-xl border border-[#84B3CE]/25 bg-white/75 p-3"><p className="text-xs font-black text-[#16587B]">Batas jarak kampanye mitra</p><p className="mt-1 text-2xl font-black text-[#16587B]">500 <span className="text-sm">meter</span></p><p className="mt-1 text-[11px] leading-4 text-[#16587B]/55">Tetap · tidak dapat diubah. Jika jarak lebih jauh, mitra tetap terdaftar di profil tetapi tidak bisa menjadi titik Find Our Friends di wisata itu.</p></div></div>
+			<div className="mt-4 rounded-xl border border-[#84B3CE]/25 bg-white/75 p-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-black text-[#16587B]">Koordinat lokasi usaha · opsional</p><p className="mt-1 text-[11px] leading-4 text-[#16587B]/55">Dipakai untuk rekomendasi wisata terdekat dan QR campaign. Bisa isi manual atau ambil lokasi perangkat.</p></div><button type="button" onClick={useMyLocation} className="min-h-10 rounded-lg border border-[#84B3CE]/45 bg-white px-3 text-xs font-bold text-[#16587B] hover:bg-sky-50">◎ Gunakan lokasi saya</button></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><div><label className={labelClass} htmlFor="partner-latitude">Latitude</label><input className={inputClass} id="partner-latitude" name="latitude" type="number" min="-90" max="90" step="any" value={latitude} onChange={(event) => setLatitude(event.currentTarget.value)} placeholder="-7.629…" required={allowMinigame} /></div><div><label className={labelClass} htmlFor="partner-longitude">Longitude</label><input className={inputClass} id="partner-longitude" name="longitude" type="number" min="-180" max="180" step="any" value={longitude} onChange={(event) => setLongitude(event.currentTarget.value)} placeholder="111.523…" required={allowMinigame} /></div></div>{locationStatus && <p role="status" className="mt-2 text-xs text-[#16587B]/65">{locationStatus}</p>}</div>
+			<label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[#84B3CE]/25 bg-white/75 p-3"><input className="mt-0.5 h-4 w-4 accent-[#16587B]" type="checkbox" name="allow_minigame_integration" checked={allowMinigame} onChange={(event) => setAllowMinigame(event.currentTarget.checked)} /><span><strong className="block text-xs text-[#16587B]">Izinkan mitra masuk ke Find Our Friends</strong><span className="mt-1 block text-[11px] leading-4 text-[#16587B]/60">Jika dicentang, admin dapat membuat QR bonus di lokasi usaha dan memilih program Find Our Friends. Perlu koordinat serta wisata berkoordinat dalam radius tetap 500 m. Jika tidak dicentang, mitra tetap memiliki profil dan dapat dipakai pada promo lain; lokasinya tidak masuk ke rute minigame.</span></span></label>
 		</div>
-		<div><label className={labelClass} htmlFor="partner-description">Deskripsi usaha</label><textarea className={inputClass} id="partner-description" name="description" rows={4} maxLength={5000} /></div>
-		<MediaUploadField folder="partners" name="logo_url" label="Logo / foto mitra" />
+		<div><label className={labelClass} htmlFor="partner-description">Deskripsi usaha *</label><textarea className={inputClass} id="partner-description" name="description" rows={3} maxLength={5000} required placeholder="Ceritakan singkat usaha dan layanan yang ditawarkan." /><p className="mt-1 text-xs text-[#16587B]/55">Cukup satu atau dua kalimat yang membantu pengunjung mengenali usaha.</p></div>
+		<div><MediaUploadField folder="partners" name="logo_url" label="Logo / foto mitra · wajib untuk verifikasi" onUrlChange={setLogoUrl} /><input type="hidden" name="logo_required_check" value={logoUrl ? "ready" : ""} /></div>
 		<div className="grid gap-4 sm:grid-cols-2">
 			<div><label className={labelClass} htmlFor="partner-contact">Nama kontak</label><input className={inputClass} id="partner-contact" name="contact_name" maxLength={120} /></div>
 			<div><label className={labelClass} htmlFor="partner-phone">Nomor WhatsApp / telepon</label><input className={inputClass} id="partner-phone" name="contact_phone" type="tel" maxLength={40} /></div>
@@ -205,79 +241,25 @@ export function PartnerForm({ destinations }: { destinations: DestinationOption[
 
 export function PartnerProximityForm({ partner, destinations, onCancel }: { partner: PartnerOption; destinations: DestinationOption[]; onCancel: () => void }) {
 	const [state, action, pending] = useActionState(updatePartnerProximityAction, initialState);
+	const [allowMinigame, setAllowMinigame] = useState(partner.allow_minigame_integration ?? false);
+	const [latitude, setLatitude] = useState(partner.latitude?.toString() ?? "");
+	const [longitude, setLongitude] = useState(partner.longitude?.toString() ?? "");
+	const [locationStatus, setLocationStatus] = useState("");
+	function useMyLocation() {
+		if (!navigator.geolocation) { setLocationStatus("Browser ini tidak menyediakan lokasi otomatis."); return; }
+		setLocationStatus("Meminta izin lokasi…");
+		navigator.geolocation.getCurrentPosition((position) => {
+			setLatitude(position.coords.latitude.toFixed(6)); setLongitude(position.coords.longitude.toFixed(6));
+			setLocationStatus("Koordinat mitra berhasil diisi dari lokasi perangkat.");
+		}, () => setLocationStatus("Lokasi belum diizinkan. Isi koordinat secara manual."), { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+	}
 	return <form action={action} className="mt-4 space-y-4 rounded-2xl border border-[#84B3CE]/25 bg-white/65 p-4">
 		<input type="hidden" name="partner_id" value={partner.id} />
-		<div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
-			<div><label className={labelClass} htmlFor={`partner-destination-${partner.id}`}>Wisata lokal terdekat *</label><select className={inputClass} id={`partner-destination-${partner.id}`} name="destination_id" required defaultValue={partner.destination_id ?? ""}><option value="" disabled>Pilih wisata berkoordinat</option>{destinations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-			<div><label className={labelClass} htmlFor={`partner-distance-${partner.id}`}>Jarak maksimal QR *</label><div className="relative"><input className={`${inputClass} pr-14`} id={`partner-distance-${partner.id}`} name="max_distance_meters" type="number" min="50" max="2000" step="50" required defaultValue={partner.max_distance_meters || 500}/><span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-bold text-[#16587B]/50">meter</span></div></div>
-		</div>
+		<div><label className={labelClass} htmlFor={`partner-destination-${partner.id}`}>Wisata terkait · opsional</label><select className={inputClass} id={`partner-destination-${partner.id}`} name="destination_id" defaultValue={partner.destination_id ?? ""} required={allowMinigame}><option value="">Tidak dikaitkan</option>{destinations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+		<div className="rounded-xl border border-[#84B3CE]/25 bg-white/75 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black text-[#16587B]">Koordinat lokasi usaha · opsional</p><p className="mt-1 text-[11px] leading-4 text-[#16587B]/55">Koordinat diperlukan jika integrasi Find Our Friends diaktifkan.</p></div><button type="button" onClick={useMyLocation} className="min-h-9 rounded-lg border border-[#84B3CE]/45 bg-white px-3 text-[11px] font-bold text-[#16587B]">◎ Gunakan lokasi saya</button></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className={labelClass}>Latitude<input className={inputClass} name="latitude" type="number" min="-90" max="90" step="any" value={latitude} onChange={(event) => setLatitude(event.currentTarget.value)} required={allowMinigame}/></label><label className={labelClass}>Longitude<input className={inputClass} name="longitude" type="number" min="-180" max="180" step="any" value={longitude} onChange={(event) => setLongitude(event.currentTarget.value)} required={allowMinigame}/></label></div>{locationStatus && <p role="status" className="mt-2 text-xs text-[#16587B]/65">{locationStatus}</p>}</div>
+		<p className="rounded-xl bg-sky-50 px-3 py-2 text-xs leading-5 text-[#16587B]/70">Batas integrasi tetap 500 m dari wisata terpilih. Usaha di luar batas tetap bisa memakai profil dan campaign lain.</p>
+		<label className="flex items-start gap-2 text-xs font-semibold text-[#16587B]"><input className="mt-0.5 accent-[#16587B]" type="checkbox" name="allow_minigame_integration" checked={allowMinigame} onChange={(event) => setAllowMinigame(event.currentTarget.checked)}/><span>Izinkan mitra digunakan sebagai titik bonus Find Our Friends.</span></label>
 		<ActionFeedback state={state} />
 		<div className="flex justify-end gap-2"><button type="button" onClick={onCancel} className="rounded-xl border border-[#84B3CE]/40 px-4 py-3 text-sm font-bold text-[#16587B]">Tutup</button><SubmitButton pending={pending}>Simpan tautan</SubmitButton></div>
-	</form>;
-}
-
-export function PromotionForm({ partners, qrPoints, initialDestinationId, initialDestinationName, initialDestinationSlug, initialQrPointId }: { partners: PartnerOption[]; qrPoints: QrPointOption[]; initialDestinationId?: string; initialDestinationName?: string; initialDestinationSlug?: string; initialQrPointId?: string }) {
-	const [state, action, pending] = useActionState(createPromotionAction, initialState);
-        const initialPartner = partners.find((item) => item.destination_id === initialDestinationId);
-        const [partnerId, setPartnerId] = useState(initialPartner?.id ?? "");
-	const [experienceType, setExperienceType] = useState("popup");
-        const [selectedQrPointId, setSelectedQrPointId] = useState(initialQrPointId ?? "");
-        const [formPreset, setFormPreset] = useState<CampaignFormPreset>("none");
-        const [formBlocks, setFormBlocks] = useState<CampaignFormBlock[]>([]);
-	const partner = partners.find((item) => item.id === partnerId);
-	const eligibleQrPoints = partner?.destination_id ? qrPoints.filter((point) => point.destination_id === partner.destination_id) : [];
-        const demoTitle = initialDestinationName ? `Jelajah seru di ${initialDestinationName}` : "";
-        const demoDescription = initialDestinationName ? `Temukan pengalaman pilihan di ${initialDestinationName}. Isi form singkat ini untuk membantu kami menyiapkan campaign yang relevan.` : "";
-        const demoUrl = initialDestinationSlug ? `/wisata/${initialDestinationSlug}` : "";
-        const formJson = JSON.stringify(formBlocks);
-        const makeId = (prefix: string) => `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
-        const addBlock = (type: CampaignFormBlock["type"]) => {
-                const id = makeId(type);
-                const block: CampaignFormBlock = type === "label" ? { id, type, text: "Teks informasi untuk pengunjung" }
-                        : type === "input" ? { id, type, label: "Pertanyaan singkat", placeholder: "Tulis jawaban…", inputType: "text", required: false, maxLength: 120 }
-                        : type === "choice" || type === "dropdown" ? { id, type, label: "Pilih salah satu", options: ["Pilihan 1", "Pilihan 2"], required: false }
-                        : { id, type: "button", label: "Kirim pilihan", action: "submit" };
-                setFormBlocks((current) => [...current, block].slice(0, 12));
-        };
-        const updateBlock = (id: string, update: Partial<CampaignFormBlock>) => setFormBlocks((current) => current.map((block) => block.id === id ? { ...block, ...update } as CampaignFormBlock : block));
-        const applyPreset = (preset: CampaignFormPreset) => { setFormPreset(preset); setFormBlocks(getCampaignFormPreset(preset)); };
-        const blockInput = "mt-1.5 min-h-10 w-full rounded-xl border border-[#84B3CE]/35 bg-white px-3 py-2 text-xs text-[#16587B] outline-none focus:border-[#16587B]";
-	return <form action={action} className="space-y-5">
-                <input type="hidden" name="form_schema" value={formJson} />
-		<div className="grid gap-4 sm:grid-cols-2">
-                        <div><label className={labelClass} htmlFor="promotion-partner">Mitra pemilik promosi *</label><select className={inputClass} id="promotion-partner" name="partner_id" required value={partnerId} onChange={(event) => { setPartnerId(event.currentTarget.value); setSelectedQrPointId(""); }}><option value="" disabled>Pilih mitra</option>{partners.map((item) => <option key={item.id} value={item.id}>{item.business_name}{item.destination_id ? "" : " · perlu ditautkan ke wisata"}</option>)}</select>{partner && <p className="mt-1 text-xs text-[#16587B]/55">Batas jarak minigame: {partner.max_distance_meters} m dari QR.</p>}</div>
-                        <div><label className={labelClass} htmlFor="promotion-qr">Titik QR penempatan *</label><select className={inputClass} id="promotion-qr" name="qr_point_id" required value={selectedQrPointId} onChange={(event) => setSelectedQrPointId(event.currentTarget.value)} disabled={!eligibleQrPoints.length}><option value="" disabled>{!partnerId ? "Pilih mitra dahulu" : eligibleQrPoints.length ? "Pilih QR di wisata mitra" : "Belum ada QR pada wisata mitra"}</option>{eligibleQrPoints.map((item) => <option key={item.id} value={item.id}>{item.destination_name} · {item.name} ({item.code})</option>)}</select>{partner?.destination_id && experienceType === "minigame" && <p className="mt-1 text-xs text-[#16587B]/55">QR ini harus menjadi anggota grup Find Our Friends aktif.</p>}</div>
-		</div>
-		<div className="grid gap-4 sm:grid-cols-2">
-                        <div><label className={labelClass} htmlFor="promotion-title">Nama kampanye *</label><input className={inputClass} id="promotion-title" name="title" required maxLength={160} defaultValue={demoTitle} placeholder="Promo kuliner lokal" /></div>
-			<div><label className={labelClass} htmlFor="promotion-type">Pengalaman kampanye *</label><select className={inputClass} id="promotion-type" name="experience_type" required value={experienceType} onChange={(event) => setExperienceType(event.currentTarget.value)}><option value="popup">Popup sekitar · tanpa scan</option><option value="minigame">Selingan Find Our Friends</option><option value="photobox">Arahkan ke Photobox</option></select>{experienceType === "minigame" ? <p className="mt-1 text-xs text-[#16587B]/60">Kampanye bisa muncul acak setelah QR anggota grup dipindai. Titik tetap dapat diselesaikan tanpa membuka promo.</p> : experienceType === "photobox" ? <p className="mt-1 text-xs text-[#16587B]/60">Pengunjung yang berada dalam radius mitra bisa membuka studio Photobox setelah tidak aktif sebentar.</p> : <p className="mt-1 text-xs text-[#16587B]/60">Popup ditawarkan setelah pengunjung tidak aktif di halaman wisata, minigame, atau Photobox dan berada dalam radius mitra.</p>}</div>
-		</div>
-                <div><label className={labelClass} htmlFor="promotion-description">Isi promosi</label><textarea className={inputClass} id="promotion-description" name="description" rows={4} maxLength={5000} defaultValue={demoDescription} placeholder="Informasi yang akan ditampilkan kepada pengunjung." /></div>
-		<MediaUploadField folder="campaigns" name="image_url" label="Gambar promosi" />
-                <section className="rounded-2xl border border-[#84B3CE]/30 bg-[#E0F2FE]/35 p-4 sm:p-5">
-                        <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[.14em] text-[#16587B]">Form pengunjung · opsional</p><p className="mt-1 max-w-2xl text-xs leading-5 text-[#16587B]/65">Kumpulkan minat, pilihan, atau saran anonim. Jangan minta data pribadi yang tidak diperlukan.</p></div><span className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-bold text-[#16587B]/65">{formBlocks.length}/12 blok</span></div>
-                        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,.72fr)]">
-                                <div className="space-y-4">
-                                        <div><label className={labelClass} htmlFor="promotion-form-preset">Mulai dari preset</label><select className={inputClass} id="promotion-form-preset" value={formPreset} onChange={(event) => applyPreset(event.currentTarget.value as CampaignFormPreset)}><option value="none">Form kosong</option><option value="interest">Survei minat pengunjung</option><option value="offer">Klaim pilihan promo</option><option value="suggestion">Saran singkat</option></select></div>
-                                        <div><p className={labelClass}>Tambah komponen</p><div className="mt-2 flex flex-wrap gap-2">{(["label", "input", "choice", "dropdown", "button"] as const).map((type) => <button key={type} type="button" disabled={formBlocks.length >= 12} onClick={() => addBlock(type)} className="min-h-9 rounded-lg border border-[#84B3CE]/35 bg-white/80 px-3 text-xs font-bold text-[#16587B] transition hover:-translate-y-0.5 disabled:opacity-45">+ {{ label: "Label", input: "Input", choice: "Choice", dropdown: "Dropdown", button: "Button" }[type]}</button>)}</div></div>
-                                        {formBlocks.length > 0 && <div className="space-y-3">{formBlocks.map((block, index) => <fieldset key={block.id} className="rounded-xl border border-[#84B3CE]/25 bg-white/60 p-3"><div className="mb-2 flex items-center justify-between"><legend className="text-[10px] font-black uppercase tracking-wide text-[#16587B]/55">{index + 1} · {block.type}</legend><button type="button" onClick={() => setFormBlocks((current) => current.filter((item) => item.id !== block.id))} className="rounded-md px-2 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-50">Hapus</button></div>
-                                                {block.type === "label" && <label className="block text-[10px] font-bold text-[#16587B]">Teks<textarea className={blockInput} value={block.text} maxLength={180} onChange={(event) => updateBlock(block.id, { text: event.currentTarget.value })} /></label>}
-                                                {block.type === "input" && <div className="grid gap-2 sm:grid-cols-2"><label className="text-[10px] font-bold text-[#16587B]">Label<input className={blockInput} value={block.label} maxLength={80} onChange={(event) => updateBlock(block.id, { label: event.currentTarget.value })} /></label><label className="text-[10px] font-bold text-[#16587B]">Placeholder<input className={blockInput} value={block.placeholder} maxLength={100} onChange={(event) => updateBlock(block.id, { placeholder: event.currentTarget.value })} /></label><label className="text-[10px] font-bold text-[#16587B]">Jenis input<select className={blockInput} value={block.inputType} onChange={(event) => updateBlock(block.id, { inputType: event.currentTarget.value as CampaignInputType })}><option value="text">Teks</option><option value="email">Email</option><option value="tel">Telepon</option></select></label><label className="text-[10px] font-bold text-[#16587B]">Maks. karakter<input className={blockInput} type="number" min="2" max="240" value={block.maxLength} onChange={(event) => updateBlock(block.id, { maxLength: Math.max(2, Math.min(240, Number(event.currentTarget.value) || 2)) })} /></label><label className="flex items-center gap-2 text-[10px] font-bold text-[#16587B]"><input type="checkbox" checked={block.required} onChange={(event) => updateBlock(block.id, { required: event.currentTarget.checked })} />Wajib diisi</label></div>}
-                                                {(block.type === "choice" || block.type === "dropdown") && <div className="grid gap-2 sm:grid-cols-2"><label className="text-[10px] font-bold text-[#16587B]">Pertanyaan<input className={blockInput} value={block.label} maxLength={80} onChange={(event) => updateBlock(block.id, { label: event.currentTarget.value })} /></label><label className="text-[10px] font-bold text-[#16587B]">Pilihan · satu per baris<textarea className={blockInput} rows={3} value={block.options.join("\n")} onChange={(event) => updateBlock(block.id, { options: event.currentTarget.value.split("\n").slice(0, 10) })} /></label><label className="flex items-center gap-2 text-[10px] font-bold text-[#16587B]"><input type="checkbox" checked={block.required} onChange={(event) => updateBlock(block.id, { required: event.currentTarget.checked })} />Wajib dipilih</label></div>}
-                                                {block.type === "button" && <div className="grid gap-2 sm:grid-cols-2"><label className="text-[10px] font-bold text-[#16587B]">Teks tombol<input className={blockInput} value={block.label} maxLength={60} onChange={(event) => updateBlock(block.id, { label: event.currentTarget.value })} /></label><label className="text-[10px] font-bold text-[#16587B]">Aksi<select className={blockInput} value={block.action} onChange={(event) => { const action = event.currentTarget.value as "submit" | "link"; updateBlock(block.id, action === "link" ? { action, url: demoUrl || "/" } : { action }); }}><option value="submit">Kirim jawaban</option><option value="link">Buka tautan</option></select></label>{block.action === "link" && <label className="text-[10px] font-bold text-[#16587B] sm:col-span-2">Tautan tujuan<input className={blockInput} value={block.url ?? ""} maxLength={2048} placeholder="/wisata/nama-wisata atau https://…" onChange={(event) => updateBlock(block.id, { url: event.currentTarget.value })} /></label>}</div>}
-                                        </fieldset>)}</div>}
-                                </div>
-                                <aside className="rounded-xl border border-[#84B3CE]/25 bg-white/75 p-4"><p className="text-[10px] font-black uppercase tracking-wide text-[#16587B]/55">Pratinjau pengunjung</p><h3 className="mt-2 text-sm font-black text-[#16587B]">{demoTitle || "Judul campaign"}</h3><p className="mt-1 text-xs leading-5 text-[#16587B]/65">{demoDescription || "Deskripsi singkat campaign akan tampil di sini."}</p><div className="mt-4 space-y-3">{formBlocks.length ? formBlocks.map((block) => <div key={block.id}>{block.type === "label" ? <p className="text-xs leading-5 text-[#16587B]/70">{block.text || "Teks informasi"}</p> : block.type === "input" ? <div className="text-[10px] font-bold text-[#16587B]">{block.label || "Label input"}<div className="mt-1 h-9 rounded-lg border border-[#84B3CE]/35 bg-white px-2 py-2 font-normal text-[#16587B]/40">{block.placeholder || "Jawaban"}</div></div> : block.type === "choice" ? <div className="text-[10px] font-bold text-[#16587B]">{block.label || "Pilihan"}{block.options.map((option) => <div key={option} className="mt-1 rounded-lg border border-[#84B3CE]/30 px-2 py-2 font-normal">◯ {option || "Pilihan"}</div>)}</div> : block.type === "dropdown" ? <div className="text-[10px] font-bold text-[#16587B]">{block.label || "Dropdown"}<div className="mt-1 rounded-lg border border-[#84B3CE]/35 bg-white px-2 py-2 font-normal text-[#16587B]/45">Pilih salah satu⌄</div></div> : <div className="rounded-lg bg-[#16587B] px-3 py-2 text-center text-[10px] font-black text-white">{block.label}</div>}</div>) : <p className="rounded-lg border border-dashed border-[#84B3CE]/50 p-3 text-xs text-[#16587B]/55">Pilih preset atau tambahkan komponen form untuk melihat pratinjau.</p>}</div></aside>
-                        </div>
-                </section>
-		<div className="grid gap-4 sm:grid-cols-2">
-			{experienceType === "minigame" && <div><label className={labelClass} htmlFor="promotion-chance">Peluang muncul di sela misi</label><div className="relative"><input className={`${inputClass} pr-16`} id="promotion-chance" name="display_chance" type="number" min="0" max="100" step="5" defaultValue="35"/><span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs font-bold text-[#16587B]/50">persen</span></div><p className="mt-1 text-xs text-[#16587B]/55">Batas tayang diatur per kunjungan, bukan syarat menyelesaikan misi.</p></div>}
-			<div><label className={labelClass} htmlFor="promotion-cta">Label tombol</label><input className={inputClass} id="promotion-cta" name="cta_label" maxLength={60} placeholder="Lihat promo" /></div>
-                        <div><label className={labelClass} htmlFor="promotion-url">Tautan tombol</label><input className={inputClass} id="promotion-url" name="cta_url" type="text" defaultValue={demoUrl} placeholder="/wisata/nama-wisata atau https://…" /></div>
-			<div><label className={labelClass} htmlFor="promotion-start">Mulai</label><input className={inputClass} id="promotion-start" name="starts_at" type="date" /></div>
-			<div><label className={labelClass} htmlFor="promotion-end">Berakhir</label><input className={inputClass} id="promotion-end" name="ends_at" type="date" /></div>
-		</div>
-		<label className="flex items-center gap-2 text-sm font-semibold"><input className="h-4 w-4 accent-[#16587B]" type="checkbox" name="is_published" /> Aktifkan kampanye</label>
-		<ActionFeedback state={state} /><div className="flex justify-end"><SubmitButton pending={pending}>Simpan kampanye</SubmitButton></div>
 	</form>;
 }

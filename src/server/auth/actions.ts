@@ -168,11 +168,12 @@ function parseCoordinates(formData: FormData, latitudeKey = "latitude", longitud
 	return { latitude, longitude };
 }
 
-function refreshWorkspace(options: { destinations?: boolean } = {}) {
+function refreshWorkspace(options: { destinations?: boolean; campaigns?: boolean } = {}) {
 	revalidatePath("/ruang-kelola");
 	revalidatePath("/");
 	revalidatePath("/scan");
 	if (options.destinations) revalidateTag("public-destinations", { expire: 0 });
+	if (options.campaigns) revalidateTag("public-campaigns", { expire: 0 });
 }
 
 function hasValidDescriptionLength(description: string) {
@@ -349,12 +350,10 @@ export async function createPartnerAction(
 	formData: FormData,
 ): Promise<WorkspaceActionState> {
 	const destinationId = value(formData, "destination_id", 64);
-	const maxDistanceRaw = value(formData, "max_distance_meters", 8);
-	const maxDistanceMeters = Number(maxDistanceRaw || "500");
 	const businessName = value(formData, "business_name", 160);
 	const slug = value(formData, "slug", 100).toLowerCase();
-	const businessType = value(formData, "business_type", 80);
 	const description = value(formData, "description", 5000);
+	const businessCategories = [...new Set(value(formData, "business_categories", 1000).split(",").map((item) => item.trim().slice(0, 80)).filter(Boolean))].slice(0, 10);
 	const contactName = value(formData, "contact_name", 120);
 	const contactEmail = value(formData, "contact_email", 254).toLowerCase();
 	const contactPhone = value(formData, "contact_phone", 40);
@@ -363,25 +362,42 @@ export async function createPartnerAction(
 	const websiteUrl = optionalUrl(websiteRaw);
 	const logoUrlRaw = value(formData, "logo_url", 2048);
 	const logoUrl = optionalUrl(logoUrlRaw);
-	if (!destinationId || !Number.isInteger(maxDistanceMeters) || maxDistanceMeters < 50 || maxDistanceMeters > 2000 || maxDistanceMeters % 50 !== 0 || !businessName || !businessType || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) || (websiteRaw && !websiteUrl) || (logoUrlRaw && !logoUrl)) {
-		return { error: "Periksa nama, jenis usaha, slug, destinasi wisata, dan batas jarak 50–2.000 meter. Pastikan email dan tautan valid." };
+	const coordinates = parseCoordinates(formData);
+	const allowMinigameIntegration = formData.get("allow_minigame_integration") === "on";
+	if (!businessName || !businessCategories.length || !slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+		|| !description || !logoUrlRaw || !logoUrl || !coordinates
+		|| (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail))
+		|| (websiteRaw && !websiteUrl)) {
+		return { error: "Lengkapi nama, minimal satu jenis usaha, ID halaman, deskripsi, dan logo/foto. Periksa juga koordinat serta tautan kontak." };
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola mitra." };
-	const { data: destination, error: destinationError } = await staff.supabase
-		.from("destinations")
-		.select("id, latitude, longitude")
-		.eq("id", destinationId)
-		.maybeSingle();
-	if (destinationError || !destination || destination.latitude === null || destination.longitude === null) {
-		return { error: "Pilih wisata lokal yang memiliki koordinat valid agar batas jarak QR bisa digunakan." };
+	let destination: { id: string; latitude: number | null; longitude: number | null } | null = null;
+	if (destinationId) {
+		const result = await staff.supabase.from("destinations").select("id, latitude, longitude").eq("id", destinationId).maybeSingle();
+		destination = result.data;
+		if (result.error || !destination) return { error: "Wisata yang dipilih belum dapat diperiksa." };
+	}
+	if (allowMinigameIntegration && (coordinates.latitude === null || coordinates.longitude === null || !destinationId || !destination || destination.latitude === null || destination.longitude === null)) {
+		return { error: "Integrasi Find Our Friends memerlukan koordinat usaha dan wisata yang dipilih." };
+	}
+	if (allowMinigameIntegration && destination && destination.latitude !== null && destination.longitude !== null && coordinates.latitude !== null && coordinates.longitude !== null) {
+		const radians = Math.PI / 180;
+		const dLat = (destination.latitude - coordinates.latitude) * radians;
+		const dLng = (destination.longitude - coordinates.longitude) * radians;
+		const a = Math.sin(dLat / 2) ** 2 + Math.cos(coordinates.latitude * radians) * Math.cos(destination.latitude * radians) * Math.sin(dLng / 2) ** 2;
+		const distance = 6371000 * 2 * Math.asin(Math.sqrt(a));
+		if (distance > 500) return { error: `Lokasi usaha sekitar ${Math.round(distance)} m dari wisata terpilih. Batas integrasi mitra adalah 500 m; pilih wisata lain yang lebih dekat.` };
 	}
 	const { error } = await staff.supabase.from("tourism_partners").insert({
 		business_name: businessName,
 		slug,
-		destination_id: destinationId,
-		max_distance_meters: maxDistanceMeters,
-		business_type: businessType,
+		destination_id: destinationId || null,
+		max_distance_meters: 500,
+		business_type: businessCategories[0],
+		business_categories: businessCategories,
+		...coordinates,
+		allow_minigame_integration: allowMinigameIntegration,
 		description,
 		contact_name: contactName || null,
 		contact_email: contactEmail || null,
@@ -402,27 +418,36 @@ export async function updatePartnerProximityAction(
 ): Promise<WorkspaceActionState> {
 	const partnerId = value(formData, "partner_id", 64);
 	const destinationId = value(formData, "destination_id", 64);
-	const maxDistanceMeters = Number(value(formData, "max_distance_meters", 8));
-	if (!partnerId || !destinationId || !Number.isInteger(maxDistanceMeters) || maxDistanceMeters < 50 || maxDistanceMeters > 2000 || maxDistanceMeters % 50 !== 0) {
-		return { error: "Pilih wisata lokal dan batas jarak 50–2.000 meter dengan kelipatan 50 meter." };
+	const allowMinigameIntegration = formData.get("allow_minigame_integration") === "on";
+	const coordinates = parseCoordinates(formData);
+	if (!partnerId) {
+		return { error: "Mitra belum dapat diperiksa." };
 	}
+	if (!coordinates) return { error: "Isi pasangan koordinat yang valid atau kosongkan kedua kolom." };
+	if (allowMinigameIntegration && !destinationId) return { error: "Pilih wisata terkait sebelum mengaktifkan integrasi Find Our Friends." };
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola mitra." };
-	const { data: destination, error: destinationError } = await staff.supabase
-		.from("destinations")
-		.select("id, latitude, longitude")
-		.eq("id", destinationId)
-		.maybeSingle();
-	if (destinationError || !destination || destination.latitude === null || destination.longitude === null) {
-		return { error: "Pilih wisata lokal yang memiliki koordinat valid." };
+	const { data: partner, error: partnerError } = await staff.supabase.from("tourism_partners").select("latitude,longitude").eq("id", partnerId).maybeSingle();
+	if (partnerError || !partner) return { error: "Mitra tidak ditemukan." };
+	if (destinationId) {
+		const { data: destination, error: destinationError } = await staff.supabase.from("destinations").select("id, latitude, longitude").eq("id", destinationId).maybeSingle();
+		if (destinationError || !destination) return { error: "Wisata yang dipilih belum dapat diperiksa." };
+	if (allowMinigameIntegration && (coordinates.latitude === null || coordinates.longitude === null || destination.latitude === null || destination.longitude === null)) {
+			return { error: "Integrasi Find Our Friends memerlukan koordinat usaha dan wisata." };
+		}
+		if (allowMinigameIntegration && coordinates.latitude !== null && coordinates.longitude !== null && destination.latitude !== null && destination.longitude !== null) {
+			const radians = Math.PI / 180;
+			const a = Math.sin((destination.latitude - coordinates.latitude) * radians / 2) ** 2 + Math.cos(coordinates.latitude * radians) * Math.cos(destination.latitude * radians) * Math.sin((destination.longitude - coordinates.longitude) * radians / 2) ** 2;
+			if (6371000 * 2 * Math.asin(Math.sqrt(a)) > 500) return { error: "Lokasi mitra berada di luar batas tetap 500 m dari wisata ini." };
+		}
 	}
 	const { error } = await staff.supabase
 		.from("tourism_partners")
-		.update({ destination_id: destinationId, max_distance_meters: maxDistanceMeters })
+		.update({ destination_id: destinationId || null, max_distance_meters: 500, allow_minigame_integration: allowMinigameIntegration, ...coordinates })
 		.eq("id", partnerId);
-	if (error) return { error: "Keterkaitan wisata mitra belum tersimpan. Periksa migrasi database dan coba lagi." };
+	if (error) return { error: "Wisata mitra belum tersimpan. Periksa migrasi campaign yang baru dan coba lagi." };
 	refreshWorkspace();
-	return { success: "Wisata lokal dan radius minigame berhasil diperbarui." };
+	return { success: "Wisata terkait berhasil diperbarui. Batas jarak minigame tetap 500 m." };
 }
 
 export async function createPromotionAction(
@@ -430,79 +455,216 @@ export async function createPromotionAction(
 	formData: FormData,
 ): Promise<WorkspaceActionState> {
 	const partnerId = value(formData, "partner_id", 64);
-	const qrPointId = value(formData, "qr_point_id", 64);
+	const assignmentId = value(formData, "assignment_id", 64);
 	const title = value(formData, "title", 160);
 	const description = value(formData, "description", 5000);
-	const experienceType = value(formData, "experience_type", 20);
+	const placementMode = value(formData, "placement_mode", 32);
+	const exposureMode = value(formData, "exposure_mode", 16);
 	const ctaLabel = value(formData, "cta_label", 60);
 	const ctaUrlRaw = value(formData, "cta_url", 2048);
-        const ctaUrl = optionalCampaignUrl(ctaUrlRaw);
-        let formSchema: ReturnType<typeof parseCampaignFormSchema> = [];
-        try {
-                const rawSchema = String(formData.get("form_schema") ?? "[]");
-                if (rawSchema.length > 24000) return { error: "Form campaign terlalu besar. Kurangi jumlah teks atau pilihan." };
-                formSchema = parseCampaignFormSchema(JSON.parse(rawSchema));
-        } catch {
-                return { error: "Rancangan form tidak terbaca. Periksa kembali komponen dan pilihan form." };
-        }
+	const ctaUrl = optionalCampaignUrl(ctaUrlRaw);
 	const imageUrlRaw = value(formData, "image_url", 2048);
 	const imageUrl = optionalUrl(imageUrlRaw);
+	const frameUrlRaw = value(formData, "frame_url", 2048);
+	const frameUrl = optionalUrl(frameUrlRaw);
+	const frameLayout = value(formData, "frame_layout", 32);
+	const frameRatio = value(formData, "frame_ratio", 32);
 	const startsAtRaw = value(formData, "starts_at", 32);
 	const endsAtRaw = value(formData, "ends_at", 32);
-	const displayChance = Number(value(formData, "display_chance", 4) || "35");
 	const startsAt = startsAtRaw ? new Date(`${startsAtRaw}T00:00:00+07:00`) : null;
 	const endsAt = endsAtRaw ? new Date(`${endsAtRaw}T23:59:59+07:00`) : null;
-        if (!partnerId || !qrPointId || !title || !["popup", "minigame", "photobox"].includes(experienceType) || !Number.isInteger(displayChance) || displayChance < 0 || displayChance > 100 || (ctaUrlRaw && !ctaUrl) || !formSchema || (imageUrlRaw && !imageUrl) || (startsAt && !Number.isFinite(startsAt.getTime())) || (endsAt && !Number.isFinite(endsAt.getTime())) || (startsAt && endsAt && endsAt <= startsAt)) {
-		return { error: "Periksa mitra, titik QR, metode aktivasi, tautan, dan jadwal promosi." };
+	let formSchema: ReturnType<typeof parseCampaignFormSchema> = [];
+	try {
+		const rawSchema = String(formData.get("form_schema") ?? "[]");
+		if (rawSchema.length > 24000) return { error: "Form campaign terlalu besar. Kurangi jumlah teks atau pilihan." };
+		formSchema = parseCampaignFormSchema(JSON.parse(rawSchema));
+	} catch { return { error: "Rancangan form tidak terbaca. Periksa kembali komponen dan pilihan form." }; }
+	const destinationIds = [...new Set(formData.getAll("destination_ids").map(String).filter((id) => /^[0-9a-f-]{36}$/i.test(id)))];
+	const systemPages = [...new Set(formData.getAll("system_pages").map(String).filter((item) => ["home", "scan", "destination", "minigame", "photobox"].includes(item)))];
+	const exposureChance = Number(value(formData, "display_chance", 4) || (placementMode === "system" ? "15" : "35"));
+	const displayChance = exposureMode === "always" ? 100 : exposureChance;
+	const campaignStatus = formData.get("is_published") === "on" ? "published" : "draft";
+	const experienceType = placementMode === "find_friends" ? "minigame" : placementMode === "photobox" ? "photobox" : "popup";
+	const allowedPlacements = ["nearby", "find_friends", "photobox", "system", "destination_feedback", "website_feedback"];
+	const feedbackMode = placementMode === "destination_feedback" || placementMode === "website_feedback";
+	const formHasQuestions = Boolean(formSchema?.some((block) => block.type === "input" || block.type === "choice" || block.type === "dropdown"));
+	const formHasRating = Boolean(formSchema?.some((block) => (block.type === "choice" || block.type === "dropdown")
+		&& (/(rating|rate|penilaian|nilai)/i.test(block.id) || /(rating|rate|penilaian|nilai)/i.test(block.label))
+		&& block.options.some((option) => /^[1-5](?:\s|$)/.test(option.trim()))));
+	if (!title || !allowedPlacements.includes(placementMode) || !["chance", "always"].includes(exposureMode)
+		|| !Number.isInteger(displayChance) || displayChance < 0 || displayChance > 100
+		|| (placementMode === "nearby" && !destinationIds.length)
+		|| (placementMode === "destination_feedback" && !destinationIds.length)
+		|| (feedbackMode && (!formSchema || !formHasQuestions || !formHasRating))
+		|| (placementMode === "find_friends" && (!partnerId || !assignmentId))
+		|| (placementMode === "photobox" && (!assignmentId || !frameUrl || !["single", "strip2", "grid6", "travel_strip", "memory_triptych"].includes(frameLayout) || !["portrait", "story", "square"].includes(frameRatio)))
+		|| (ctaUrlRaw && !ctaUrl) || (imageUrlRaw && !imageUrl) || (placementMode === "photobox" && !frameUrl)
+		|| (startsAt && !Number.isFinite(startsAt.getTime())) || (endsAt && !Number.isFinite(endsAt.getTime())) || (startsAt && endsAt && endsAt <= startsAt)) {
+		return { error: feedbackMode && !formHasRating ? "Form ulasan harus mempertahankan pertanyaan rating dengan pilihan nilai 1–5." : "Periksa tujuan campaign, target wisata/program, isi form, materi, peluang tayang, dan jadwal." };
 	}
+	if (placementMode === "system" && !systemPages.length) return { error: "Pilih minimal satu halaman umum untuk campaign sistem." };
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola promosi." };
-	const [{ data: partner }, { data: qrPoint }] = await Promise.all([
-		staff.supabase.from("tourism_partners").select("destination_id").eq("id", partnerId).maybeSingle(),
-		staff.supabase.from("qr_points").select("destination_id").eq("id", qrPointId).maybeSingle(),
-	]);
-	if (!partner?.destination_id) {
-		return { error: "Mitra ini belum ditautkan ke wisata lokal. Lengkapi data keterkaitan mitra terlebih dahulu." };
+
+	let partner: { id: string; business_name: string; destination_id: string | null; latitude: number | null; longitude: number | null; allow_minigame_integration: boolean; address: string | null; logo_url: string | null; status: string } | null = null;
+	if (partnerId) {
+		const result = await staff.supabase.from("tourism_partners").select("id,business_name,destination_id,latitude,longitude,allow_minigame_integration,address,logo_url,status").eq("id", partnerId).maybeSingle();
+		partner = result.data;
+		if (result.error || !partner || partner.status !== "active") return { error: "Mitra yang dipilih tidak tersedia atau belum aktif." };
 	}
-	if (!qrPoint || qrPoint.destination_id !== partner.destination_id) {
-		return { error: "Pilih titik QR yang berada di wisata lokal yang ditautkan ke mitra ini." };
+	let assignment: { id: string; destination_id: string; program_id: string; components: string[]; photobox_templates: unknown } | null = null;
+	let generatedPointId: string | null = null;
+	if (placementMode === "find_friends" || placementMode === "photobox") {
+		const result = await staff.supabase.from("tourism_minigame_destinations").select("id,destination_id,program_id,components,photobox_templates,is_enabled").eq("id", assignmentId).eq("is_enabled", true).maybeSingle();
+		const candidate = result.data;
+		const requiredComponent = placementMode === "find_friends" ? "find_friends" : "photobox";
+		if (result.error || !candidate || !candidate.components.includes(requiredComponent)) return { error: "Pilih program minigame aktif dengan komponen yang sesuai." };
+		const { data: program } = await staff.supabase.from("tourism_minigame_programs").select("is_enabled").eq("id", candidate.program_id).maybeSingle();
+		if (!program?.is_enabled) return { error: "Program minigame ini sedang tidak aktif." };
+		assignment = candidate;
 	}
-	if (experienceType === "minigame") {
-		const { data: membership } = await staff.supabase.from("tourism_minigame_qr_points").select("assignment_id").eq("qr_point_id", qrPointId);
-		const assignmentIds = [...new Set((membership ?? []).map((item) => item.assignment_id))];
-		const assignmentQuery = assignmentIds.length ? await staff.supabase.from("tourism_minigame_destinations")
-			.select("id,program_id").eq("destination_id", partner.destination_id).eq("is_enabled", true).contains("components", ["find_friends"]).in("id", assignmentIds) : null;
-		const assignments = assignmentQuery?.data ?? [];
-		if (!assignments.length) return { error: "Campaign tantangan perlu QR yang menjadi anggota grup Find Our Friends aktif." };
-		const { data: activePrograms } = await staff.supabase.from("tourism_minigame_programs").select("id").eq("is_enabled", true).in("id", assignments.map((item) => item.program_id));
-		if (!activePrograms?.length) return { error: "Program minigame pada destinasi ini belum aktif." };
-	} else if (experienceType === "photobox") {
-		const { data: assignments } = await staff.supabase.from("tourism_minigame_destinations")
-			.select("program_id").eq("destination_id", partner.destination_id).eq("is_enabled", true).contains("components", ["photobox"]);
-		const programIds = [...new Set((assignments ?? []).map((item) => item.program_id))];
-		const programQuery = programIds.length ? await staff.supabase.from("tourism_minigame_programs")
-			.select("id").eq("is_enabled", true).in("id", programIds) : null;
-		if (!programQuery?.data?.length) return { error: "Campaign Photobox perlu program dengan komponen Photobox aktif di wisata mitra." };
+	let partnerCoordinates: { latitude: number; longitude: number } | null = null;
+	if (placementMode === "find_friends") {
+		if (!partner || !partner.allow_minigame_integration || partner.latitude === null || partner.longitude === null) {
+			return { error: "Pilih mitra yang sudah mengizinkan integrasi Find Our Friends dan memiliki koordinat usaha." };
+		}
+		if (partner.destination_id && partner.destination_id !== assignment?.destination_id) return { error: "Program minigame harus berada di wisata yang ditautkan ke mitra." };
+		const { data: destination } = await staff.supabase.from("destinations").select("id,latitude,longitude").eq("id", assignment!.destination_id).maybeSingle();
+		if (!destination || destination.latitude === null || destination.longitude === null) return { error: "Wisata minigame ini belum memiliki koordinat." };
+		const radians = Math.PI / 180;
+		const a = Math.sin((destination.latitude - partner.latitude) * radians / 2) ** 2 + Math.cos(partner.latitude * radians) * Math.cos(destination.latitude * radians) * Math.sin((destination.longitude - partner.longitude) * radians / 2) ** 2;
+		if (6371000 * 2 * Math.asin(Math.sqrt(a)) > 500) return { error: "Lokasi usaha berada di luar batas tetap 500 m dari wisata minigame ini." };
+		partnerCoordinates = { latitude: partner.latitude, longitude: partner.longitude };
 	}
-	const { error } = await staff.supabase.from("promotion_campaigns").insert({
-		partner_id: partnerId,
-		qr_point_id: qrPointId,
+	if (placementMode === "photobox") {
+		const templates = Array.isArray(assignment?.photobox_templates) ? assignment.photobox_templates : [];
+		if (templates.length >= 12) return { error: "Program Photobox ini sudah memakai 12 frame. Nonaktifkan satu frame lama dahulu." };
+	}
+	if (destinationIds.length) {
+		const { data: matchedDestinations, error: destinationError } = await staff.supabase.from("destinations").select("id").in("id", destinationIds);
+		if (destinationError || matchedDestinations?.length !== destinationIds.length) return { error: "Satu atau beberapa wisata pilihan tidak tersedia." };
+	}
+
+	const { data: campaign, error: campaignError } = await staff.supabase.from("promotion_campaigns").insert({
+		partner_id: partner?.id ?? null,
+		qr_point_id: null,
 		title,
 		description,
 		image_url: imageUrl,
 		experience_type: experienceType,
+		placement_mode: placementMode,
+		exposure_mode: exposureMode,
+		system_pages: placementMode === "system" ? systemPages : placementMode === "website_feedback" ? ["home", "scan", "destination", "minigame", "photobox"] : ["destination", "minigame", "photobox"],
+		frame_url: placementMode === "photobox" ? frameUrl : null,
+		frame_layout: placementMode === "photobox" ? frameLayout : null,
+		frame_ratio: placementMode === "photobox" ? frameRatio : null,
 		cta_label: ctaLabel || null,
 		cta_url: ctaUrl,
-                form_schema: formSchema,
+		form_schema: formSchema,
 		starts_at: startsAt?.toISOString() ?? null,
 		ends_at: endsAt?.toISOString() ?? null,
 		display_chance: displayChance,
-		status: formData.get("is_published") === "on" ? "published" : "draft",
+		status: campaignStatus,
 		created_by: staff.userId,
-	});
-        if (error) return { error: error.code === "42703" || error.code === "PGRST204" ? "Form campaign belum tersedia di Supabase. Jalankan migration insight pengunjung dan form campaign, lalu coba lagi." : "Promosi belum tersimpan. Pastikan mitra dan titik QR masih aktif." };
-	refreshWorkspace();
-	return { success: "Kampanye promosi berhasil disimpan." };
+	}).select("id").single();
+	if (campaignError || !campaign) return { error: campaignError?.code === "42703" || campaignError?.code === "PGRST204" ? "Skema campaign baru belum tersedia. Jalankan migration campaign placement redesign di Supabase." : "Campaign belum tersimpan. Periksa kembali data dan relasi yang dipilih." };
+
+	async function rollbackCampaign() {
+		await staff.supabase.from("promotion_campaigns").delete().eq("id", campaign.id);
+		if (generatedPointId) await staff.supabase.from("qr_points").delete().eq("id", generatedPointId);
+	}
+	if (destinationIds.length) {
+		const { error } = await staff.supabase.from("promotion_campaign_destinations").insert(destinationIds.map((destination_id) => ({ campaign_id: campaign.id, destination_id })));
+		if (error) { await rollbackCampaign(); return { error: "Tautan wisata campaign belum tersimpan. Jalankan migration campaign placement redesign." }; }
+	}
+	if (assignment && placementMode === "find_friends" && partnerCoordinates && partner) {
+		const code = `campaign-${slugPart(title).slice(0, 48) || "mitra"}-${campaign.id.replaceAll("-", "").slice(0, 8)}`;
+		const { data: point, error: pointError } = await staff.supabase.from("qr_points").insert({
+			destination_id: assignment.destination_id,
+			name: `${partner.business_name} · ${title}`.slice(0, 120),
+			code,
+			address: partner.address,
+			latitude: partnerCoordinates.latitude,
+			longitude: partnerCoordinates.longitude,
+			is_active: campaignStatus === "published",
+			created_by: staff.userId,
+		}).select("id").single();
+		if (pointError || !point) { await rollbackCampaign(); return { error: "QR campaign belum dapat dibuat. Pastikan kode unik dan koordinat mitra valid." }; }
+		generatedPointId = point.id;
+		const { error: membershipError } = await staff.supabase.from("tourism_minigame_qr_points").insert({ assignment_id: assignment.id, qr_point_id: point.id, is_required: false, friend_name: partner.business_name, friend_image_url: partner.logo_url });
+		if (membershipError) { await rollbackCampaign(); return { error: "QR bonus gagal ditautkan ke grup Find Our Friends." }; }
+		const [{ error: targetError }, { error: campaignQrError }] = await Promise.all([
+			staff.supabase.from("promotion_campaign_minigames").insert({ campaign_id: campaign.id, assignment_id: assignment.id, qr_point_id: point.id }),
+			staff.supabase.from("promotion_campaigns").update({ qr_point_id: point.id }).eq("id", campaign.id),
+		]);
+		if (targetError || campaignQrError) { await rollbackCampaign(); return { error: "Tautan QR bonus campaign belum tersimpan sepenuhnya." }; }
+	}
+	if (assignment && placementMode === "photobox") {
+		const { error: targetError } = await staff.supabase.from("promotion_campaign_minigames").insert({ campaign_id: campaign.id, assignment_id: assignment.id });
+		if (targetError) { await rollbackCampaign(); return { error: "Tautan program Photobox belum tersimpan." }; }
+		const currentTemplates = Array.isArray(assignment.photobox_templates) ? assignment.photobox_templates : [];
+		const promotedFrame = { id: `campaign-${campaign.id}`, name: title, layout: frameLayout, ratio: frameRatio, frameUrl, enabled: campaignStatus === "published", source: "campaign", campaignId: campaign.id, displayChance, alwaysShow: exposureMode === "always" };
+		const { error: frameError } = await staff.supabase.from("tourism_minigame_destinations").update({ photobox_templates: [...currentTemplates, promotedFrame] }).eq("id", assignment.id);
+		if (frameError) { await rollbackCampaign(); return { error: "Frame belum dapat dimasukkan ke preset Photobox. Periksa ulang template aktif program." }; }
+	}
+	refreshWorkspace({ campaigns: true });
+	return { success: placementMode === "find_friends" ? "Campaign tersimpan. QR bonus otomatis dibuat dan tidak diwajibkan untuk menyelesaikan misi." : placementMode === "photobox" ? "Campaign dan frame mitra berhasil dimasukkan ke preset Photobox." : "Campaign promosi berhasil disimpan." };
+}
+
+export async function setPromotionCampaignStatusAction(
+	_previousState: WorkspaceActionState,
+	formData: FormData,
+): Promise<WorkspaceActionState> {
+	const campaignId = value(formData, "campaign_id", 64);
+	const nextStatus = value(formData, "next_status", 16);
+	if (!/^[0-9a-f-]{36}$/i.test(campaignId) || !["published", "paused"].includes(nextStatus)) {
+		return { error: "Status campaign tidak valid." };
+	}
+	const staff = await requireStaff();
+	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola promosi." };
+	const { data: campaign, error: campaignError } = await staff.supabase.from("promotion_campaigns")
+		.select("id,placement_mode,qr_point_id,status").eq("id", campaignId).maybeSingle();
+	if (campaignError || !campaign) return { error: "Campaign tidak ditemukan." };
+	const { error: statusError } = await staff.supabase.from("promotion_campaigns").update({ status: nextStatus }).eq("id", campaignId);
+	if (statusError) return { error: "Status campaign belum dapat diperbarui." };
+	if (campaign.placement_mode === "find_friends" && campaign.qr_point_id) {
+		const { error } = await staff.supabase.from("qr_points").update({ is_active: nextStatus === "published" }).eq("id", campaign.qr_point_id);
+		if (error) {
+			await staff.supabase.from("promotion_campaigns").update({ status: campaign.status }).eq("id", campaignId);
+			return { error: "Status QR bonus belum dapat diperbarui. Status campaign dikembalikan." };
+		}
+	}
+	if (campaign.placement_mode === "photobox") {
+		const { data: links, error: linksError } = await staff.supabase.from("promotion_campaign_minigames").select("assignment_id").eq("campaign_id", campaignId);
+		if (linksError) {
+			await staff.supabase.from("promotion_campaigns").update({ status: campaign.status }).eq("id", campaignId);
+			return { error: "Program Photobox campaign belum dapat diperiksa. Status campaign dikembalikan." };
+		}
+		const changedAssignments: { id: string; templates: unknown }[] = [];
+		for (const link of links ?? []) {
+			const { data: assignment, error: assignmentError } = await staff.supabase.from("tourism_minigame_destinations").select("photobox_templates").eq("id", link.assignment_id).maybeSingle();
+			if (assignmentError || !assignment) {
+				for (const changed of changedAssignments) {
+					await staff.supabase.from("tourism_minigame_destinations").update({ photobox_templates: changed.templates }).eq("id", changed.id);
+				}
+				await staff.supabase.from("promotion_campaigns").update({ status: campaign.status }).eq("id", campaignId);
+				return { error: "Program Photobox campaign belum dapat diperiksa. Status campaign dikembalikan." };
+			}
+			const templates = Array.isArray(assignment.photobox_templates) ? assignment.photobox_templates as Record<string, unknown>[] : [];
+			const updated = templates.map((template) => template.campaignId === campaignId ? { ...template, enabled: nextStatus === "published" } : template);
+			const { error } = await staff.supabase.from("tourism_minigame_destinations").update({ photobox_templates: updated }).eq("id", link.assignment_id);
+			if (error) {
+				for (const changed of changedAssignments) {
+					await staff.supabase.from("tourism_minigame_destinations").update({ photobox_templates: changed.templates }).eq("id", changed.id);
+				}
+				await staff.supabase.from("promotion_campaigns").update({ status: campaign.status }).eq("id", campaignId);
+				return { error: "Frame Photobox belum dapat diperbarui. Status campaign dikembalikan." };
+			}
+			changedAssignments.push({ id: link.assignment_id, templates: assignment.photobox_templates });
+		}
+	}
+	refreshWorkspace({ campaigns: true });
+	return { success: nextStatus === "published" ? "Campaign berhasil diaktifkan." : "Campaign dijeda." };
 }
 
 const MINIGAME_COMPONENTS = new Set(Object.keys(minigameComponentRegistry));
@@ -574,7 +736,7 @@ export async function saveTourismMinigameProgramAction(
 }
 
 type FindPointConfiguration = { qrPointId: string; isRequired: boolean; requires: string[]; friendName?: string; friendImageUrl?: string };
-type PhotoboxTemplateConfiguration = { id: string; name: string; layout: "single" | "strip2" | "grid6" | "travel_strip" | "memory_triptych"; ratio: "portrait" | "story" | "square"; frameUrl: string; enabled: boolean; source?: "preset" | "custom" };
+type PhotoboxTemplateConfiguration = { id: string; name: string; layout: "single" | "strip2" | "grid6" | "travel_strip" | "memory_triptych"; ratio: "portrait" | "story" | "square"; frameUrl: string; enabled: boolean; source?: "preset" | "custom" | "campaign"; campaignId?: string; displayChance?: number; alwaysShow?: boolean };
 
 export async function configureTourismMinigameAssignmentAction(
 	_previousState: WorkspaceActionState,
@@ -609,7 +771,10 @@ export async function configureTourismMinigameAssignmentAction(
 				ratio: ["portrait", "story", "square"].includes(item.ratio) ? item.ratio : "portrait",
 				frameUrl: typeof item.frameUrl === "string" ? item.frameUrl.slice(0, 2048) : "",
 				enabled: item.enabled !== false,
-				source: item.source === "custom" ? "custom" : "preset",
+				source: item.source === "campaign" ? "campaign" : item.source === "custom" ? "custom" : "preset",
+				...(item.source === "campaign" && typeof item.campaignId === "string" ? { campaignId: item.campaignId } : {}),
+				...(item.source === "campaign" && Number.isInteger(item.displayChance) ? { displayChance: item.displayChance } : {}),
+				...(item.source === "campaign" ? { alwaysShow: item.alwaysShow === true } : {}),
 			}));
 	} catch {
 		return { error: "Data grup QR atau template Photobox tidak terbaca." };
@@ -628,6 +793,19 @@ export async function configureTourismMinigameAssignmentAction(
 	if (components.includes("photobox") && !templates.some((item) => item.enabled)) return { error: "Aktifkan setidaknya satu template Photobox." };
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola minigame." };
+	if (components.includes("find_friends")) {
+		const { data: linkedCampaignPoints, error: linkedCampaignError } = await staff.supabase.from("promotion_campaign_minigames")
+			.select("qr_point_id").eq("assignment_id", assignmentId).not("qr_point_id", "is", null);
+		if (linkedCampaignError) return { error: "Data QR bonus campaign belum dapat dibaca. Jalankan migration campaign placement redesign." };
+		const campaignPointIds = [...new Set((linkedCampaignPoints ?? []).map((item) => item.qr_point_id).filter((id): id is string => Boolean(id)))];
+		const newPointIds = campaignPointIds.filter((id) => !points.some((point) => point.qrPointId === id));
+		if (newPointIds.length) {
+			const { data: qrPoints, error: qrError } = await staff.supabase.from("qr_points").select("id,name").in("id", newPointIds);
+			if (qrError) return { error: "Titik QR bonus campaign belum dapat diperiksa." };
+			for (const point of qrPoints ?? []) points.push({ qrPointId: point.id, isRequired: false, requires: [], friendName: point.name, friendImageUrl: "" });
+		}
+		if (points.length > 100) return { error: "Grup ini melewati batas 100 titik QR setelah QR bonus campaign ditambahkan." };
+	}
 	const { data, error } = await staff.supabase.rpc("configure_tourism_minigame_assignment", {
 		p_assignment_id: assignmentId,
 		p_is_enabled: formData.get("assignment_enabled") === "on",

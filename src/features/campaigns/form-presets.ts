@@ -1,6 +1,6 @@
 import type { CampaignFormBlock } from "./form-schema";
 
-export type CampaignFormPreset = "none" | "interest" | "offer" | "suggestion";
+export type CampaignFormPreset = "none" | "interest" | "offer" | "suggestion" | "tourism_feedback" | "website_feedback";
 
 const PRESETS: Record<Exclude<CampaignFormPreset, "none">, CampaignFormBlock[]> = {
 	interest: [
@@ -19,6 +19,18 @@ const PRESETS: Record<Exclude<CampaignFormPreset, "none">, CampaignFormBlock[]> 
 		{ id: "suggestion_intro", type: "label", text: "Ceritakan singkat pengalaman atau hal yang ingin kamu lihat di sini." },
 		{ id: "suggestion_text", type: "input", label: "Saran singkat", placeholder: "Tulis ide kamu…", inputType: "text", required: true, maxLength: 240 },
 		{ id: "suggestion_submit", type: "button", label: "Kirim saran", action: "submit" },
+	],
+	tourism_feedback: [
+		{ id: "tourism_feedback_intro", type: "label", text: "Bantu pengelola memahami pengalamanmu di objek wisata ini." },
+		{ id: "tourism_feedback_rating", type: "dropdown", label: "Bagaimana penilaianmu?", options: ["5 · Sangat baik", "4 · Baik", "3 · Cukup", "2 · Kurang", "1 · Sangat kurang"], required: true },
+		{ id: "tourism_feedback_suggestion", type: "input", label: "Saran untuk objek wisata", placeholder: "Apa yang bisa ditingkatkan?", inputType: "text", required: false, maxLength: 240 },
+		{ id: "tourism_feedback_submit", type: "button", label: "Kirim ulasan wisata", action: "submit" },
+	],
+	website_feedback: [
+		{ id: "website_feedback_intro", type: "label", text: "Masukan ini hanya untuk pengalaman menggunakan website TiLoc." },
+		{ id: "website_feedback_rating", type: "dropdown", label: "Bagaimana penilaianmu terhadap website?", options: ["5 · Sangat nyaman", "4 · Nyaman", "3 · Cukup", "2 · Kurang nyaman", "1 · Tidak nyaman"], required: true },
+		{ id: "website_feedback_suggestion", type: "input", label: "Saran untuk website", placeholder: "Apa yang perlu ditingkatkan?", inputType: "text", required: false, maxLength: 240 },
+		{ id: "website_feedback_submit", type: "button", label: "Kirim ulasan website", action: "submit" },
 	],
 };
 

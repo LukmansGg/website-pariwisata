@@ -6,14 +6,14 @@ import type { CampaignFormBlock } from "@/src/features/campaigns/form-schema";
 
 type CampaignFormExperienceProps = {
 	campaignId: string;
-	pageKey: "destination" | "minigame";
+	pageKey: "home" | "destination" | "minigame" | "photobox" | "scan";
 	destinationSlug: string;
 	fallbackHref: string;
 	fallbackLabel: string;
 	onNavigate?: () => void;
 };
 
-type CampaignPublicConfig = { formSchema: CampaignFormBlock[]; ctaLabel: string | null; ctaUrl: string | null };
+type CampaignPublicConfig = { formSchema: CampaignFormBlock[]; ctaLabel: string | null; ctaUrl: string | null; placementMode: string };
 
 function safeUrl(value: string | null) {
 	if (!value) return null;
@@ -63,14 +63,21 @@ export function CampaignFormExperience({ campaignId, pageKey, destinationSlug, f
 			const response = await fetch("/api/campaigns/" + encodeURIComponent(campaignId), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ values: responseValues }),
+				body: JSON.stringify({ values: responseValues, destinationSlug: destinationSlug || undefined }),
 			});
 			const result = await response.json() as { error?: string; status?: string };
 			if (response.status === 409 || result.status === "already_submitted") {
 				setSubmitted(true);
-				setMessage("Jawabanmu untuk campaign ini sudah tercatat.");
+				setMessage(config.placementMode === "website_feedback" || config.placementMode === "destination_feedback"
+					? "Kamu sudah memberi masukan untuk bagian ini bulan ini."
+					: "Jawabanmu untuk campaign ini sudah tercatat.");
 			} else if (!response.ok) throw new Error(result.error || "Jawaban belum tersimpan.");
-			else { setSubmitted(true); setMessage("Pilihanmu sudah tercatat. Terima kasih! ✨"); }
+			else {
+				setSubmitted(true); setMessage("Pilihanmu sudah tercatat. Terima kasih! ✨");
+				if (config.placementMode === "website_feedback" || config.placementMode === "destination_feedback") {
+					window.dispatchEvent(new CustomEvent("tiloc:survey-submitted", { detail: { placementMode: config.placementMode, destinationSlug } }));
+				}
+			}
 		} catch (error) { setMessage(error instanceof Error ? error.message : "Jawaban belum tersimpan."); }
 		finally { setBusy(false); }
 	}

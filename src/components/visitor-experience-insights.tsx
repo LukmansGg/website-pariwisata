@@ -87,6 +87,17 @@ export function VisitorExperienceInsights() {
 		return () => { window.clearTimeout(delay); controller.abort(); };
 	}, [route, targetKey]);
 
+	useEffect(() => {
+		const handleCampaignSurvey = (event: Event) => {
+			const detail = (event as CustomEvent<{ placementMode?: string; destinationSlug?: string }>).detail;
+			const matchesWebsite = route.scope === "website" && detail?.placementMode === "website_feedback";
+			const matchesDestination = route.scope === "destination" && detail?.placementMode === "destination_feedback" && detail.destinationSlug === route.destinationSlug;
+			if (matchesWebsite || matchesDestination) setEligibleKey("");
+		};
+		window.addEventListener("tiloc:survey-submitted", handleCampaignSurvey);
+		return () => window.removeEventListener("tiloc:survey-submitted", handleCampaignSurvey);
+	}, [route]);
+
 	if (!route.enabled || eligibleKey !== targetKey || readyKey !== targetKey || dismissedKey === targetKey) return null;
 	const scopeLabel = route.scope === "destination" ? "wisata · " + (targetName || "destinasi ini") : "pengalaman website TiLoc";
 

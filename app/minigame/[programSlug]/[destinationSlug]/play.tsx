@@ -93,5 +93,5 @@ export default function MinigamePlay({ programSlug, destination, initialQrCode, 
 					<Link href={`/wisata/${encodeURIComponent(destination.slug)}`} className="block rounded-2xl border border-[#84B3CE]/30 bg-white/70 px-4 py-3 text-center text-xs font-bold text-[#16587b]/70 hover:bg-white">Kembali ke dashboard wisata</Link></aside>
 			</div>
 		</>}
-	</div><NearbyCampaignPopup destinationSlug={destination.slug} active={Boolean(program)} /></main>;
+	</div><NearbyCampaignPopup destinationSlug={destination.slug} systemPage="minigame" active={Boolean(program)} /></main>;
 }

@@ -31,6 +31,7 @@ export async function GET() {
 				description: campaign.description,
 				imageUrl: safeHttpUrl(campaign.image_url),
 				experienceType: campaign.experience_type,
+				displayChance: campaign.exposure_mode === "always" ? 100 : campaign.display_chance,
 				ctaLabel: campaign.cta_label,
 				ctaUrl: safeCtaUrl(campaign.cta_url) ?? "/scan",
 			}));

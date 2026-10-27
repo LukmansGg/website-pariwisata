@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTheme } from "@/src/components/theme-provider";
+import { SystemCampaignPrompt } from "@/src/components/system-campaign-prompt";
+import { trackVisitorEvent } from "@/src/features/visitor-insights/events";
 
 const MOODS = [
 	{ name: "Alam", icon: "🍃" },
@@ -942,6 +944,7 @@ type PublicCampaign = {
 	description: string;
 	imageUrl: string | null;
 	experienceType: "popup" | "minigame" | "photobox";
+	displayChance: number;
 	ctaLabel: string | null;
 	ctaUrl: string;
 };
@@ -950,13 +953,14 @@ const PromotionalSection = () => {
 	const [campaigns, setCampaigns] = useState<PublicCampaign[]>([]);
 	const [activeIndex, setActiveIndex] = useState(0);
 	const touchStartX = useRef<number | null>(null);
+	const seenCampaigns = useRef(new Set<string>());
 
 	useEffect(() => {
 		let isMounted = true;
 		fetch("/api/public-campaigns")
 			.then((response) => (response.ok ? response.json() : { campaigns: [] }))
 			.then((result: { campaigns?: PublicCampaign[] }) => {
-				if (isMounted && Array.isArray(result.campaigns)) setCampaigns(result.campaigns);
+				if (isMounted && Array.isArray(result.campaigns)) setCampaigns(result.campaigns.filter((campaign) => Math.random() * 100 < campaign.displayChance));
 			})
 			.catch(() => undefined);
 		return () => { isMounted = false; };
@@ -968,6 +972,14 @@ const PromotionalSection = () => {
 	];
 	const activeSlide = slides[activeIndex] ?? slides[0];
 	const campaign = activeSlide.campaign;
+	useEffect(() => {
+		if (!campaign || seenCampaigns.current.has(campaign.id)) return;
+		seenCampaigns.current.add(campaign.id);
+		void trackVisitorEvent({ eventName: "campaign_impression", pageKey: "home", campaignId: campaign.id });
+	}, [campaign?.id]);
+	function trackCampaignClick() {
+		if (campaign) void trackVisitorEvent({ eventName: "campaign_click", pageKey: "home", campaignId: campaign.id });
+	}
 	const campaignType = campaign?.experienceType === "minigame"
 		? "MINIGAME · TILOC"
 		: campaign?.experienceType === "photobox"
@@ -1007,11 +1019,11 @@ const PromotionalSection = () => {
 								{campaign?.description?.trim() || "Scan QR di lokasi untuk membuka cerita destinasi, memulai sesi pengunjung, dan menemukan kejutan visual sepanjang perjalanan."}
 							</p>
 							{ctaUrl.startsWith("/") ? (
-								<Link href={ctaUrl} className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-7 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-[1.03]">
+								<Link href={ctaUrl} onClick={trackCampaignClick} className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-7 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-[1.03]">
 									{campaign ? ctaLabel : "Aktifkan perjalanan"} <IconArrowRight />
 								</Link>
 							) : (
-								<a href={ctaUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-7 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-[1.03]">
+								<a href={ctaUrl} target="_blank" rel="noreferrer" onClick={trackCampaignClick} className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-7 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-[1.03]">
 									{ctaLabel} <IconArrowRight />
 								</a>
 							)}
@@ -1305,6 +1317,7 @@ export default function TiLocApp() {
 						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={() => { setSearchQuery(""); setSelectedCategories([]); }} />
 					</>}
 					<PromotionalSection />
+					<SystemCampaignPrompt pageKey="home" />
 				</main>
 
 				<AssistantTirta

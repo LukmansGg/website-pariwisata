@@ -17,8 +17,10 @@ export async function getCachedPublishedCampaigns() {
 	});
 	const { data, error } = await supabase
 		.from("promotion_campaigns")
-		.select("id,title,description,image_url,experience_type,cta_label,cta_url,starts_at,ends_at,created_at")
+		.select("id,title,description,image_url,experience_type,placement_mode,exposure_mode,display_chance,system_pages,cta_label,cta_url,starts_at,ends_at,created_at")
 		.eq("status", "published")
+		.eq("placement_mode", "system")
+		.contains("system_pages", ["home"])
 		.order("created_at", { ascending: false })
 		.limit(12);
 

@@ -7,7 +7,7 @@ import NearbyCampaignPopup from "@/app/wisata/[slug]/nearby-campaign-popup";
 
 type Layout = "single" | "strip2" | "grid6" | "travel_strip" | "memory_triptych";
 type Ratio = "portrait" | "story" | "square";
-type Template = { id: string; name: string; layout: Layout; ratio: Ratio; frameUrl: string; enabled: boolean };
+type Template = { id: string; name: string; layout: Layout; ratio: Ratio; frameUrl: string; enabled: boolean; source?: "preset" | "custom" | "campaign"; displayChance?: number; alwaysShow?: boolean };
 type Program = { assignmentId: string; programSlug: string; programName: string; components: string[]; requiredComponents: string[]; photoboxAccessMode: "standalone" | "mission_reward"; photoboxTemplates: Template[]; captionTemplate: string; maxCaptionLength: number; progress: { completedComponents: string[]; completed: boolean } };
 type State = { destinationName: string; destinationAddress?: string | null; destinationTags?: string[]; programs: Program[] };
 type Destination = { slug: string; name: string; description: string | null; address: string | null; tags: string[] | null; mascot_mode: "tiloc" | "custom"; mascot_image_url: string | null };
@@ -113,6 +113,7 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 	const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 	const [state, setState] = useState<State | null>(null);
 	const [selectedTemplateId, setSelectedTemplateId] = useState("");
+	const [templateExposureRoll] = useState(() => Math.random() * 100);
 	const [pendingTemplateId, setPendingTemplateId] = useState("");
 	const [photos, setPhotos] = useState<PhotoSlot[]>([]);
 	const [photoTransforms, setPhotoTransforms] = useState<PhotoTransform[]>([]);
@@ -172,7 +173,7 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 		return () => window.clearTimeout(initialLoad);
 	}, [refresh]);
 	const program = state?.programs.find((item) => item.programSlug === programSlug);
-	const templates = useMemo(() => (program?.photoboxTemplates ?? []).filter((template) => template.enabled), [program]);
+	const templates = useMemo(() => (program?.photoboxTemplates ?? []).filter((template) => template.enabled && (template.source !== "campaign" || template.alwaysShow || templateExposureRoll < (template.displayChance ?? 35))), [program, templateExposureRoll]);
 	const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? templates[0];
 	const slotCount = templateSlotCount(selectedTemplate);
 	const locked = program?.photoboxAccessMode === "mission_reward" && !program.progress.completed;
@@ -776,6 +777,6 @@ export default function PhotoboxStudio({ programSlug, destination }: { programSl
 			<p className="relative z-10 pb-2 text-center text-[10px] font-semibold text-white/65">Geser kamera agar momen pas · foto masuk ke slot {activeSlot + 1}</p>
 		</div>}
 		{pendingTemplateId && <div className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="change-frame-title" className={"w-full max-w-sm rounded-[2rem] border p-6 text-center shadow-2xl " + glassPanel}><h2 id="change-frame-title" className="text-xl font-black">Ubah frame?</h2><p className={"mt-2 text-sm leading-relaxed " + muted}>Mengganti frame mengosongkan bidang yang terisi. Draf fotomu tetap tersimpan di tray.</p><div className="mt-6 flex gap-3"><button type="button" onClick={() => setPendingTemplateId("")} className={"flex-1 rounded-xl border py-3 font-bold " + btnSecondary}>Batal</button><button type="button" onClick={() => applyTemplateChange(pendingTemplateId)} className={"flex-1 rounded-xl py-3 font-black " + btnSolid}>Ya, lanjutkan</button></div></section></div>}
-		<NearbyCampaignPopup destinationSlug={destination.slug} active={Boolean(program && !locked && !cameraOverlayOpen)} />
+		<NearbyCampaignPopup destinationSlug={destination.slug} systemPage="photobox" active={Boolean(program && !locked && !cameraOverlayOpen)} />
 	</main>;
 }

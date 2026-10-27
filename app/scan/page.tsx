@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/src/infrastructure/supabase/client";
+import { SystemCampaignPrompt } from "@/src/components/system-campaign-prompt";
 
 type ScanStatus = "idle" | "requesting" | "scanning" | "paused" | "error";
 
@@ -429,6 +430,7 @@ export default function ScanPage() {
 	const modalOpen = qrDetected || Boolean(scannedSlug || previewError);
 	return (
 		<main className="fixed inset-0 z-40 flex h-[100dvh] min-h-[100svh] flex-col items-center justify-center overflow-hidden bg-[#16587B] px-0 py-0 text-[#F5EEDD]">
+			<SystemCampaignPrompt pageKey="scan" />
 
 			<header className="absolute left-0 right-0 top-0 z-30 flex w-full items-center justify-between px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-7 sm:pb-6">
 				<Link href="/" className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2.5 text-sm font-bold text-[#16587B] shadow-sm backdrop-blur transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16587B]">
