@@ -139,6 +139,15 @@ function value(formData: FormData, key: string, maxLength: number) {
 	return String(formData.get(key) ?? "").trim().slice(0, maxLength);
 }
 
+function slugPart(text: string) {
+	return text
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
 function optionalUrl(raw: string) {
 	if (!raw) return null;
 	try {
@@ -569,9 +578,11 @@ export async function createPromotionAction(
 	}).select("id").single();
 	if (campaignError || !campaign) return { error: campaignError?.code === "42703" || campaignError?.code === "PGRST204" ? "Skema campaign baru belum tersedia. Jalankan migration campaign placement redesign di Supabase." : "Campaign belum tersimpan. Periksa kembali data dan relasi yang dipilih." };
 
+	const rollbackSupabase = staff.supabase;
+	const createdCampaignId = campaign.id;
 	async function rollbackCampaign() {
-		await staff.supabase.from("promotion_campaigns").delete().eq("id", campaign.id);
-		if (generatedPointId) await staff.supabase.from("qr_points").delete().eq("id", generatedPointId);
+		await rollbackSupabase.from("promotion_campaigns").delete().eq("id", createdCampaignId);
+		if (generatedPointId) await rollbackSupabase.from("qr_points").delete().eq("id", generatedPointId);
 	}
 	if (destinationIds.length) {
 		const { error } = await staff.supabase.from("promotion_campaign_destinations").insert(destinationIds.map((destination_id) => ({ campaign_id: campaign.id, destination_id })));
