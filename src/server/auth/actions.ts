@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import { checkLoginLimit } from "@/src/server/auth/rate-limit";
 import { isMinigameComponentKey, minigameComponentRegistry } from "@/src/features/minigames/registry";
+import { parseCampaignFormSchema } from "@/src/features/campaigns/form-schema";
 
 export type LoginState = {
 	error?: string;
@@ -146,6 +147,12 @@ function optionalUrl(raw: string) {
 	} catch {
 		return null;
 	}
+}
+
+function optionalCampaignUrl(raw: string) {
+        if (!raw) return null;
+        if (/^\/(?!\/)[^\s\\]*$/.test(raw)) return raw;
+        return optionalUrl(raw);
 }
 
 function parseCoordinates(formData: FormData, latitudeKey = "latitude", longitudeKey = "longitude") {
@@ -429,7 +436,15 @@ export async function createPromotionAction(
 	const experienceType = value(formData, "experience_type", 20);
 	const ctaLabel = value(formData, "cta_label", 60);
 	const ctaUrlRaw = value(formData, "cta_url", 2048);
-	const ctaUrl = optionalUrl(ctaUrlRaw);
+        const ctaUrl = optionalCampaignUrl(ctaUrlRaw);
+        let formSchema: ReturnType<typeof parseCampaignFormSchema> = [];
+        try {
+                const rawSchema = String(formData.get("form_schema") ?? "[]");
+                if (rawSchema.length > 24000) return { error: "Form campaign terlalu besar. Kurangi jumlah teks atau pilihan." };
+                formSchema = parseCampaignFormSchema(JSON.parse(rawSchema));
+        } catch {
+                return { error: "Rancangan form tidak terbaca. Periksa kembali komponen dan pilihan form." };
+        }
 	const imageUrlRaw = value(formData, "image_url", 2048);
 	const imageUrl = optionalUrl(imageUrlRaw);
 	const startsAtRaw = value(formData, "starts_at", 32);
@@ -437,7 +452,7 @@ export async function createPromotionAction(
 	const displayChance = Number(value(formData, "display_chance", 4) || "35");
 	const startsAt = startsAtRaw ? new Date(`${startsAtRaw}T00:00:00+07:00`) : null;
 	const endsAt = endsAtRaw ? new Date(`${endsAtRaw}T23:59:59+07:00`) : null;
-	if (!partnerId || !qrPointId || !title || !["popup", "minigame", "photobox"].includes(experienceType) || !Number.isInteger(displayChance) || displayChance < 0 || displayChance > 100 || (ctaUrlRaw && !ctaUrl) || (imageUrlRaw && !imageUrl) || (startsAt && !Number.isFinite(startsAt.getTime())) || (endsAt && !Number.isFinite(endsAt.getTime())) || (startsAt && endsAt && endsAt <= startsAt)) {
+        if (!partnerId || !qrPointId || !title || !["popup", "minigame", "photobox"].includes(experienceType) || !Number.isInteger(displayChance) || displayChance < 0 || displayChance > 100 || (ctaUrlRaw && !ctaUrl) || !formSchema || (imageUrlRaw && !imageUrl) || (startsAt && !Number.isFinite(startsAt.getTime())) || (endsAt && !Number.isFinite(endsAt.getTime())) || (startsAt && endsAt && endsAt <= startsAt)) {
 		return { error: "Periksa mitra, titik QR, metode aktivasi, tautan, dan jadwal promosi." };
 	}
 	const staff = await requireStaff();
@@ -478,13 +493,14 @@ export async function createPromotionAction(
 		experience_type: experienceType,
 		cta_label: ctaLabel || null,
 		cta_url: ctaUrl,
+                form_schema: formSchema,
 		starts_at: startsAt?.toISOString() ?? null,
 		ends_at: endsAt?.toISOString() ?? null,
 		display_chance: displayChance,
 		status: formData.get("is_published") === "on" ? "published" : "draft",
 		created_by: staff.userId,
 	});
-	if (error) return { error: "Promosi belum tersimpan. Pastikan mitra dan titik QR masih aktif." };
+        if (error) return { error: error.code === "42703" || error.code === "PGRST204" ? "Form campaign belum tersedia di Supabase. Jalankan migration insight pengunjung dan form campaign, lalu coba lagi." : "Promosi belum tersimpan. Pastikan mitra dan titik QR masih aktif." };
 	refreshWorkspace();
 	return { success: "Kampanye promosi berhasil disimpan." };
 }

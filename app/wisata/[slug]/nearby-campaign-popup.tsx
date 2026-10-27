@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { trackVisitorEvent } from "@/src/features/visitor-insights/events";
+import { CampaignFormExperience } from "@/src/components/campaign-form-experience";
 
 type Campaign = {
 	id: string;
@@ -73,7 +75,10 @@ export default function NearbyCampaignPopup({ destinationSlug, active }: Props) 
 				.map((item) => ({ item, distance: distanceMeters(position.coords.latitude, position.coords.longitude, item.latitude, item.longitude) }))
 				.filter(({ item, distance }) => distance <= item.maxDistanceMeters)
 				.sort((a, b) => a.distance - b.distance)[0]?.item;
-			if (nearest) setCampaign(nearest);
+			if (nearest) {
+				setCampaign(nearest);
+				void trackVisitorEvent({ eventName: "campaign_impression", pageKey: "destination", destinationSlug, campaignId: nearest.id });
+			}
 		} catch (error) {
 			const geoError = error as GeolocationPositionError;
 			if (geoError?.code === 1 || (error instanceof Error && error.message === "NO_GEOLOCATION")) {
@@ -115,11 +120,11 @@ export default function NearbyCampaignPopup({ destinationSlug, active }: Props) 
 	}
 
 	if (!active) return null;
-	const campaignUrl = campaign ? safeUrl(campaign.ctaUrl) ?? (campaign.experienceType === "photobox" && campaign.programSlug ? `/photobox/${encodeURIComponent(campaign.programSlug)}/${encodeURIComponent(destinationSlug)}` : null) : null;
+	const campaignUrl = campaign ? safeUrl(campaign.ctaUrl) ?? (campaign.experienceType === "photobox" && campaign.programSlug ? `/photobox/${encodeURIComponent(campaign.programSlug)}/${encodeURIComponent(destinationSlug)}` : `/wisata/${encodeURIComponent(destinationSlug)}`) : null;
 	return <>
 		{permissionNeeded && !campaigns.length && null}
 		{permissionNeeded && campaigns.length > 0 && !campaign && <button type="button" onClick={() => { setLocationStatus("Memeriksa promo sekitar…"); void locateCampaign(); }} className="fixed bottom-4 right-4 z-[65] max-w-[calc(100vw-2rem)] rounded-full border border-white/80 bg-[#16587B] px-4 py-3 text-left text-xs font-bold text-white shadow-xl transition hover:-translate-y-0.5">📍 Tampilkan promo sekitar</button>}
 		{locationStatus && !campaign && <p role="status" className="fixed bottom-[4.5rem] right-4 z-[65] max-w-[calc(100vw-2rem)] rounded-xl bg-white px-4 py-3 text-xs font-semibold text-[#16587B] shadow-xl">{locationStatus}</p>}
-		{campaign && <div className="fixed inset-0 z-[95] grid place-items-center bg-[#102F43]/65 p-3 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}><section role="dialog" aria-modal="true" aria-labelledby="nearby-campaign-title" className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[1.7rem] border border-white/80 bg-[#F5EEDD] p-5 text-[#16587B] shadow-2xl sm:p-7"><button type="button" onClick={dismiss} aria-label="Tutup campaign" className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-xl font-bold">×</button><p className="text-[9px] font-black uppercase tracking-[.18em] text-[#16587B]/55">CAMPAIGN DI DEKATMU</p>{campaign.imageUrl && <img src={campaign.imageUrl} alt="" className="mt-3 max-h-48 w-full rounded-2xl object-cover"/>}<h2 id="nearby-campaign-title" className="mt-3 pr-8 text-2xl font-black">{campaign.title}</h2>{campaign.description && <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#16587B]/75">{campaign.description}</p>}<p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-[10px] font-semibold text-[#16587B]/65">Promo ini berada dalam radius {campaign.maxDistanceMeters} m dari QR wisata terdekat. Tidak perlu scan untuk melihatnya.</p><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={dismiss} className="min-h-11 rounded-xl border border-[#84B3CE]/45 bg-white px-3 text-xs font-bold">Nanti saja</button>{campaignUrl ? <a href={campaignUrl} target={campaignUrl.startsWith("http") ? "_blank" : undefined} rel="noreferrer" onClick={dismiss} className="flex min-h-11 items-center justify-center rounded-xl bg-[#16587B] px-3 text-center text-xs font-black text-white">{campaign.ctaLabel || (campaign.experienceType === "photobox" ? "Buka Photobox" : "Lihat campaign")}</a> : <button type="button" onClick={dismiss} className="min-h-11 rounded-xl bg-[#16587B] px-3 text-xs font-black text-white">{campaign.ctaLabel || "Lihat campaign"}</button>}</div></section></div>}
+		{campaign && <div className="fixed inset-0 z-[95] grid place-items-center bg-[#102F43]/65 p-3 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}><section role="dialog" aria-modal="true" aria-labelledby="nearby-campaign-title" className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[1.7rem] border border-white/80 bg-[#F5EEDD] p-5 text-[#16587B] shadow-2xl sm:p-7"><button type="button" onClick={dismiss} aria-label="Tutup campaign" className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-xl font-bold">×</button><p className="text-[9px] font-black uppercase tracking-[.18em] text-[#16587B]/55">CAMPAIGN DI DEKATMU</p>{campaign.imageUrl && <img src={campaign.imageUrl} alt="" className="mt-3 max-h-48 w-full rounded-2xl object-cover"/>}<h2 id="nearby-campaign-title" className="mt-3 pr-8 text-2xl font-black">{campaign.title}</h2>{campaign.description && <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#16587B]/75">{campaign.description}</p>}<p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-[10px] font-semibold text-[#16587B]/65">Promo ini berada dalam radius {campaign.maxDistanceMeters} m dari QR wisata terdekat. Tidak perlu scan untuk melihatnya.</p><div className="mt-5 space-y-2"><button type="button" onClick={dismiss} className="min-h-11 w-full rounded-xl border border-[#84B3CE]/45 bg-white px-3 text-xs font-bold">Nanti saja</button><CampaignFormExperience campaignId={campaign.id} pageKey="destination" destinationSlug={destinationSlug} fallbackHref={campaignUrl || ""} fallbackLabel={campaign.ctaLabel || (campaign.experienceType === "photobox" ? "Buka Photobox" : "Lihat campaign")} onNavigate={dismiss} /></div></section></div>}
 	</>;
 }

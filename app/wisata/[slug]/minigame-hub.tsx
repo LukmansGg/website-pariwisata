@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { getMinigameComponent } from "@/src/features/minigames/registry";
 import { summarizeQrMissionProgress } from "@/src/features/minigames/progress";
+import { trackVisitorEvent } from "@/src/features/visitor-insights/events";
+import { CampaignFormExperience } from "@/src/components/campaign-form-experience";
 
 type Campaign = { id: string; title: string; description: string; imageUrl: string | null; ctaLabel: string | null; ctaUrl: string | null; displayChance: number; experienceType: "minigame" | "photobox" };
 type Point = { id: string; name: string; code: string; isRequired: boolean; friendName: string | null; requires: string[]; campaigns: Campaign[] };
@@ -74,7 +76,12 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 					if (selected) {
 						seen.add(selected.id);
 						try { sessionStorage.setItem(seenKey, JSON.stringify([...seen])); } catch { /* Keep the campaign available when storage is restricted. */ }
-						window.setTimeout(() => { if (!cancelled) setCampaign(selected); }, 1800);
+								window.setTimeout(() => {
+									if (!cancelled) {
+										setCampaign(selected);
+										void trackVisitorEvent({ eventName: "campaign_impression", pageKey: "minigame", featureKey: "find_friends", destinationSlug, campaignId: selected.id });
+									}
+								}, 1800);
 					}
 				}
 			})
@@ -105,6 +112,6 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 				<div className="mt-4 flex flex-wrap gap-2">{program.components.includes("find_friends") && <Link href={`/minigame/${encodeURIComponent(program.programSlug)}/${encodeURIComponent(destinationSlug)}`} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-[#F5EEDD] px-4 py-2 text-xs font-black text-[#16587B] shadow-sm hover:-translate-y-0.5">Lanjutkan grup misi →</Link>}{program.components.includes("photobox") && !photoboxLocked && <Link href={`/photobox/${encodeURIComponent(program.programSlug)}/${encodeURIComponent(destinationSlug)}`} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-xs font-black text-white hover:bg-white/20">Buka Photobox ↗</Link>}</div>
 			</article>;
 		})}</div>}
-		{campaign && <div className="fixed inset-0 z-[110] grid place-items-center bg-slate-950/65 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="game-campaign-title" className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-[2rem] border border-white/80 bg-[#fff9eb] p-5 text-[#16587B] shadow-2xl sm:p-7"><button type="button" onClick={() => setCampaign(null)} className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white text-2xl" aria-label="Tutup kampanye">×</button><p className="text-[10px] font-black uppercase tracking-[.18em] text-amber-700">{campaign.experienceType === "photobox" ? "Kenangan & partner wisata" : "Selingan petualangan"}</p>{campaign.imageUrl && <img src={campaign.imageUrl} alt="" className="mt-3 max-h-48 w-full rounded-2xl object-cover"/>}<h3 id="game-campaign-title" className="mt-3 pr-8 text-2xl font-black">{campaign.title}</h3>{campaign.description && <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#16587B]/75">{campaign.description}</p>}<div className="mt-5 flex gap-2"><button type="button" onClick={() => setCampaign(null)} className="min-h-11 flex-1 rounded-xl border border-[#84B3CE]/35 bg-white px-3 text-xs font-bold">Nanti saja</button>{campaign.ctaUrl ? <a href={campaign.ctaUrl} target="_blank" rel="noreferrer" onClick={() => setCampaign(null)} className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[#16587B] px-3 text-xs font-black text-white">{campaign.ctaLabel || "Lihat promo"}</a> : <Link href={`/${campaign.experienceType === "photobox" ? "photobox" : "minigame"}/${encodeURIComponent(campaign.programSlug)}/${encodeURIComponent(destinationSlug)}`} onClick={() => setCampaign(null)} className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[#16587B] px-3 text-xs font-black text-white">{campaign.ctaLabel || (campaign.experienceType === "photobox" ? "Buka Photobox" : "Lanjutkan")}</Link>}</div></section></div>}
+                {campaign && <div className="fixed inset-0 z-[110] grid place-items-center bg-slate-950/65 p-4 backdrop-blur-sm"><section role="dialog" aria-modal="true" aria-labelledby="game-campaign-title" className="relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-[2rem] border border-white/80 bg-[#fff9eb] p-5 text-[#16587B] shadow-2xl sm:p-7"><button type="button" onClick={() => setCampaign(null)} className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white text-2xl" aria-label="Tutup kampanye">×</button><p className="text-[10px] font-black uppercase tracking-[.18em] text-amber-700">{campaign.experienceType === "photobox" ? "Kenangan & partner wisata" : "Selingan petualangan"}</p>{campaign.imageUrl && <img src={campaign.imageUrl} alt="" className="mt-3 max-h-48 w-full rounded-2xl object-cover"/>}<h3 id="game-campaign-title" className="mt-3 pr-8 text-2xl font-black">{campaign.title}</h3>{campaign.description && <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#16587B]/75">{campaign.description}</p>}<div className="mt-5 space-y-2"><button type="button" onClick={() => setCampaign(null)} className="min-h-11 w-full rounded-xl border border-[#84B3CE]/35 bg-white px-3 text-xs font-bold">Nanti saja</button><CampaignFormExperience campaignId={campaign.id} pageKey="minigame" destinationSlug={destinationSlug} fallbackHref={campaign.ctaUrl || `/${campaign.experienceType === "photobox" ? "photobox" : "minigame"}/${encodeURIComponent(campaign.programSlug)}/${encodeURIComponent(destinationSlug)}`} fallbackLabel={campaign.ctaLabel || (campaign.experienceType === "photobox" ? "Buka Photobox" : "Lanjutkan")} onNavigate={() => setCampaign(null)} /></div></section></div>}
 	</section>;
 }

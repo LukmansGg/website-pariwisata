@@ -30,7 +30,7 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 		supabase.from("destinations").select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, mascot_mode, mascot_image_url, is_published, is_featured, created_at").order("created_at", { ascending: false }),
 		supabase.from("tourism_partners").select("id, business_name, slug, destination_id, max_distance_meters, business_type, address, status, created_at").order("created_at", { ascending: false }),
 		supabase.from("qr_points").select("id, destination_id, name, code, address, latitude, longitude, is_active, created_at").order("created_at", { ascending: false }),
-		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, status, starts_at, ends_at, created_at").order("created_at", { ascending: false }),
+		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, status, starts_at, ends_at, created_at, form_schema").order("created_at", { ascending: false }),
 		supabase.from("google_drive_connections").select("id, connected_email, updated_at").eq("id", "primary").maybeSingle(),
 	]);
 
@@ -69,6 +69,7 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 		qrPoints,
 		promotions: (promotionsResult.data ?? []).map((campaign) => ({
 			...campaign,
+			has_form: Array.isArray(campaign.form_schema) && campaign.form_schema.some((block: { type?: string }) => ["input", "choice", "dropdown"].includes(block?.type ?? "")),
 			partner_name: partnerById.get(campaign.partner_id) ?? "Mitra tidak diketahui",
 			qr_label: qrById.get(campaign.qr_point_id)?.name ?? "Titik QR tidak diketahui",
 		})),

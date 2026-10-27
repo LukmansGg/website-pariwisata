@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { DestinationForm, PartnerForm, PartnerProximityForm, PromotionForm, QrPointForm } from "./workspace-forms";
 import { useTheme } from "@/src/components/theme-provider";
+import { VisitorAnalyticsSection } from "./visitor-analytics-section";
 
 type Destination = {
 	id: string; slug: string; name: string; category: string | null; categories: string[]; short_description: string; address: string | null;
@@ -12,7 +13,7 @@ type Destination = {
 };
 type Partner = { id: string; business_name: string; slug: string; destination_id: string | null; destination_name: string | null; max_distance_meters: number; business_type: string; address: string | null; status: string; created_at: string };
 type QrPoint = { id: string; destination_id: string; destination_name: string; name: string; code: string; address: string | null; latitude: number | null; longitude: number | null; is_active: boolean; created_at: string };
-type Promotion = { id: string; partner_id: string; partner_name: string; qr_point_id: string; qr_label: string; title: string; experience_type: string; status: string; starts_at: string | null; ends_at: string | null; created_at: string };
+type Promotion = { id: string; partner_id: string; partner_name: string; qr_point_id: string; qr_label: string; title: string; experience_type: string; status: string; starts_at: string | null; ends_at: string | null; created_at: string; has_form: boolean };
 type SessionMonitorData = {
 	updatedAt: string;
 	metrics: { sessionsToday: number; activeNow: number; averageDurationMinutes: number; busiestDestination: { name: string; count: number } | null };
@@ -35,7 +36,8 @@ export type WorkspaceData = {
 	driveIssue?: string;
 };
 
-type Section = "overview" | "destinations" | "qr" | "partners" | "promotions" | "sessions" | "guide";
+type Section = "overview" | "destinations" | "qr" | "partners" | "promotions" | "analytics" | "sessions" | "guide";
+type CampaignIdea = { id: string; slug: string; name: string; views: number; visitors: number };
 const navigation: { id: Section; label: string; group: string; marker: string }[] = [
 	{ id: "overview", label: "Ringkasan", group: "WORKSPACE", marker: "01" },
 	{ id: "destinations", label: "Daftarkan wisata", group: "KONTEN", marker: "02" },
@@ -43,7 +45,8 @@ const navigation: { id: Section; label: string; group: string; marker: string }[
 	{ id: "partners", label: "Mitra lokal", group: "KEMITRAAN", marker: "04" },
 	{ id: "promotions", label: "Kampanye promosi", group: "KEMITRAAN", marker: "05" },
 	{ id: "sessions", label: "Sesi Aktif", group: "LIVE DATA", marker: "06" },
-	{ id: "guide", label: "Panduan & Akses", group: "SISTEM", marker: "07" },
+	{ id: "analytics", label: "Analitik & masukan", group: "LIVE DATA", marker: "07" },
+	{ id: "guide", label: "Panduan & Akses", group: "SISTEM", marker: "08" },
 ];
 const sectionCopy: Record<Section, { eyebrow: string; title: string; description: string }> = {
 	overview: { eyebrow: "TILOC · CONTROL ROOM", title: "Ruang pengelola", description: "Kelola informasi destinasi dan pengalaman pengunjung dari satu tempat." },
@@ -51,6 +54,7 @@ const sectionCopy: Record<Section, { eyebrow: string; title: string; description
 	qr: { eyebrow: "AKTIVASI LOKASI", title: "Lokasi & titik QR", description: "Hubungkan setiap kode QR ke destinasi dan posisi pemasangannya." },
 	partners: { eyebrow: "EKOSISTEM LOKAL", title: "Mitra lokal", description: "Simpan profil UMKM, kontak, dan jenis layanan pariwisata." },
 	promotions: { eyebrow: "PROMOSI & AKTIVASI", title: "Kampanye promosi", description: "Atur mitra, titik QR, jadwal, dan pengalaman yang muncul setelah scan." },
+	analytics: { eyebrow: "DATA PENGUNJUNG", title: "Analitik & masukan", description: "Gunakan kunjungan, minat, dan saran untuk merancang campaign yang lebih relevan." },
 	sessions: { eyebrow: "MONITORING PENGUNJUNG", title: "Sesi Aktif (Live)", description: "Pantau sesi pengunjung saat menjelajahi destinasi wisata Madiun." },
 	guide: { eyebrow: "SISTEM", title: "Panduan & Akses", description: "Informasi fitur pendukung dan pengaturan hak akses dashboard." },
 };
@@ -83,6 +87,7 @@ function WorkspaceIcon({ section, className = "h-5 w-5" }: { section: Section; c
 		qr: <><path d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1zm12 0h2a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1zM5 20h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1z" /></>,
 		partners: <><path d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 9.288 0M15 7a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm6 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM7 10a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" /></>,
 		promotions: <><path d="M11 5.882V19.24a1.76 1.76 0 0 1-3.417.592l-2.147-6.15M18 13a3 3 0 1 0 0-6M5.436 13.683A4.001 4.001 0 0 1 7 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 0 1-1.564-.317z" /></>,
+		analytics: <><path d="M4 19V9m8 10V5m8 14v-7M2 19h20" /><path d="m4 7 5-3 4 4 7-5" /></>,
 		sessions: <><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></>,
 		guide: <><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></>,
 	};
@@ -95,24 +100,26 @@ function DestinationList({ items }: { items: Destination[] }) {
 
 export function DashboardWorkspace({ data, logoutAction }: { data: WorkspaceData; logoutAction: () => Promise<void> }) {
 	const [section, setSection] = useState<Section>("overview");
+	const [campaignIdea, setCampaignIdea] = useState<CampaignIdea | null>(null);
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const { isDark, toggleTheme } = useTheme();
 	const mainRef = useRef<HTMLElement>(null);
 	const copy = sectionCopy[section];
 	const selectSection = (nextSection: Section) => {
 		setSection(nextSection);
+		if (nextSection !== "promotions") setCampaignIdea(null);
 		setIsMobileMenuOpen(false);
 		mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
 	};
 	const groups = [...new Set(navigation.map((item) => item.group))];
 	const nav = (item: (typeof navigation)[number]) => {
 		const active = section === item.id;
-		const isLive = item.id === "sessions";
+		const isLive = item.id === "sessions" || item.id === "analytics";
 		const isGuide = item.id === "guide";
 		const navColor = active
 			? isLive ? "bg-emerald-100/50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" : isGuide ? "bg-slate-200/50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300" : "bg-madiun-blue text-white shadow-[0_4px_12px_rgba(22,88,123,0.4)] dark:bg-indigo-600 dark:shadow-[0_4px_12px_rgba(79,70,229,0.4)]"
 			: isLive ? "text-emerald-700 hover:bg-emerald-100/50 dark:text-emerald-300 dark:hover:bg-emerald-900/30" : isGuide ? "text-slate-600 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-slate-700/50" : "text-madiun-blue/80 hover:bg-white/80 dark:text-slate-300 dark:hover:bg-slate-800/80";
-		const iconColor = active && !isLive && !isGuide ? "bg-white/20 text-white shadow-inner" : item.id === "overview" ? "bg-white/80 text-madiun-blue dark:bg-slate-800 dark:text-white" : item.id === "destinations" ? "bg-sky-100 text-sky-600 dark:bg-slate-800 dark:text-sky-400" : item.id === "qr" ? "bg-purple-100 text-purple-600 dark:bg-slate-800 dark:text-purple-400" : item.id === "partners" ? "bg-amber-100 text-amber-600 dark:bg-slate-800 dark:text-amber-400" : item.id === "promotions" ? "bg-rose-100 text-rose-600 dark:bg-slate-800 dark:text-rose-400" : item.id === "sessions" ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]" : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
+		const iconColor = active && !isLive && !isGuide ? "bg-white/20 text-white shadow-inner" : item.id === "overview" ? "bg-white/80 text-madiun-blue dark:bg-slate-800 dark:text-white" : item.id === "destinations" ? "bg-sky-100 text-sky-600 dark:bg-slate-800 dark:text-sky-400" : item.id === "qr" ? "bg-purple-100 text-purple-600 dark:bg-slate-800 dark:text-purple-400" : item.id === "partners" ? "bg-amber-100 text-amber-600 dark:bg-slate-800 dark:text-amber-400" : item.id === "promotions" ? "bg-rose-100 text-rose-600 dark:bg-slate-800 dark:text-rose-400" : item.id === "analytics" ? "bg-cyan-100 text-cyan-700 dark:bg-slate-800 dark:text-cyan-300" : item.id === "sessions" ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)]" : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
 		const button = <button key={item.id} type="button" id={`nav-${item.id === "sessions" ? "live-sessions" : item.id}`} data-section={item.id} aria-current={active ? "page" : undefined} aria-controls="main-content-area" onClick={() => selectSection(item.id)} className={`nav-btn w-full flex items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${isLive || isGuide ? "rounded-xl" : "rounded-2xl"} ${navColor}`}>
 			<span className={`relative grid h-8 w-8 shrink-0 place-items-center rounded-xl ${iconColor}`}><WorkspaceIcon section={item.id} className="h-4 w-4"/>{isLive && <span className="absolute -right-1 -top-1 flex h-3 w-3"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"/><span className="relative inline-flex h-3 w-3 rounded-full border border-white bg-emerald-500 dark:border-slate-900"/></span>}</span><span>{item.label}</span></button>;
 		return button;
@@ -147,7 +154,7 @@ export function DashboardWorkspace({ data, logoutAction }: { data: WorkspaceData
 
 				<main ref={mainRef} className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 pb-24 sm:px-8 sm:py-10"><div className="mx-auto min-w-0 w-full max-w-[1200px]" id="main-content-area"><div className="mb-8 animate-[fade-in_0.4s_ease-out] sm:mb-10"><p className="text-[10px] font-black tracking-[0.25em] text-sky-600 drop-shadow-sm dark:text-sky-400 sm:text-xs">{copy.eyebrow}</p><h1 className="mt-1 text-3xl font-black tracking-tight drop-shadow-md dark:text-white sm:mt-2 sm:text-5xl">{copy.title}</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-madiun-blue/80 dark:text-slate-300 sm:mt-3 sm:text-base">{copy.description}</p></div>
 					{data.dataIssues.length > 0 && <div role="alert" className="glass-panel mb-6 rounded-2xl border-amber-300 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-100"><strong>Data workspace belum bisa dibaca dari Supabase.</strong><p className="mt-1">Login petugas berhasil, tetapi akses ke tabel konten belum lengkap. Angka yang kosong di bawah belum tentu berarti datanya tidak ada.</p><ul className="mt-3 list-disc space-y-1 pl-5">{data.dataIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}{data.driveIssue && <div role="alert" className="glass-panel mb-6 rounded-2xl border-amber-300 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-100"><strong>Status penyimpanan Drive belum terbaca.</strong> {data.driveIssue}</div>}
-					<div id={`section-${section === "sessions" ? "live-sessions" : section}`} key={section} data-active-section={section} className="section-container animate-[fade-in_0.4s_ease-out] space-y-6 sm:space-y-8">{section === "overview" && <Overview data={data} onNavigate={selectSection} />}{section === "destinations" && <DestinationsSection items={data.destinations} points={data.qrPoints} />}{section === "qr" && <QrSection destinations={data.destinations} points={data.qrPoints} />}{section === "partners" && <PartnersSection partners={data.partners} destinations={data.destinations} />}{section === "promotions" && <PromotionsSection campaigns={data.promotions} partners={data.partners} qrPoints={data.qrPoints} />}{section === "sessions" && <SessionsSection />}{section === "guide" && <GuideSection role={data.role} onNavigate={selectSection} />}</div>
+					<div id={`section-${section === "sessions" ? "live-sessions" : section}`} key={section} data-active-section={section} className="section-container animate-[fade-in_0.4s_ease-out] space-y-6 sm:space-y-8">{section === "overview" && <Overview data={data} onNavigate={selectSection} />}{section === "destinations" && <DestinationsSection items={data.destinations} points={data.qrPoints} />}{section === "qr" && <QrSection destinations={data.destinations} points={data.qrPoints} />}{section === "partners" && <PartnersSection partners={data.partners} destinations={data.destinations} />}{section === "promotions" && <PromotionsSection campaigns={data.promotions} partners={data.partners} qrPoints={data.qrPoints} campaignIdea={campaignIdea} />}{section === "analytics" && <VisitorAnalyticsSection onCreateCampaign={(idea) => { setCampaignIdea(idea); selectSection("promotions"); }} />}{section === "sessions" && <SessionsSection />}{section === "guide" && <GuideSection role={data.role} onNavigate={selectSection} />}</div>
 					<footer className="mt-10 flex flex-col items-center justify-between gap-2 border-t-2 border-madiun-blue/10 pt-6 pb-10 text-center text-[10px] font-bold text-madiun-blue/50 dark:border-white/10 dark:text-slate-500 sm:mt-16 sm:flex-row sm:text-left sm:text-xs"><span>TiLoc · Ruang Pengelola</span><span>Editor dapat membuat, mengubah, dan menerbitkan konten.</span></footer>
 				</div></main>
 			</div>
@@ -215,9 +222,16 @@ function PartnersSection({ partners, destinations }: { partners: Partner[]; dest
 	</div>;
 }
 
-function PromotionsSection({ campaigns, partners, qrPoints }: { campaigns: Promotion[]; partners: Partner[]; qrPoints: QrPoint[] }) {
+function PromotionsSection({ campaigns, partners, qrPoints, campaignIdea }: { campaigns: Promotion[]; partners: Partner[]; qrPoints: QrPoint[]; campaignIdea: CampaignIdea | null }) {
 	const readyPartners = partners.filter((partner) => partner.destination_id);
-	return <div className="grid items-start gap-6 sm:gap-8 lg:grid-cols-[1fr_0.8fr]"><Panel className="order-2 lg:order-1"><SectionTitle title="Buat kampanye promosi" description="Tentukan mitra, lokasi QR, jadwal, dan tujuan aktivasi."/>{readyPartners.length && qrPoints.length ? <PromotionForm partners={readyPartners.map(({ id, business_name, destination_id, max_distance_meters }) => ({ id, business_name, destination_id, max_distance_meters }))} qrPoints={qrPoints.map(({ id, name, code, destination_id, destination_name }) => ({ id, name, code, destination_id, destination_name }))}/> : <EmptyRow>Tambahkan mitra yang sudah ditautkan ke wisata dan titik QR pada wisata yang sama sebelum membuat kampanye.</EmptyRow>}</Panel><Panel className="order-1 lg:order-2"><SectionTitle title="Kampanye tersimpan" description={`${campaigns.length} kampanye`}/>{campaigns.length ? <div className="space-y-3">{campaigns.map((campaign) => <div key={campaign.id} className="rounded-2xl border-2 border-white/50 bg-white/60 p-4 dark:border-white/5 dark:bg-slate-800/60"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-sm dark:text-white sm:text-base">{campaign.title}</p><p className="mt-1 text-[10px] text-madiun-blue/70 dark:text-slate-400 sm:text-xs">{campaign.partner_name} · {campaign.qr_label}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-madiun-blue/60 dark:text-slate-400">{campaign.experience_type === "popup" ? "Popup sekitar" : campaign.experience_type === "minigame" ? "Scan · Find Our Friends" : "Photobox"}</p></div><StatusPill muted={campaign.status !== "published"}>{campaign.status}</StatusPill></div></div>)}</div> : <EmptyRow>Belum ada kampanye. Lengkapi mitra dan titik QR lebih dulu.</EmptyRow>}</Panel></div>;
+	const recommendedQr = campaignIdea ? qrPoints.find((point) => point.destination_id === campaignIdea.id) : undefined;
+	return <div className="space-y-6 sm:space-y-8">
+		<section className="glass-panel rounded-3xl border-l-4 border-l-rose-400 p-5 sm:p-6"><p className="text-[10px] font-black uppercase tracking-[.16em] text-rose-600 dark:text-rose-300">KAMPANYE = PENEMPATAN · PROMOSI = ISI</p><p className="mt-2 text-sm leading-6 text-madiun-blue/75 dark:text-slate-300">Campaign mengatur siapa mitranya, QR pemicu, waktu, dan cara tayangnya. Promosi adalah materi yang pengunjung lihat: judul, gambar, isi, tombol, serta form respons opsional. Keduanya disimpan dan dilaporkan sebagai satu campaign.</p><div className="mt-4 grid gap-2 sm:grid-cols-3"><p className="rounded-xl bg-white/65 p-3 text-[10px] leading-5 dark:bg-slate-900/40"><strong className="block text-madiun-blue dark:text-white">Popup sekitar</strong>Muncul setelah pengunjung lama tidak aktif dan berada dekat QR wisata.</p><p className="rounded-xl bg-white/65 p-3 text-[10px] leading-5 dark:bg-slate-900/40"><strong className="block text-madiun-blue dark:text-white">Selingan misi</strong>Peluang campaign muncul setelah scan titik Find Our Friends.</p><p className="rounded-xl bg-white/65 p-3 text-[10px] leading-5 dark:bg-slate-900/40"><strong className="block text-madiun-blue dark:text-white">Photobox</strong>Popup dekat wisata mengarahkan pengunjung ke Photobox aktif.</p></div></section>
+		<div className="grid items-start gap-6 sm:gap-8 lg:grid-cols-[1fr_0.8fr]">
+			<Panel className="order-2 lg:order-1"><SectionTitle title="Rancang campaign & promosi" description="Pilih mitra dan QR, lalu susun isi serta form pengunjung."/>{campaignIdea && <div className="mb-5 rounded-2xl border border-sky-300/50 bg-sky-50/80 p-4 dark:border-sky-300/15 dark:bg-sky-950/25"><p className="text-[9px] font-black uppercase tracking-[.15em] text-sky-800 dark:text-sky-200">DEMO DARI DATA PENGUNJUNG</p><p className="mt-1 text-sm font-black text-madiun-blue dark:text-white">{campaignIdea.name} · {campaignIdea.visitors} pengunjung unik</p><p className="mt-1 text-[10px] leading-5 text-madiun-blue/70 dark:text-slate-300">Form campaign disiapkan untuk lokasi ini. Pilih mitra yang terhubung dan QR; campaign tetap draft sampai kamu mengaktifkannya.</p>{(!readyPartners.some((partner) => partner.destination_id === campaignIdea.id) || !recommendedQr) && <p className="mt-2 text-[10px] font-bold text-amber-800 dark:text-amber-200">Lokasi ini belum memiliki mitra dan QR yang siap dipakai. Siapkan keduanya terlebih dahulu.</p>}</div>}{readyPartners.length && qrPoints.length ? <PromotionForm partners={readyPartners.map(({ id, business_name, destination_id, max_distance_meters }) => ({ id, business_name, destination_id, max_distance_meters }))} qrPoints={qrPoints.map(({ id, name, code, destination_id, destination_name }) => ({ id, name, code, destination_id, destination_name }))} initialDestinationId={campaignIdea?.id} initialDestinationName={campaignIdea?.name} initialDestinationSlug={campaignIdea?.slug} initialQrPointId={recommendedQr?.id}/> : <EmptyRow>Tambahkan mitra yang sudah ditautkan ke wisata dan titik QR pada wisata yang sama sebelum membuat campaign.</EmptyRow>}</Panel>
+                        <Panel className="order-1 lg:order-2"><SectionTitle title="Campaign tersimpan" description={`${campaigns.length} campaign`}/>{campaigns.length ? <div className="space-y-3">{campaigns.map((campaign) => <div key={campaign.id} className="rounded-2xl border-2 border-white/50 bg-white/60 p-4 dark:border-white/5 dark:bg-slate-800/60"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-sm dark:text-white sm:text-base">{campaign.title}</p><p className="mt-1 text-[10px] text-madiun-blue/70 dark:text-slate-400 sm:text-xs">{campaign.partner_name} · {campaign.qr_label}</p><div className="mt-2 flex flex-wrap gap-2"><span className="rounded-full bg-sky-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">{campaign.experience_type === "popup" ? "Popup sekitar" : campaign.experience_type === "minigame" ? "Scan · Find Our Friends" : "Photobox"}</span>{campaign.has_form && <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-violet-900 dark:bg-violet-950/40 dark:text-violet-200">Form respons</span>}</div></div><StatusPill muted={campaign.status !== "published"}>{campaign.status}</StatusPill></div></div>)}</div> : <EmptyRow>Belum ada campaign. Lengkapi mitra dan titik QR lebih dulu, lalu gunakan preset demo atau form custom.</EmptyRow>}</Panel>
+		</div>
+	</div>;
 }
 
 function SessionsSection() {
