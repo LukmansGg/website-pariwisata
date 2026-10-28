@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTheme } from "@/src/components/theme-provider";
@@ -165,7 +165,7 @@ const IconArrowRight = () => (
 	</svg>
 );
 const IconSparkle = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+	<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
 		<path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-2-5.8L4 11l6-2.2L12 3Z" />
 		<path d="m19 14 1 2.5 2.5 1-2.5 1L19 21l-1-2.5-2.5-1 2.5-1L19 14Z" />
 	</svg>
@@ -210,19 +210,21 @@ const IconEnvelope = () => (
 	</svg>
 );
 
-const STAR_POSITIONS = Array.from({ length: 36 }, (_, index) => {
-	const column = index % 9;
-	const row = Math.floor(index / 9);
+const STAR_TONES = ["#f5fcff", "#c9edff", "#a9dcff", "#d7e2ff"] as const;
+const STAR_POSITIONS = Array.from({ length: 30 }, (_, index) => {
 	const jitter = (seed: number) => {
 		const value = Math.sin((index + seed) * 127.1) * 43758.5453;
 		return value - Math.floor(value);
 	};
+	const flare = index === 4 || index === 17 || index === 27;
 	return {
-		left: ((column + 0.14 + jitter(4) * 0.72) / 9) * 100,
-		top: ((row + 0.12 + jitter(19) * 0.76) / 4) * 100,
-		size: index % 9 === 0 ? 7 : 3 + Math.round(jitter(37) * 2),
-		delay: (index % 8) * 410,
-		flare: index % 9 === 0,
+		left: 3 + jitter(4) * 94,
+		top: 4 + jitter(19) * 91,
+		size: flare ? 3.1 + jitter(38) * .8 : 1.3 + jitter(37) * 1.9,
+		delay: Math.round(jitter(51) * 4800),
+		duration: 4.2 + jitter(69) * 4.2,
+		tone: STAR_TONES[Math.floor(jitter(77) * STAR_TONES.length)],
+		flare,
 	};
 });
 
@@ -230,12 +232,12 @@ const LIGHT_SPARKLES = [[9, 20], [27, 46], [84, 18], [72, 68], [15, 84], [93, 76
 
 function StarParticles({ isDark }: { isDark: boolean }) {
 	return <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-		{(isDark ? STAR_POSITIONS : []).map((star, index) => <span key={`star-${index}`} className={`home-star${star.flare ? " is-flare" : ""}`} style={{ left: `${star.left}%`, top: `${star.top}%`, width: star.size, height: star.size, animationDelay: `${star.delay}ms`, "--star-size": `${star.size}px` } as React.CSSProperties} />)}
+		{(isDark ? STAR_POSITIONS : []).map((star, index) => <span key={`star-${index}`} className={`home-star${star.flare ? " is-flare" : ""}`} style={{ left: `${star.left}%`, top: `${star.top}%`, width: star.size, height: star.size, animationDelay: `${star.delay}ms`, animationDuration: `${star.duration}s`, "--star-size": `${star.size}px`, "--star-tone": star.tone } as React.CSSProperties} />)}
 		{(isDark ? [[71, 18], [94, 39]] as const : LIGHT_SPARKLES).map(([left, top], index) => isDark
 			? <span key={`shooting-${index}`} className="shooting-star" style={{ left: `${left}%`, top: `${top}%`, animationDelay: `${index * 3.8}s` }} />
 			: <span key={`sparkle-${index}`} className="ambient-sparkle" style={{ left: `${left}%`, top: `${top}%`, animationDelay: `${index * 430}ms` }}><IconSparkle /></span>)}
-		<span className="absolute -left-28 top-[18%] h-72 w-72 rounded-full bg-[var(--home-accent)]/10 blur-3xl" />
-		<span className="absolute -right-32 top-[62%] h-80 w-80 rounded-full bg-[var(--home-primary)]/10 blur-3xl" />
+		<span className="home-ambient-glow absolute -left-28 top-[18%] h-72 w-72 rounded-full bg-[var(--home-accent)]/10 blur-3xl" />
+		<span className="home-ambient-glow absolute -right-32 top-[62%] h-80 w-80 rounded-full bg-[var(--home-primary)]/10 blur-3xl" />
 	</div>;
 }
 
@@ -297,25 +299,27 @@ const GlobalStyles = () => (
       position: absolute;
       display: block;
       border-radius: 999px;
-      background: radial-gradient(circle, #fff 0%, #effbff 28%, #8bd9ff 58%, rgba(76,184,237,.15) 100%);
-      box-shadow: 0 0 5px 2px rgba(224,248,255,.72), 0 0 16px 4px var(--home-bloom), 0 0 30px 8px rgba(64,166,220,.22);
-      animation: homeTwinkle 4.8s cubic-bezier(.4,0,.2,1) infinite;
+      background: radial-gradient(circle, #fff 0%, var(--star-tone) 38%, #8bd9ff 72%, rgba(76,184,237,.12) 100%);
+      box-shadow: 0 0 3px 1px rgba(224,248,255,.48), 0 0 9px 2px var(--home-bloom);
+      animation: homeTwinkle 5.6s cubic-bezier(.4,0,.2,1) infinite;
       transform-origin: center;
-      will-change: transform, opacity, filter;
+      will-change: transform, opacity;
     }
     .home-page .home-star::before {
       content: "";
       position: absolute;
       left: 50%; top: 50%;
-      width: calc(var(--star-size) * 3.6);
-      height: calc(var(--star-size) * 3.6);
+      width: calc(var(--star-size) * 2.2);
+      height: calc(var(--star-size) * 2.2);
       transform: translate(-50%, -50%);
-      background: linear-gradient(90deg, transparent 39%, rgba(239,251,255,.82) 49%, transparent 61%), linear-gradient(0deg, transparent 39%, rgba(239,251,255,.82) 49%, transparent 61%);
-      filter: blur(.35px);
-      opacity: .66;
+      background: linear-gradient(90deg, transparent 43%, rgba(239,251,255,.55) 50%, transparent 57%), linear-gradient(0deg, transparent 43%, rgba(239,251,255,.55) 50%, transparent 57%);
+      filter: blur(.15px);
+      opacity: .42;
       pointer-events: none;
     }
-    .home-page .home-star.is-flare { z-index: 0; }
+    .home-page .home-star.is-flare { z-index: 0; box-shadow: 0 0 4px 1px rgba(238,250,255,.66), 0 0 14px 3px var(--home-bloom); }
+    .home-page .home-star.is-flare::before { width: calc(var(--star-size) * 3.1); height: calc(var(--star-size) * 3.1); opacity: .54; }
+    .home-page.dark .home-ambient-glow { opacity: .38; }
     .home-page .matrix-cell { animation: matrixPulse 1.8s ease-in-out infinite; }
     .home-page .matrix-cell.is-fixed { animation: none; opacity: 1; }
     .home-page .matrix-qr-stage::after { content: ""; position: absolute; left: 8%; right: 8%; top: 10%; height: 2px; background: var(--home-accent); box-shadow: 0 0 14px var(--home-accent); opacity: .8; animation: qrScan 3.4s ease-in-out infinite; pointer-events: none; }
@@ -324,15 +328,18 @@ const GlobalStyles = () => (
     .home-page .madiun-marker:hover { animation: markerBoing 520ms cubic-bezier(.2,.9,.25,1.25) both; }
     .home-page .marker-visibility { opacity: 1; visibility: visible; transition: opacity 180ms ease, visibility 180ms; }
     .home-page .markers-hidden { opacity: 0; visibility: hidden; }
-    .home-page .map-activate-lock { box-shadow: 0 8px 24px rgba(47, 116, 159, .14), inset 0 1px 0 rgba(255,255,255,.95); transition: transform 220ms cubic-bezier(.2,.8,.2,1), box-shadow 220ms ease, background-color 220ms ease; }
-    .home-page .map-activate-lock:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 12px 28px rgba(47, 116, 159, .2), inset 0 1px 0 rgba(255,255,255,.98); }
+    .home-page .map-explore-button { box-shadow: 0 8px 24px rgba(47, 116, 159, .13), inset 0 1px 0 rgba(255,255,255,.95); transition: transform 220ms cubic-bezier(.2,.8,.2,1), box-shadow 220ms ease, background-color 220ms ease; }
+    .home-page .map-explore-button:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(47, 116, 159, .2), inset 0 1px 0 rgba(255,255,255,.98); }
+    .home-page .map-hand-icon { transform-origin: 55% 78%; animation: mapHandNudge 2.2s ease-in-out infinite; }
+    .home-page .map-hand-halo { animation: mapHandHalo 2.8s ease-out infinite; }
     .home-page .map-control-bar { box-shadow: 0 8px 24px rgba(31, 71, 99, .12), inset 0 1px 0 rgba(255,255,255,.9); }
     .home-page .map-surface { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 8px 28px rgba(50, 112, 145, .08); }
-    .home-page .map-activation-halo { animation: mapActivationHalo 3.4s ease-out infinite; }
     .home-page .map-marker-halo { transform-box: fill-box; transform-origin: center; animation: selectedMarkerAura 2.1s ease-out infinite; }
     @keyframes markerIdle { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
     @keyframes markerBoing { 0% { transform: translateY(0) scale(1); } 45% { transform: translateY(-9px) scale(1.08); } 75% { transform: translateY(2px) scale(.96); } 100% { transform: translateY(0) scale(1); } }
-    @keyframes mapActivationHalo { 0% { opacity: .34; transform: scale(.88); } 70%,100% { opacity: 0; transform: scale(1.3); } }
+    @keyframes mapHandNudge { 0%,100% { transform: rotate(0) translateY(0); } 38% { transform: rotate(-9deg) translateY(-2px); } 70% { transform: rotate(2deg) translateY(0); } }
+    @keyframes mapHandHalo { 0% { opacity: .5; transform: scale(.88); } 75%,100% { opacity: 0; transform: scale(1.2); } }
+    @media (prefers-reduced-motion: reduce) { .home-page .map-hand-icon, .home-page .map-hand-halo { animation: none; } }
     @keyframes selectedMarkerAura { 0% { opacity: .95; transform: scale(.78); } 75%,100% { opacity: 0; transform: scale(1.65); } }
     .home-page .animate-envelope-float { animation: envelopeFloat 4.5s ease-in-out infinite; }
     @keyframes fadeInUp {
@@ -363,15 +370,15 @@ const GlobalStyles = () => (
       70% { box-shadow: 0 0 0 16px transparent; }
       100% { box-shadow: 0 0 0 0 transparent; }
     }
-    @keyframes homeTwinkle { 0%, 100% { opacity: .46; transform: scale(.82) rotate(0); filter:brightness(.92); } 50% { opacity: 1; transform: scale(1.22) rotate(45deg); filter:brightness(1.28); } }
+    @keyframes homeTwinkle { 0%, 100% { opacity: .34; transform: scale(.86) rotate(0); filter:brightness(.94); } 50% { opacity: .82; transform: scale(1.1) rotate(28deg); filter:brightness(1.12); } }
     @keyframes matrixPulse { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.9; filter: drop-shadow(0 0 5px var(--home-accent)); } }
     @keyframes qrScan { 0%,100% { top: 12%; opacity: .35; } 50% { top: 88%; opacity: .9; } }
     @keyframes envelopeFloat { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-7px) rotate(4deg); } }
     @keyframes moodFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
     @keyframes shootingStar { 0% { transform: translate(0,0) rotate(315deg) scaleX(0); opacity: 0; } 10% { opacity: 1; scale: 1; } 100% { transform: translate(-55vw,55vh) rotate(315deg) scaleX(1); opacity: 0; } }
-    @keyframes sparkleFloat { 0%,100% { transform: translateY(0) scale(.55) rotate(0); opacity: .2; } 50% { transform: translateY(-18px) scale(1) rotate(35deg); opacity: .8; } }
-    .home-page .shooting-star { position:absolute; width:150px; height:2px; border-radius:99px; background:linear-gradient(90deg,transparent,var(--home-accent)); box-shadow:0 0 12px var(--home-bloom); animation:shootingStar 8s linear infinite; }
-    .home-page .ambient-sparkle { position:absolute; color:var(--home-accent); filter:drop-shadow(0 0 8px var(--home-bloom)); animation:sparkleFloat 5s ease-in-out infinite; }
+    @keyframes sparkleFloat { 0%,100% { transform: translateY(0) scale(.72) rotate(0); opacity: .32; } 50% { transform: translateY(-12px) scale(1) rotate(28deg); opacity: .74; } }
+    .home-page .shooting-star { position:absolute; width:108px; height:1px; border-radius:99px; background:linear-gradient(90deg,transparent,rgba(139,217,255,.8)); box-shadow:0 0 7px rgba(77,180,231,.28); opacity:.72; animation:shootingStar 9.5s linear infinite; }
+    .home-page .ambient-sparkle { position:absolute; color:var(--home-accent); opacity:.66; filter:drop-shadow(0 0 5px color-mix(in srgb,var(--home-bloom) 72%,transparent)); animation:sparkleFloat 5.6s ease-in-out infinite; }
 
     @keyframes mobileNavEnter {
       from { opacity: 0; transform: translateY(7px); filter: blur(4px); }
@@ -591,14 +598,18 @@ const DiscoveryMap = ({
 	onSearchChange,
 	destinations,
 	selectedDestinationId,
+	selectedSpot,
 	onSpotSelected,
+	onClearSelectedSpot,
 	compact = false,
 }: {
 	searchQuery: string;
 	onSearchChange: (value: string) => void;
 	destinations: DestinationCard[];
 	selectedDestinationId: string | null;
+	selectedSpot: DestinationCard | null;
 	onSpotSelected: (destination: DestinationCard | null) => void;
+	onClearSelectedSpot: () => void;
 	compact?: boolean;
 }) => {
 	const [boundaryPaths, setBoundaryPaths] = useState<MapBoundaries | null>(null);
@@ -634,16 +645,8 @@ const DiscoveryMap = ({
 
 	useEffect(() => {
 		if (!mapActive) return;
-		const scrollY = window.scrollY;
-		const body = document.body;
-		const html = document.documentElement;
-		const previous = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow, htmlOverflow: html.style.overflow };
-		body.style.position = "fixed";
-		body.style.top = `-${scrollY}px`;
-		body.style.width = "100%";
-		body.style.overflow = "hidden";
-		html.style.overflow = "hidden";
 		const handleOutsidePress = (event: PointerEvent) => {
+			if (event.target instanceof Element && event.target.closest("[data-map-explore]")) return;
 			if (event.target instanceof Node && !mapViewportRef.current?.contains(event.target)) setMapActive(false);
 		};
 		const handleEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setMapActive(false); };
@@ -652,37 +655,51 @@ const DiscoveryMap = ({
 		return () => {
 			document.removeEventListener("pointerdown", handleOutsidePress);
 			window.removeEventListener("keydown", handleEscape);
-			body.style.position = previous.position;
-			body.style.top = previous.top;
-			body.style.width = previous.width;
-			body.style.overflow = previous.overflow;
-			html.style.overflow = previous.htmlOverflow;
-			window.scrollTo(0, scrollY);
 		};
 	}, [mapActive]);
+
+	const setZoomAround = useCallback((nextScale: number, anchorX?: number, anchorY?: number) => {
+		const viewport = mapViewportRef.current;
+		const scale = Math.max(1, Math.min(2, nextScale));
+		if (!viewport || scale === mapScale) return;
+		const bounds = viewport.getBoundingClientRect();
+		const focalX = anchorX === undefined ? 0 : anchorX - bounds.left - bounds.width / 2;
+		const focalY = anchorY === undefined ? 0 : anchorY - bounds.top - bounds.height / 2;
+		const ratio = scale / mapScale;
+		const maxX = Math.max(0, (bounds.width * (1.2 * scale - 1)) / 2);
+		const maxY = Math.max(0, (bounds.height * (1.2 * scale - 1)) / 2);
+		const offset = {
+			x: Math.max(-maxX, Math.min(maxX, focalX - (focalX - mapOffsetRef.current.x) * ratio)),
+			y: Math.max(-maxY, Math.min(maxY, focalY - (focalY - mapOffsetRef.current.y) * ratio)),
+		};
+		mapOffsetRef.current = offset;
+		setMapOffset(offset);
+		setMapScale(scale);
+	}, [mapScale]);
 
 	useEffect(() => {
 		const viewport = mapViewportRef.current;
 		if (!mapActive || !viewport) return;
 		const handleWheel = (event: WheelEvent) => {
 			event.preventDefault();
-			setMapScale((value) => Math.max(1, Math.min(3.5, Number((value + (event.deltaY < 0 ? .16 : -.16)).toFixed(2)))));
+			const nextScale = mapScale * Math.exp(-event.deltaY * 0.001);
+			setZoomAround(nextScale, event.clientX, event.clientY);
 		};
 		viewport.addEventListener("wheel", handleWheel, { passive: false });
 		return () => viewport.removeEventListener("wheel", handleWheel);
-	}, [mapActive]);
+	}, [mapActive, mapScale, setZoomAround]);
 
 	const markers = useMemo(() => destinations.filter((destination) => destination.longitude >= MADIUN_MAP_BOUNDS.minX && destination.longitude <= MADIUN_MAP_BOUNDS.maxX && destination.latitude >= MADIUN_MAP_BOUNDS.minY && destination.latitude <= MADIUN_MAP_BOUNDS.maxY).map((destination) => ({ destination, point: projectMapPoint(destination.longitude, destination.latitude) })), [destinations]);
 	const googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=Madiun";
-	const zoom = (delta: number) => setMapScale((value) => Math.max(1, Math.min(3.5, Number((value + delta).toFixed(2)))));
+	const zoom = (delta: number) => setZoomAround(mapScale + delta);
 	const areaSuggestions = mapAreas.filter((area) => !searchQuery.trim() || area.name.toLocaleLowerCase("id").includes(searchQuery.trim().toLocaleLowerCase("id")) || searchQuery.trim().toLocaleLowerCase("id").split(/\s+/).every((term) => area.name.toLocaleLowerCase("id").includes(term)));
 	const moveToArea = (area: MapArea) => {
 		const point = projectMapPoint(area.longitude, area.latitude);
 		const viewport = mapViewportRef.current;
-		const scale = area.id === "city" ? 1.85 : 1.25;
+		const scale = area.id === "city" ? 1.32 : 1.12;
 		setSelectedArea(area);
 		onSpotSelected(null);
-		setMapActive(true);
+		setMapActive(false);
 		setMapScale(scale);
 		if (viewport) {
 			const width = viewport.clientWidth;
@@ -697,6 +714,7 @@ const DiscoveryMap = ({
 		}
 		setSearchOpen(false);
 		onSearchChange("");
+		window.requestAnimationFrame(() => document.getElementById("peta")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 	};
 	const destinationSuggestions = searchQuery.trim()
 		? destinations.filter((destination) => {
@@ -707,10 +725,10 @@ const DiscoveryMap = ({
 	const focusDestination = (destination: DestinationCard) => {
 		const point = projectMapPoint(destination.longitude, destination.latitude);
 		const viewport = mapViewportRef.current;
-		const scale = 2.2;
+		const scale = 1.35;
 		setSelectedArea(null);
+		onSearchChange(destination.title);
 		onSpotSelected(destination);
-		setMapActive(true);
 		setMapScale(scale);
 		if (viewport) {
 			const width = viewport.clientWidth;
@@ -724,11 +742,10 @@ const DiscoveryMap = ({
 			setMapOffset(offset);
 		}
 		setSearchOpen(false);
-		onSearchChange(destination.title);
 		setMapActive(false);
 	};
 	const handleMapPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-		if (!mapActive || (event.target as HTMLElement).closest("[data-map-control]")) return;
+		if (!mapActive || (event.target as HTMLElement).closest("[data-map-control], [data-marker]")) return;
 		event.currentTarget.setPointerCapture(event.pointerId);
 		dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, originX: mapOffsetRef.current.x, originY: mapOffsetRef.current.y, moved: false };
 		setIsMapDragging(true);
@@ -741,7 +758,7 @@ const DiscoveryMap = ({
 		if (Math.abs(deltaX) + Math.abs(deltaY) > 5) drag.moved = true;
 		const maxX = event.currentTarget.clientWidth * (1.2 * mapScale - 1) / 2;
 		const maxY = event.currentTarget.clientHeight * (1.2 * mapScale - 1) / 2;
-		const offset = { x: Math.max(-maxX, Math.min(maxX, drag.originX + deltaX * 1.15)), y: Math.max(-maxY, Math.min(maxY, drag.originY + deltaY * 1.15)) };
+		const offset = { x: Math.max(-maxX, Math.min(maxX, drag.originX + deltaX)), y: Math.max(-maxY, Math.min(maxY, drag.originY + deltaY)) };
 		mapOffsetRef.current = offset;
 		mapLayerRef.current?.style.setProperty("transform", `translate(${offset.x}px, ${offset.y}px) scale(${mapScale})`);
 	};
@@ -758,75 +775,90 @@ const DiscoveryMap = ({
 		setMapOffset(mapOffsetRef.current);
 		setIsMapDragging(false);
 	};
+	const clearMapSelection = () => {
+		setSelectedArea(null);
+		setMapActive(false);
+		setMapScale(1);
+		mapOffsetRef.current = { x: 0, y: 0 };
+		setMapOffset({ x: 0, y: 0 });
+		onClearSelectedSpot();
+	};
 
 	return (
-		<section
-			id="peta"
-			className={`relative z-20 mx-auto max-w-6xl px-6 pb-20 ${compact ? "order-[30] mt-0" : "order-[20] -mt-10"}`}>
+		<section id="peta" className={`relative z-20 mx-auto w-full max-w-[1760px] px-4 pb-16 sm:px-6 xl:px-8 ${compact ? "mt-0" : "-mt-8"} ${compact && selectedDestinationId ? "order-[20]" : compact ? "order-[30]" : "order-[20]"}`}>
 			<div className="animate-fade-up delay-400">
-				{/* Floating Search Capsule */}
-				<div className="absolute -top-8 left-1/2 -translate-x-1/2 w-full max-w-2xl z-30 px-4">
-					<div className="glass-panel p-2 rounded-full shadow-[0_10px_40px_-10px_var(--home-bloom)] flex items-center">
-						<div className="pl-4 text-[var(--home-accent)]">
-							<IconSearch />
-						</div>
-						<input
-							type="text"
-							placeholder="Cari wisata atau area Madiun..."
-							className="w-full bg-transparent border-none outline-none px-4 py-3 text-[var(--home-ink)] placeholder-[var(--home-ink)]/40 font-medium"
-							value={selectedArea ? selectedArea.name : searchQuery}
-							onFocus={() => setSearchOpen(true)}
-							onBlur={() => window.setTimeout(() => setSearchOpen(false), 140)}
-							onChange={(e) => { setSelectedArea(null); onSpotSelected(null); onSearchChange(e.target.value); setSearchOpen(true); }}
-							onKeyDown={(event) => { if (event.key === "Enter" && areaSuggestions.length + destinationSuggestions.length === 1) { event.preventDefault(); if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } }}
-						/>
-						<button
-							type="button"
-							onClick={() => { if (areaSuggestions.length + destinationSuggestions.length === 1) { if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } else setSearchOpen(true); }}
-							className="bg-[var(--home-accent)] text-[var(--home-on-accent)] px-6 py-3 rounded-full font-bold hover:bg-[var(--home-primary)] hover:text-white transition-colors shadow-sm">
-							Cari
-						</button>
+				<div className="mb-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+					<div className="min-w-0">
+						<p className="mb-2 text-[10px] font-black uppercase tracking-[.2em] text-[var(--home-primary)]">PETA INTERAKTIF · MADIUN</p>
+						<h2 className="text-2xl font-black tracking-tight text-[var(--home-ink)] sm:text-3xl">Jelajahi sekitar</h2>
+						<p className="mt-1 max-w-xl text-sm leading-6 text-[var(--home-ink)]/65">Cari destinasi, lihat posisinya, lalu buka profil tempat yang ingin kamu kunjungi.</p>
 					</div>
-					{searchOpen && (areaSuggestions.length > 0 || destinationSuggestions.length > 0) && <div className="absolute left-4 right-4 top-full mt-2 max-h-[min(55vh,360px)] overflow-y-auto rounded-2xl border border-sky-100 bg-white/95 p-2 shadow-xl backdrop-blur-xl">
-						{areaSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Wilayah</p>{areaSuggestions.map((area) => <button key={area.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => moveToArea(area)} className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-800 transition hover:bg-sky-50"><span>{area.name}</span><span className="text-xs font-semibold text-sky-700">Tampilkan →</span></button>)}</>}
-						{destinationSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Destinasi terdaftar</p>{destinationSuggestions.map((destination) => <button key={destination.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => focusDestination(destination)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-sky-50"><span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-800">{destination.title}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{destination.category}</span></span><span className="shrink-0 text-xs font-semibold text-sky-700">Lihat peta →</span></button>)}</>}
-					</div>}
+					<div className="relative z-30 w-full lg:max-w-[min(48vw,620px)]">
+						<div className="glass-panel flex items-center rounded-2xl border border-[var(--home-glass-border)] p-1.5 shadow-[0_10px_40px_-10px_var(--home-bloom)] sm:rounded-full">
+							<div className="pl-3 text-[var(--home-accent)] sm:pl-4"><IconSearch /></div>
+							<input type="text" aria-label="Cari wisata atau area Madiun" placeholder="Cari wisata atau area Madiun..." className="w-full min-w-0 border-none bg-transparent px-3 py-3 font-medium text-[var(--home-ink)] outline-none placeholder:text-[var(--home-ink)]/40 sm:px-4" value={selectedArea ? selectedArea.name : searchQuery} onFocus={() => setSearchOpen(true)} onBlur={() => window.setTimeout(() => setSearchOpen(false), 140)} onChange={(event) => { setSelectedArea(null); onSearchChange(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Enter" && areaSuggestions.length + destinationSuggestions.length === 1) { event.preventDefault(); if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } }} />
+							<button type="button" onClick={() => { if (areaSuggestions.length + destinationSuggestions.length === 1) { if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } else setSearchOpen(true); }} className="shrink-0 rounded-xl bg-[var(--home-accent)] px-4 py-3 font-bold text-[var(--home-on-accent)] shadow-sm transition-colors hover:bg-[var(--home-primary)] hover:text-white sm:rounded-full sm:px-6">Cari</button>
+						</div>
+						{searchOpen && (areaSuggestions.length > 0 || destinationSuggestions.length > 0) && <div className="absolute left-0 right-0 top-full mt-2 max-h-[min(55vh,360px)] overflow-y-auto rounded-2xl border border-sky-100 bg-white/95 p-2 shadow-xl backdrop-blur-xl">
+							{areaSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Wilayah</p>{areaSuggestions.map((area) => <button key={area.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => moveToArea(area)} className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-800 transition hover:bg-sky-50"><span>{area.name}</span><span className="text-xs font-semibold text-sky-700">Tampilkan →</span></button>)}</>}
+							{destinationSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Destinasi terdaftar</p>{destinationSuggestions.map((destination) => <button key={destination.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => focusDestination(destination)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-sky-50"><span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-800">{destination.title}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{destination.category}</span></span><span className="shrink-0 text-xs font-semibold text-sky-700">Lihat peta →</span></button>)}</>}
+						</div>}
+					</div>
 				</div>
 
-				{/* Map Container */}
-				<div className="glass-panel rounded-[1.75rem] border border-sky-100/80 bg-white/80 p-4 pt-16 shadow-[0_18px_55px_-36px_rgba(34,108,148,.28)] map-container relative overflow-hidden group">
-					{/* Decorative map corner */}
-					<div className="absolute top-0 right-0 bg-white/85 text-slate-600 text-[11px] font-bold tracking-wide px-4 py-2 rounded-bl-2xl rounded-tr-[1.65rem] border-b border-l border-sky-100 z-10">
-						WILAYAH MADIUN
+				<div className="rounded-[1.75rem] border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-3 shadow-[0_18px_55px_-36px_var(--home-bloom)] backdrop-blur-xl sm:rounded-[2rem] sm:p-5">
+					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1">
+						<div><p className="text-sm font-extrabold text-[var(--home-ink)]">Wilayah Madiun</p><p className="mt-0.5 text-xs text-[var(--home-ink)]/55">{markers.length} destinasi dengan titik lokasi</p></div>
+						<span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300"><i className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>Peta siap dijelajahi</span>
 					</div>
+					<div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
+						<div className={`min-w-0 ${selectedSpot ? "order-2 lg:order-1" : "order-1"}`}>
+							<div ref={mapViewportRef} className={`map-surface relative h-[min(64vh,620px)] min-h-[420px] w-full overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#f5f9fc] shadow-[inset_0_1px_0_rgba(255,255,255,.9),0_8px_28px_rgba(50,112,145,.08)] sm:h-[clamp(560px,68vh,760px)] sm:min-h-0 lg:h-[clamp(620px,72vh,840px)] ${mapActive ? "touch-none cursor-grab active:cursor-grabbing" : "touch-pan-y cursor-default"}`} aria-label={mapActive ? "Peta interaktif. Geser atau scroll untuk navigasi." : "Peta pratinjau. Aktifkan jelajah untuk menggeser atau zoom."} onClick={() => { if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } if (!mapActive) setMapActive(true); }} onPointerDown={handleMapPointerDown} onPointerMove={handleMapPointerMove} onPointerUp={handleMapPointerUp} onPointerCancel={handleMapPointerCancel}>
+								<div ref={mapLayerRef} className="absolute -inset-[10%] origin-center will-change-transform" style={{ transform: `translate3d(${mapOffset.x}px, ${mapOffset.y}px, 0) scale(${mapScale})`, transition: isMapDragging ? "none" : "transform 480ms cubic-bezier(.22,.8,.22,1)" }}>
+									<iframe className="pointer-events-none absolute inset-0 h-full w-full border-0" loading="lazy" scrolling="no" title="Peta OpenStreetMap Madiun" src="https://www.openstreetmap.org/export/embed.html?bbox=111.18%2C-7.91%2C111.88%2C-7.32&amp;layer=mapnik" />
+									<div className="pointer-events-none absolute inset-0 bg-sky-50/20" />
+									<svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label="Batas wilayah Madiun">
+										{boundaryPaths?.countyPath && <path d={boundaryPaths.countyPath} fill="none" fillRule="evenodd" stroke="#0284c7" strokeWidth="2.4" strokeDasharray="6 6" vectorEffect="non-scaling-stroke" />}
+										{boundaryPaths?.cityPath && <path d={boundaryPaths.cityPath} fill="none" fillRule="evenodd" stroke="#7c3aed" strokeWidth="2.8" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
+										{selectedArea && (() => { const point = projectMapPoint(selectedArea.longitude, selectedArea.latitude); return <g data-marker className="madiun-marker" aria-label={`Area ${selectedArea.name}`}><circle cx={point.x} cy={point.y} r="12" fill="#f97316" stroke="white" strokeWidth="3"/><circle cx={point.x} cy={point.y} r="4" fill="white"/><text x={point.x + 16} y={point.y - 12} fill="#7c2d12" stroke="white" strokeWidth="4" paintOrder="stroke" fontSize="18" fontWeight="800">{selectedArea.name}</text></g>; })()}
+										<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); const isSelected = destination.id === selectedDestinationId; return <g key={destination.id} data-marker role="button" tabIndex={0} aria-pressed={isSelected} aria-label={`Pilih wisata ${destination.title}`} onClick={(event) => { event.stopPropagation(); if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } focusDestination(destination); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusDestination(destination); } }} className={`madiun-marker cursor-pointer${isSelected ? " selected-map-marker" : ""}`}>
+											<title>{destination.title} · {destination.category}</title>
+											{isSelected && <><circle cx={point.x} cy={point.y} r="23" fill="rgba(14,165,233,.18)" stroke="#38bdf8" strokeWidth="2" className="map-marker-halo"/><text x={point.x} y={point.y - 27} textAnchor="middle" fill="#082f49" stroke="white" strokeWidth="5" paintOrder="stroke" fontSize="15" fontWeight="900">{destination.title}</text></>}
+											{marker.shape === "pin" ? <><path d={`M${point.x} ${point.y + 11}S${point.x - 8} ${point.y + 2} ${point.x - 8} ${point.y - 3}a8 8 0 1 1 16 0c0 5-8 14-8 14Z`} fill={marker.color} stroke="white" strokeWidth="2"/><circle cx={point.x} cy={point.y - 3} r="2.5" fill="white"/></> : marker.shape === "star" ? <path d={`m${point.x} ${point.y - 9} 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "diamond" ? <path d={`m${point.x} ${point.y - 9} 8 9-8 9-8-9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "leaf" ? <path d={`M${point.x} ${point.y + 8}C${point.x - 12} ${point.y + 1} ${point.x - 3} ${point.y - 10} ${point.x + 8} ${point.y - 8}C${point.x + 9} ${point.y + 2} ${point.x + 3} ${point.y + 8} ${point.x} ${point.y + 8}M${point.x} ${point.y + 7}l5-8`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : <circle cx={point.x} cy={point.y} r="7" fill={marker.color} stroke="white" strokeWidth="2"/>}
+										</g>; })}</g>
+									</svg>
+								</div>
+								<div className="absolute left-3 top-3 z-10 flex max-w-[45%] items-center gap-2 rounded-xl border border-white/75 bg-white/90 px-3 py-2 text-[10px] font-bold text-slate-700 shadow-sm backdrop-blur-md sm:left-4 sm:top-4 sm:max-w-[62%] sm:text-xs"><span className="h-2 w-2 shrink-0 rounded-full bg-sky-500"/>{selectedSpot ? "Destinasi terpilih" : selectedArea ? "Wilayah terpilih" : "Madiun · Jawa Timur"}</div>
+								{mapActive && <div className="absolute right-3 top-3 z-10 flex gap-2 sm:right-4 sm:top-4"><div className="map-control-bar flex overflow-hidden rounded-xl border border-white/90 bg-white/95 text-slate-700 shadow-lg backdrop-blur-md"><button data-map-control type="button" onClick={() => zoom(.2)} className="px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perbesar peta">+</button><button data-map-control type="button" onClick={() => zoom(-.2)} className="border-l border-slate-100 px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perkecil peta">−</button><button data-map-control type="button" onClick={() => { setMapScale(1); mapOffsetRef.current = { x: 0, y: 0 }; setMapOffset({ x: 0, y: 0 }); }} className="border-l border-slate-100 px-3 py-2 text-xs font-bold transition hover:bg-sky-50 hover:text-sky-700">Reset</button></div><button data-map-control type="button" onClick={() => setMapActive(false)} className="map-control-bar rounded-xl border border-white/90 bg-white/95 px-3 py-2 text-xs font-bold text-slate-700 shadow-lg backdrop-blur-md transition hover:bg-sky-50 hover:text-sky-700">Selesai <span aria-hidden="true">×</span></button></div>}
+								<div className="absolute bottom-3 left-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-sm backdrop-blur-md sm:bottom-4 sm:left-4 sm:text-[11px]">{markers.length} wisata ditandai</div>
+								<div className="absolute bottom-3 right-3 rounded-md bg-white/90 px-2 py-1 text-[9px] font-semibold text-slate-600 shadow-sm backdrop-blur sm:bottom-4 sm:right-4 sm:text-[10px]">© OpenStreetMap</div>
+								{!boundaryPaths && <div className="absolute left-3 top-14 z-10 rounded-xl bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-sm sm:left-4 sm:top-16 sm:text-xs">{boundaryFailed ? "Garis batas belum termuat." : "Memuat garis batas…"}</div>}
+							</div>
+							<div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+								<div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-semibold text-[var(--home-ink)]/65 sm:text-xs" aria-label="Legenda peta"><span className="inline-flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-sky-600"/>Kabupaten</span><span className="inline-flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-violet-600"/>Kota</span><span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-sky-600"/>Wisata</span></div>
+								<a href={googleMapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold text-[var(--home-ink)] transition hover:bg-[var(--home-soft)]">Buka di Google Maps <IconArrowRight/></a>
+							</div>
+							<div className="mt-3 flex flex-wrap items-center gap-3 border-t border-[var(--home-glass-border)] pt-3">
+								<button type="button" data-map-explore aria-pressed={mapActive} onClick={() => setMapActive((active) => !active)} className="map-explore-button group relative inline-flex min-h-11 items-center gap-3 overflow-hidden rounded-2xl border border-sky-200/70 bg-white/90 px-3 py-2 text-left text-sky-900 shadow-sm dark:border-sky-300/15 dark:bg-slate-900/70 dark:text-sky-100 sm:px-4">
+									<span className="relative grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-sky-500/10 text-sky-700 dark:text-sky-200"><span className="map-hand-halo absolute inset-0 rounded-xl border border-sky-400/50"/><svg className="map-hand-icon relative h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V12 4.5a1.5 1.5 0 0 1 3 0V12 6a1.5 1.5 0 0 1 3 0v7l.8-2.1a1.7 1.7 0 0 1 3.2 1.2l-2 5.5A5 5 0 0 1 15.3 21h-3.1a5 5 0 0 1-3.8-1.8L5.6 16a1.8 1.8 0 0 1 2.4-2.7L10 15"/></svg></span>
+									<span><span className="block text-xs font-extrabold">{mapActive ? "Mode jelajah aktif" : "Jelajahi peta"}</span><span className="mt-0.5 block text-[10px] font-medium text-sky-800/65 dark:text-sky-100/55">{mapActive ? "Geser peta · scroll untuk zoom" : "Ketuk untuk geser dan zoom"}</span></span>
+								</button>
+								{mapActive && <button type="button" onClick={() => setShowMarkers((shown) => !shown)} aria-pressed={showMarkers} className="rounded-xl border border-[var(--home-glass-border)] px-3 py-2 text-xs font-bold text-[var(--home-ink)] transition hover:bg-[var(--home-soft)]">{showMarkers ? "Sembunyikan pin" : "Tampilkan pin"}</button>}
+							</div>
+						</div>
 
-					<div ref={mapViewportRef} className={`map-surface relative h-[480px] w-full overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#f5f9fc] sm:h-[540px] lg:h-[600px] ${mapActive ? "touch-none cursor-grab active:cursor-grabbing" : "touch-pan-y cursor-default"}`} aria-label={mapActive ? "Peta interaktif. Geser atau scroll untuk navigasi." : "Peta statis."} onClick={() => { if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } if (!mapActive) setMapActive(true); }} onPointerDown={handleMapPointerDown} onPointerMove={handleMapPointerMove} onPointerUp={handleMapPointerUp} onPointerCancel={handleMapPointerCancel}>
-						<div ref={mapLayerRef} className="absolute -inset-[10%] origin-center will-change-transform" style={{ transform: `translate(${mapOffset.x}px, ${mapOffset.y}px) scale(${mapScale})`, transition: isMapDragging ? "none" : "transform 280ms cubic-bezier(.2,.8,.2,1)" }}>
-						<iframe className="absolute inset-0 h-full w-full border-0 pointer-events-none" loading="lazy" scrolling="no" title="Peta OpenStreetMap Madiun" src="https://www.openstreetmap.org/export/embed.html?bbox=111.18%2C-7.91%2C111.88%2C-7.32&amp;layer=mapnik" />
-						<div className="absolute inset-0 bg-sky-50/20 pointer-events-none" />
-						<svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label="Batas wilayah Madiun">
-							{boundaryPaths?.countyPath && <path d={boundaryPaths.countyPath} fill="none" fillRule="evenodd" stroke="#0284c7" strokeWidth="2.4" strokeDasharray="6 6" vectorEffect="non-scaling-stroke" />}
-							{boundaryPaths?.cityPath && <path d={boundaryPaths.cityPath} fill="none" fillRule="evenodd" stroke="#7c3aed" strokeWidth="2.8" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
-							{selectedArea && (() => { const point = projectMapPoint(selectedArea.longitude, selectedArea.latitude); return <g data-marker className="madiun-marker" aria-label={`Area ${selectedArea.name}`}><circle cx={point.x} cy={point.y} r="12" fill="#f97316" stroke="white" strokeWidth="3"/><circle cx={point.x} cy={point.y} r="4" fill="white"/><text x={point.x + 16} y={point.y - 12} fill="#7c2d12" stroke="white" strokeWidth="4" paintOrder="stroke" fontSize="18" fontWeight="800">{selectedArea.name}</text></g>; })()}
-							<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); const isSelected = destination.id === selectedDestinationId; return <g key={destination.id} data-marker role="button" tabIndex={0} aria-pressed={isSelected} aria-label={`Pilih wisata ${destination.title}`} onClick={(event) => { event.stopPropagation(); if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } focusDestination(destination); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusDestination(destination); } }} className={`madiun-marker cursor-pointer${isSelected ? " selected-map-marker" : ""}`}>
-								<title>{destination.title} · {destination.category}</title>
-								{isSelected && <><circle cx={point.x} cy={point.y} r="23" fill="rgba(14,165,233,.18)" stroke="#38bdf8" strokeWidth="2" className="map-marker-halo"/><text x={point.x} y={point.y - 27} textAnchor="middle" fill="#082f49" stroke="white" strokeWidth="5" paintOrder="stroke" fontSize="15" fontWeight="900">{destination.title}</text></>}
-								{marker.shape === "pin" ? <><path d={`M${point.x} ${point.y + 11}S${point.x - 8} ${point.y + 2} ${point.x - 8} ${point.y - 3}a8 8 0 1 1 16 0c0 5-8 14-8 14Z`} fill={marker.color} stroke="white" strokeWidth="2"/><circle cx={point.x} cy={point.y - 3} r="2.5" fill="white"/></> : marker.shape === "star" ? <path d={`m${point.x} ${point.y - 9} 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "diamond" ? <path d={`m${point.x} ${point.y - 9} 8 9-8 9-8-9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "leaf" ? <path d={`M${point.x} ${point.y + 8}C${point.x - 12} ${point.y + 1} ${point.x - 3} ${point.y - 10} ${point.x + 8} ${point.y - 8}C${point.x + 9} ${point.y + 2} ${point.x + 3} ${point.y + 8} ${point.x} ${point.y + 8}M${point.x} ${point.y + 7}l5-8`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : <circle cx={point.x} cy={point.y} r="7" fill={marker.color} stroke="white" strokeWidth="2"/>}
-							</g>; })}</g>
-						</svg>
-						</div>
-						{mapActive ? <div className="absolute right-3 top-3 z-10 flex gap-2"><div className="map-control-bar flex overflow-hidden rounded-xl border border-white/90 bg-white/90 text-slate-700 backdrop-blur-md"><button data-map-control type="button" onClick={() => zoom(.2)} className="px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perbesar peta">+</button><button data-map-control type="button" onClick={() => zoom(-.2)} className="border-l border-slate-100 px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perkecil peta">−</button><button data-map-control type="button" onClick={() => setShowMarkers((shown) => !shown)} aria-pressed={showMarkers} className="border-l border-slate-100 px-3 py-2 text-xs font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label={showMarkers ? "Sembunyikan marker wisata" : "Tampilkan marker wisata"}>{showMarkers ? "Pin on" : "Pin off"}</button></div><button data-map-control type="button" onClick={() => setMapActive(false)} className="map-control-bar rounded-xl border border-white/90 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 backdrop-blur-md transition hover:bg-sky-50 hover:text-sky-700">Selesai <span aria-hidden="true">×</span></button></div> : <button data-map-control type="button" aria-label="Aktifkan navigasi peta" title="Aktifkan navigasi peta" onClick={() => setMapActive(true)} className="map-activate-lock absolute left-1/2 top-1/2 z-[5] grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/90 bg-white/80 text-sky-700 backdrop-blur-sm"><span className="map-activation-halo absolute inset-0 rounded-full border border-sky-300/70"/><svg className="relative h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/><path d="M12 16.5v1.5"/></svg></button>}
-						<div className="absolute right-3 bottom-3 rounded-md bg-white/90 px-2 py-1 text-[10px] font-semibold text-slate-600">© OpenStreetMap contributors</div>
-						{!boundaryPaths && <div className="absolute left-3 top-3 z-10 rounded-xl bg-white/90 px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">{boundaryFailed ? "Garis batas belum termuat; peta tetap tersedia." : "Memuat garis batas…"}</div>}
-						<div className="absolute bottom-3 left-3 rounded-xl bg-white/90 px-3 py-2 text-[11px] font-semibold text-slate-600 shadow-sm">{markers.length} wisata cocok</div>
-					</div>
-					<div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-						<div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-[var(--home-ink)]/65" aria-label="Legenda peta">
-							<span className="inline-flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-sky-600" />Kabupaten</span>
-							<span className="inline-flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-violet-600" />Kota</span>
-							<span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Wisata dari Supabase</span>
-						</div>
-						<a href={googleMapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-[var(--home-ink)] transition hover:bg-[var(--home-soft)]">Buka di Google Maps <IconArrowRight /></a>
+						<aside className={`min-w-0 overflow-hidden rounded-[1.35rem] border border-[var(--home-glass-border)] bg-white/60 p-4 dark:bg-slate-950/25 sm:p-5 lg:flex lg:min-h-[clamp(620px,72vh,840px)] lg:flex-col ${selectedSpot ? "order-1 lg:order-2" : "order-2"}`}>
+							<div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.17em] text-[var(--home-primary)]">PROFIL DESTINASI</p><h3 className="mt-1 text-lg font-black text-[var(--home-ink)]">{selectedSpot ? selectedSpot.title : selectedArea ? selectedArea.name : "Pilih sebuah spot"}</h3></div>{selectedSpot?.featured && <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">Unggulan</span>}</div>
+							{selectedSpot ? <>
+								<div className="relative mt-4 aspect-[16/10] overflow-hidden rounded-2xl bg-sky-100 dark:bg-slate-800">{selectedSpot.image ? <Image src={selectedSpot.image} alt={selectedSpot.title} fill sizes="(min-width: 1024px) 380px, 100vw" className="object-cover"/> : <div className="grid h-full place-items-center text-3xl">📍</div>}<span className="absolute bottom-3 left-3 max-w-[85%] truncate rounded-full border border-white/40 bg-white/90 px-3 py-1.5 text-[10px] font-extrabold text-slate-900 shadow-sm backdrop-blur">{selectedSpot.category}</span></div>
+								<p className="mt-4 line-clamp-4 text-sm leading-6 text-[var(--home-ink)]/70">{selectedSpot.shortDescription || selectedSpot.description || "Buka profil destinasi untuk melihat cerita dan informasi lengkap tempat ini."}</p>
+								{selectedSpot.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{selectedSpot.tags.slice(0, 4).map((tag) => <span key={tag} className="rounded-full bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold text-sky-800 dark:text-sky-200">#{tag}</span>)}</div>}
+								<div className="mt-auto flex flex-col gap-2 pt-5"><Link href={`/wisata/${encodeURIComponent(selectedSpot.slug)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--home-primary)] px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-sky-900/10 transition hover:-translate-y-0.5">Buka profil wisata <IconArrowRight/></Link><button type="button" onClick={clearMapSelection} className="min-h-10 rounded-xl px-3 py-2 text-xs font-bold text-[var(--home-ink)]/65 transition hover:bg-[var(--home-soft)]">Tampilkan semua destinasi</button></div>
+							</> : <>
+								<div className="mt-4 rounded-2xl border border-sky-200/60 bg-sky-500/5 p-4 dark:border-sky-300/10"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-500/10 text-sky-700 dark:text-sky-200"><IconMapPin/></span><p className="mt-3 text-sm font-bold text-[var(--home-ink)]">{selectedArea ? "Wilayah sudah ditandai" : "Cari atau pilih marker"}</p><p className="mt-1 text-xs leading-5 text-[var(--home-ink)]/65">{selectedArea ? "Pilih salah satu pin wisata untuk melihat profilnya." : "Pilih destinasi dari pencarian atau ketuk pin pada peta untuk membuka profilnya di sini."}</p>{selectedArea && <button type="button" onClick={clearMapSelection} className="mt-3 text-xs font-extrabold text-sky-800 underline decoration-sky-400/50 underline-offset-4 dark:text-sky-200">Tampilkan seluruh wilayah</button>}</div>
+								{destinations.length > 0 && <div className="mt-4 min-h-0 lg:flex-1"><p className="mb-2 text-[10px] font-black uppercase tracking-[.15em] text-[var(--home-ink)]/55">{searchQuery ? "Hasil pencarian" : "Spot tersedia"}</p><div className="space-y-1.5 lg:max-h-[min(34vh,340px)] lg:overflow-y-auto lg:pr-1">{destinations.slice(0, 6).map((destination) => <button key={destination.id} type="button" onClick={() => focusDestination(destination)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-sky-500/10"><span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-sky-100 dark:bg-slate-800">{destination.image ? <Image src={destination.image} alt="" fill sizes="44px" className="object-cover"/> : <span className="grid h-full place-items-center">📍</span>}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[var(--home-ink)]">{destination.title}</span><span className="mt-0.5 block truncate text-[10px] text-[var(--home-ink)]/55">{destination.category}</span></span><span className="text-sm text-sky-700 dark:text-sky-300">→</span></button>)}</div></div>}
+							</>}
+						</aside>
 					</div>
 				</div>
 			</div>
@@ -873,8 +905,6 @@ const Highlights = ({
 	hasActiveFilters,
 	incompleteCount,
 	compact = false,
-	selectedMapSpot = null,
-	onClearMapSpot,
 }: {
 	destinations: DestinationCard[];
 	loading: boolean;
@@ -883,11 +913,8 @@ const Highlights = ({
 	hasActiveFilters: boolean;
 	incompleteCount: number;
 	compact?: boolean;
-	selectedMapSpot?: DestinationCard | null;
-	onClearMapSpot?: () => void;
 }) => (
-	<section id="destinasi" className={`mx-auto max-w-7xl px-6 ${compact ? "order-[20] py-6" : "order-[40] py-20"}`}>
-		{selectedMapSpot && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-300/50 bg-[var(--home-glass)] px-4 py-3 shadow-[0_10px_32px_-22px_var(--home-bloom)] backdrop-blur-xl" role="status"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-300"><IconMapPin /></span><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.16em] text-sky-700 dark:text-sky-300">Spot dipilih dari peta</p><p className="truncate text-sm font-extrabold text-[var(--home-ink)]">{selectedMapSpot.title}</p></div></div>{onClearMapSpot && <button type="button" onClick={onClearMapSpot} className="rounded-full border border-[var(--home-glass-border)] px-4 py-2 text-xs font-bold text-[var(--home-ink)] transition hover:border-sky-400 hover:bg-sky-400/10">Tampilkan semua</button>}</div>}
+	<section id="destinasi" className={`mx-auto max-w-7xl px-6 ${compact ? selectedMapSpot ? "order-[30] py-6" : "order-[20] py-6" : "order-[40] py-20"}`}>
 		<div className={`flex justify-between items-end animate-fade-up ${compact ? "mb-6" : "mb-12"}`}>
 			<div>
 				<p className="mb-3 text-xs font-black uppercase tracking-[.22em] text-[var(--home-primary)]">Curated for your next story</p>
@@ -1339,14 +1366,17 @@ export default function TiLocApp() {
 	const compactDiscovery = categoryFocused || mapFocusPanelOpen;
 	const handleMapSearchChange = (value: string) => {
 		setSearchQuery(value);
+		setSelectedMapSpot(null);
 		if (!value.trim()) {
 			setMapFocusPanelOpen(false);
-			setSelectedMapSpot(null);
 		}
 	};
 	const handleMapSpotSelected = (destination: DestinationCard | null) => {
 		setSelectedMapSpot(destination);
-		if (!destination) return;
+		if (!destination) {
+			setMapFocusPanelOpen(false);
+			return;
+		}
 		setSelectedCategories([]);
 		setMapFocusPanelOpen(true);
 		window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
@@ -1378,8 +1408,8 @@ export default function TiLocApp() {
 					<div className="flex flex-col">
 						{!compactDiscovery && <div className="order-10"><HeroSection /></div>}
 						<MoodCategories selectedCategories={selectedCategories} onSelect={handleCategorySelect} compact={compactDiscovery} />
-						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={clearDiscoveryFilters} compact={compactDiscovery} selectedMapSpot={selectedMapSpot} onClearMapSpot={clearDiscoveryFilters} />
-						<DiscoveryMap searchQuery={searchQuery} onSearchChange={handleMapSearchChange} destinations={visibleDestinations} selectedDestinationId={selectedMapSpot?.id ?? null} onSpotSelected={handleMapSpotSelected} compact={compactDiscovery} />
+						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={clearDiscoveryFilters} compact={compactDiscovery} />
+						<DiscoveryMap searchQuery={searchQuery} onSearchChange={handleMapSearchChange} destinations={visibleDestinations} selectedDestinationId={selectedMapSpot?.id ?? null} selectedSpot={selectedMapSpot} onSpotSelected={handleMapSpotSelected} onClearSelectedSpot={clearDiscoveryFilters} compact={compactDiscovery} />
 					</div>
 					<PromotionalSection />
 					<SystemCampaignPrompt pageKey="home" />
