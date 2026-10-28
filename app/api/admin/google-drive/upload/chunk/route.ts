@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import {
 	decryptDriveConnection,
@@ -58,18 +59,32 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "Sesi staf tidak cocok. Silakan login kembali." }, { status: 401 });
 	}
 	const { data: role, error: roleError } = await supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
-	if (roleError || !role || !["admin", "editor"].includes(role.role)) {
-		return NextResponse.json({ error: "Akses admin/editor diperlukan." }, { status: 403 });
+	if (roleError || !role || !["admin", "editor", "destination_manager"].includes(role.role)) {
+		return NextResponse.json({ error: "Akun tidak memiliki akses upload." }, { status: 403 });
+	}
+	if (role.role === "destination_manager" && !["destinations", "mascots", "photobox"].includes(uploadSession.assetFolder)) {
+		return NextResponse.json({ error: "Folder upload tidak tersedia untuk pengelola wisata." }, { status: 403 });
 	}
 
 	try {
-		const { data: connection, error: connectionError } = await supabase
+		const serviceKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+		if (role.role === "destination_manager" && (!serviceKey || !process.env.NEXT_PUBLIC_SUPABASE_URL)) return NextResponse.json({ error: "Layanan upload belum disiapkan server." }, { status: 503 });
+		const serviceClient = serviceKey && process.env.NEXT_PUBLIC_SUPABASE_URL
+			? createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+			: null;
+		const connectionClient = role.role === "destination_manager" ? serviceClient! : supabase;
+		const { data: connection, error: connectionError } = await connectionClient
 			.from("google_drive_connections")
-			.select("encrypted_credentials, connected_email")
+			.select("encrypted_credentials, connected_email, connected_by")
 			.eq("id", "primary")
 			.maybeSingle();
-		if (connectionError || !connection?.encrypted_credentials) {
+		if (connectionError || !connection?.encrypted_credentials || !connection.connected_by) {
 			return NextResponse.json({ error: "Google Drive belum dihubungkan admin." }, { status: 503 });
+		}
+		if (role.role === "destination_manager") {
+			const { data: ownerRole } = await serviceClient!.from("user_roles").select("role").eq("user_id", connection.connected_by).maybeSingle();
+			const { data: ownerUser } = await serviceClient!.auth.admin.getUserById(connection.connected_by);
+			if (ownerRole?.role !== "admin" || !ownerUser.user?.email || ownerUser.user.email.toLowerCase() !== googleDriveOwnerEmail()) return NextResponse.json({ error: "Koneksi Drive harus dimiliki akun admin aplikasi." }, { status: 503 });
 		}
 		if (!googleDriveOwnerEmail() || connection.connected_email?.toLowerCase() !== googleDriveOwnerEmail()) {
 			return NextResponse.json({ error: "Akun Drive belum cocok dengan pemilik yang ditetapkan. Admin harus menghubungkan ulang akun pemilik aplikasi." }, { status: 503 });

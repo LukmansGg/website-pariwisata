@@ -93,7 +93,7 @@ export async function loginAction(
 		.eq("user_id", data.user.id)
 		.maybeSingle();
 
-	if (roleError || !role || !["admin", "editor"].includes(role.role)) {
+	if (roleError || !role || !["admin", "editor", "destination_manager"].includes(role.role)) {
 		await supabase.auth.signOut();
 
 		return {
@@ -117,7 +117,7 @@ export type WorkspaceActionState = { error?: string; success?: string };
 type StaffContext = {
 	supabase: Awaited<ReturnType<typeof createClient>>;
 	userId: string;
-	role: "admin" | "editor";
+	role: "admin" | "editor" | "destination_manager";
 };
 
 async function requireStaff(): Promise<StaffContext | null> {
@@ -131,8 +131,13 @@ async function requireStaff(): Promise<StaffContext | null> {
 		.select("role")
 		.eq("user_id", userId)
 		.maybeSingle();
-	if (error || !staff || !["admin", "editor"].includes(staff.role)) return null;
+	if (error || !staff || !["admin", "editor", "destination_manager"].includes(staff.role)) return null;
 	return { supabase, userId, role: staff.role as StaffContext["role"] };
+}
+
+async function requireEditor(): Promise<StaffContext | null> {
+	const staff = await requireStaff();
+	return staff && staff.role !== "destination_manager" ? staff : null;
 }
 
 function value(formData: FormData, key: string, maxLength: number) {
@@ -224,6 +229,7 @@ export async function createDestinationAction(
 
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk menginput data." };
+	if (staff.role === "destination_manager" && wantsPublication && !imageUrl) return { error: "Tambahkan foto sampul sebelum mengajukan wisata untuk ditinjau admin." };
 	const { error: mascotSchemaError } = await staff.supabase.from("destinations").select("mascot_mode").limit(1);
 	if (mascotSchemaError) return { error: "Pengaturan maskot belum siap. Jalankan migration 20261018000000_minigame_programs.sql sebelum menyimpan wisata." };
 
@@ -240,8 +246,8 @@ export async function createDestinationAction(
 		p_longitude: coordinates.longitude,
 		p_image_url: imageUrl,
 		p_tags: tags,
-		p_is_featured: formData.get("is_featured") === "on",
-		p_is_published: isPublished,
+		p_is_featured: staff.role !== "destination_manager" && formData.get("is_featured") === "on",
+		p_is_published: staff.role !== "destination_manager" && isPublished,
 		p_additional_minigames: [],
 		p_qr_name: qrName,
 		p_qr_code: qrCode,
@@ -257,9 +263,13 @@ export async function createDestinationAction(
 	const { error: mascotError } = await staff.supabase.from("destinations")
 		.update({ mascot_mode: mascotMode, mascot_image_url: mascotMode === "custom" ? mascotImageUrl : null }).eq("id", savedDestinationId);
 	if (mascotError) return { error: "Wisata tersimpan, tetapi pengaturan maskot belum dapat diterapkan. Jalankan migration minigame programs." };
+	if (staff.role === "destination_manager" && wantsPublication) {
+		const { data: review, error: reviewError } = await staff.supabase.rpc("submit_destination_for_review", { p_destination_id: savedDestinationId });
+		if (reviewError || review?.error) return { error: reviewError?.code === "PGRST202" ? "Migration persetujuan wisata belum tersedia di database." : review?.error === "DESTINATION_INCOMPLETE" ? "Lengkapi foto sampul, koordinat, dan QR aktif sebelum meminta persetujuan admin." : "Wisata tersimpan sebagai draft, tetapi permintaan review belum berhasil dikirim." };
+	}
 
 	refreshWorkspace({ destinations: true });
-	return { success: isPublished ? "Destinasi dan QR utama berhasil disimpan; wisata sudah diterbitkan." : wantsPublication ? "Destinasi dan QR utama tersimpan sebagai draft. Lengkapi foto sampul sebelum tayang." : "Destinasi dan QR utama berhasil disimpan sebagai draft." };
+	return { success: staff.role === "destination_manager" && wantsPublication ? "Wisata tersimpan dan masuk antrean review admin. Halaman akan tayang setelah disetujui." : isPublished ? "Destinasi dan QR utama berhasil disimpan; wisata sudah diterbitkan." : wantsPublication ? "Destinasi dan QR utama tersimpan sebagai draft. Lengkapi foto sampul sebelum tayang." : "Destinasi dan QR utama berhasil disimpan sebagai draft." };
 }
 
 export async function updateDestinationAction(
@@ -293,6 +303,13 @@ export async function updateDestinationAction(
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengedit data wisata." };
+	let shouldSubmitReview = wantsPublication;
+	if (staff.role === "destination_manager") {
+		const { data: existing, error: existingError } = await staff.supabase.from("destinations").select("is_published").eq("id", id).maybeSingle();
+		if (existingError || !existing) return { error: "Destinasi ini tidak ditemukan atau bukan bagian dari akses akunmu." };
+		shouldSubmitReview = wantsPublication || existing.is_published;
+		if (shouldSubmitReview && !imageUrl) return { error: "Tambahkan foto sampul sebelum mengajukan perubahan untuk ditinjau admin." };
+	}
 	const { error: mascotSchemaError } = await staff.supabase.from("destinations").select("mascot_mode").limit(1);
 	if (mascotSchemaError) return { error: "Pengaturan maskot belum siap. Jalankan migration 20261018000000_minigame_programs.sql sebelum menyimpan wisata." };
 	const { error } = await staff.supabase.rpc("save_destination_with_qr", {
@@ -308,8 +325,8 @@ export async function updateDestinationAction(
 		p_longitude: coordinates.longitude,
 		p_image_url: imageUrl,
 		p_tags: tags,
-		p_is_featured: formData.get("is_featured") === "on",
-		p_is_published: isPublished,
+		p_is_featured: staff.role !== "destination_manager" && formData.get("is_featured") === "on",
+		p_is_published: staff.role !== "destination_manager" && isPublished,
 		p_additional_minigames: [],
 		p_qr_name: qrName,
 		p_qr_code: qrCode,
@@ -321,8 +338,12 @@ export async function updateDestinationAction(
 	const { error: mascotError } = await staff.supabase.from("destinations")
 		.update({ mascot_mode: mascotMode, mascot_image_url: mascotMode === "custom" ? mascotImageUrl : null }).eq("id", id);
 	if (mascotError) return { error: "Wisata dan QR tersimpan, tetapi pengaturan maskot belum dapat diterapkan. Jalankan migration minigame programs." };
+	if (staff.role === "destination_manager" && shouldSubmitReview) {
+		const { data: review, error: reviewError } = await staff.supabase.rpc("submit_destination_for_review", { p_destination_id: id });
+		if (reviewError || review?.error) return { error: reviewError?.code === "PGRST202" ? "Migration persetujuan wisata belum tersedia di database." : review?.error === "DESTINATION_INCOMPLETE" ? "Lengkapi foto sampul, koordinat, dan QR aktif sebelum meminta persetujuan admin." : "Perubahan tersimpan sebagai draft, tetapi permintaan review belum berhasil dikirim." };
+	}
 	refreshWorkspace({ destinations: true });
-	return { success: isPublished ? "Wisata dan QR utama diperbarui; wisata sudah tayang." : wantsPublication ? "Perubahan dan QR tersimpan sebagai draft. Lengkapi foto sampul sebelum tayang." : "Perubahan wisata dan QR utama berhasil disimpan." };
+	return { success: staff.role === "destination_manager" && shouldSubmitReview ? "Perubahan tersimpan dan masuk antrean review admin. Halaman akan tayang kembali setelah disetujui." : isPublished ? "Wisata dan QR utama diperbarui; wisata sudah tayang." : wantsPublication ? "Perubahan dan QR tersimpan sebagai draft. Lengkapi foto sampul sebelum tayang." : "Perubahan wisata dan QR utama berhasil disimpan." };
 }
 
 export async function createQrPointAction(
@@ -379,7 +400,7 @@ export async function createPartnerAction(
 		|| (websiteRaw && !websiteUrl)) {
 		return { error: "Lengkapi nama, minimal satu jenis usaha, ID halaman, deskripsi, dan logo/foto. Periksa juga koordinat serta tautan kontak." };
 	}
-	const staff = await requireStaff();
+	const staff = await requireEditor();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola mitra." };
 	let destination: { id: string; latitude: number | null; longitude: number | null } | null = null;
 	if (destinationId) {
@@ -434,7 +455,7 @@ export async function updatePartnerProximityAction(
 	}
 	if (!coordinates) return { error: "Isi pasangan koordinat yang valid atau kosongkan kedua kolom." };
 	if (allowMinigameIntegration && !destinationId) return { error: "Pilih wisata terkait sebelum mengaktifkan integrasi Find Our Friends." };
-	const staff = await requireStaff();
+	const staff = await requireEditor();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola mitra." };
 	const { data: partner, error: partnerError } = await staff.supabase.from("tourism_partners").select("latitude,longitude").eq("id", partnerId).maybeSingle();
 	if (partnerError || !partner) return { error: "Mitra tidak ditemukan." };
@@ -512,7 +533,7 @@ export async function createPromotionAction(
 		return { error: feedbackMode && !formHasRating ? "Form ulasan harus mempertahankan pertanyaan rating dengan pilihan nilai 1–5." : "Periksa tujuan campaign, target wisata/program, isi form, materi, peluang tayang, dan jadwal." };
 	}
 	if (placementMode === "system" && !systemPages.length) return { error: "Pilih minimal satu halaman umum untuk campaign sistem." };
-	const staff = await requireStaff();
+	const staff = await requireEditor();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola promosi." };
 
 	let partner: { id: string; business_name: string; destination_id: string | null; latitude: number | null; longitude: number | null; allow_minigame_integration: boolean; address: string | null; logo_url: string | null; status: string } | null = null;
@@ -631,7 +652,7 @@ export async function setPromotionCampaignStatusAction(
 	if (!/^[0-9a-f-]{36}$/i.test(campaignId) || !["published", "paused"].includes(nextStatus)) {
 		return { error: "Status campaign tidak valid." };
 	}
-	const staff = await requireStaff();
+	const staff = await requireEditor();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola promosi." };
 	const { data: campaign, error: campaignError } = await staff.supabase.from("promotion_campaigns")
 		.select("id,placement_mode,qr_point_id,status").eq("id", campaignId).maybeSingle();
@@ -678,6 +699,52 @@ export async function setPromotionCampaignStatusAction(
 	return { success: nextStatus === "published" ? "Campaign berhasil diaktifkan." : "Campaign dijeda." };
 }
 
+export async function reviewManagedDestinationAction(
+	_previousState: WorkspaceActionState,
+	formData: FormData,
+): Promise<WorkspaceActionState> {
+	const reviewId = value(formData, "review_id", 64);
+	const decision = value(formData, "decision", 32);
+	const feedback = value(formData, "feedback", 1200);
+	if (!/^[0-9a-f-]{36}$/i.test(reviewId) || !["approved", "changes_requested", "taken_down"].includes(decision)) {
+		return { error: "Permintaan review atau keputusan tidak valid." };
+	}
+	if (decision !== "approved" && feedback.length < 8) return { error: "Tulis alasan yang jelas agar pengelola tahu apa yang perlu diperbaiki." };
+	const staff = await requireStaff();
+	if (!staff || staff.role !== "admin") return { error: "Hanya admin yang dapat memutuskan review wisata." };
+	const { data, error } = await staff.supabase.rpc("review_destination_submission", {
+		p_request_id: reviewId,
+		p_decision: decision,
+		p_feedback: feedback,
+	});
+	if (error || data?.error) {
+		const code = String(data?.error ?? error?.code ?? "");
+		return { error: code === "DESTINATION_INCOMPLETE" ? "Wisata belum memiliki foto, koordinat, dan QR aktif yang diperlukan untuk tayang." : code === "REVIEW_NOT_PENDING" ? "Permintaan ini sudah ditangani. Muat ulang data review." : "Keputusan review belum tersimpan. Periksa migration persetujuan wisata." };
+	}
+	revalidatePath("/ruang-kelola");
+	revalidatePath("/");
+	return { success: decision === "approved" ? "Wisata disetujui dan diterbitkan." : decision === "taken_down" ? "Wisata diturunkan. Alasan sudah dikirim ke pengelola." : "Perbaikan diminta. Catatan sudah dikirim ke pengelola." };
+}
+
+export async function takeDownManagedDestinationAction(
+	_previousState: WorkspaceActionState,
+	formData: FormData,
+): Promise<WorkspaceActionState> {
+	const destinationId = value(formData, "destination_id", 64);
+	const feedback = value(formData, "feedback", 1200);
+	if (!/^[0-9a-f-]{36}$/i.test(destinationId) || feedback.length < 8) return { error: "Pilih wisata dan tulis alasan penurunan yang jelas." };
+	const staff = await requireStaff();
+	if (!staff || staff.role !== "admin") return { error: "Hanya admin yang dapat menurunkan publikasi wisata." };
+	const { data, error } = await staff.supabase.rpc("take_down_managed_destination", {
+		p_destination_id: destinationId,
+		p_feedback: feedback,
+	});
+	if (error || data?.error) return { error: data?.error === "DESTINATION_NOT_PUBLISHED" ? "Wisata ini sudah tidak tayang." : "Wisata belum dapat diturunkan. Periksa status dan migration review." };
+	revalidatePath("/ruang-kelola");
+	revalidatePath("/");
+	return { success: "Wisata diturunkan. Alasan sudah tercatat dan dikirim ke pengelola." };
+}
+
 const MINIGAME_COMPONENTS = new Set(Object.keys(minigameComponentRegistry));
 const isMinigameMission = (component: string) =>
 	isMinigameComponentKey(component) && minigameComponentRegistry[component].role === "mission";
@@ -685,6 +752,8 @@ const isMinigameMission = (component: string) =>
 function minigameErrorMessage(code: string | undefined) {
 	const messages: Record<string, string> = {
 		STAFF_REQUIRED: "Akun ini tidak memiliki akses untuk mengelola minigame.",
+		MANAGER_REQUIRED: "Akun ini bukan pengelola wisata yang terdaftar.",
+		DESTINATION_FORBIDDEN: "Program minigame hanya dapat diterapkan pada destinasi yang ditugaskan ke akunmu.",
 		INVALID_PROGRAM: "Periksa nama, ID, komponen, dan komponen wajib minigame.",
 		SLUG_IN_USE: "ID minigame sudah digunakan. Pilih ID lain.",
 		PROGRAM_NOT_FOUND: "Program minigame tidak ditemukan.",
@@ -723,7 +792,18 @@ export async function saveTourismMinigameProgramAction(
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola minigame." };
-	const { data, error } = await staff.supabase.rpc("save_tourism_minigame_program", {
+	if (staff.role === "destination_manager" && programId) return { error: "Pengelola eksternal hanya dapat membuat program baru untuk destinasi miliknya." };
+	if (staff.role === "destination_manager" && !destinationIds.length) return { error: "Pilih setidaknya satu destinasi milikmu untuk program minigame ini." };
+	const rpcName = staff.role === "destination_manager" ? "create_destination_manager_minigame_program" : "save_tourism_minigame_program";
+	const rpcArgs = staff.role === "destination_manager" ? {
+		p_name: name,
+		p_slug: slug,
+		p_is_enabled: formData.get("is_enabled") === "on",
+		p_components: components,
+		p_required_components: requiredComponents,
+		p_destination_ids: destinationIds,
+		p_default_photobox_access_mode: defaultPhotoboxAccessMode,
+	} : {
 		p_program_id: programId || null,
 		p_name: name,
 		p_slug: slug,
@@ -732,10 +812,11 @@ export async function saveTourismMinigameProgramAction(
 		p_required_components: requiredComponents,
 		p_destination_ids: destinationIds,
 		p_default_photobox_access_mode: defaultPhotoboxAccessMode,
-	});
+	};
+	const { data, error } = await staff.supabase.rpc(rpcName, rpcArgs);
 	if (error) {
 		console.error("Minigame program save failed", { code: error.code, message: error.message });
-		if (error.code === "PGRST202" || error.code === "42883") return { error: "Pengaturan minigame belum tersedia di database. Jalankan migration minigame terbaru di Supabase." };
+		if (error.code === "PGRST202" || error.code === "42883") return { error: staff.role === "destination_manager" ? "Fitur pengelola wisata belum tersedia di database. Jalankan migration 20261028000000_destination_manager_review.sql." : "Pengaturan minigame belum tersedia di database. Jalankan migration minigame terbaru di Supabase." };
 		return { error: "Program belum tersimpan. Periksa koneksi dan pastikan ID program belum dipakai program lain." };
 	}
 	if (data?.error) return { error: minigameErrorMessage(String(data.error)) };
@@ -743,7 +824,7 @@ export async function saveTourismMinigameProgramAction(
 	revalidatePath("/ruang-kelola/minigames");
 	revalidatePath("/ruang-kelola");
 	revalidatePath("/");
-	return { success: "Program tersimpan. Lanjutkan dengan checklist pengaturan di setiap destinasi." };
+	return { success: staff.role === "destination_manager" ? "Program minigame dibuat khusus untuk destinasi milikmu. Atur grup QR dan Photobox per destinasi." : "Program tersimpan. Lanjutkan dengan checklist pengaturan di setiap destinasi." };
 }
 
 type FindPointConfiguration = { qrPointId: string; isRequired: boolean; requires: string[]; friendName?: string; friendImageUrl?: string };
@@ -804,7 +885,19 @@ export async function configureTourismMinigameAssignmentAction(
 	if (components.includes("photobox") && !templates.some((item) => item.enabled)) return { error: "Aktifkan setidaknya satu template Photobox." };
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengelola minigame." };
-	if (components.includes("find_friends")) {
+	if (staff.role === "destination_manager") {
+		const { data: assignment, error: assignmentError } = await staff.supabase.from("tourism_minigame_destinations")
+			.select("photobox_templates").eq("id", assignmentId).maybeSingle();
+		if (assignmentError || !assignment) return { error: "Penerapan minigame ini bukan milik destinasi yang ditugaskan ke akunmu." };
+		const currentTemplates = Array.isArray(assignment.photobox_templates) ? assignment.photobox_templates as PhotoboxTemplateConfiguration[] : [];
+		const protectedCampaignTemplates = currentTemplates.filter((template) => template.source === "campaign");
+		if (templates.filter((template) => template.source !== "campaign").length + protectedCampaignTemplates.length > 12) return { error: "Sisakan slot untuk frame promosi yang dikelola admin. Hapus atau nonaktifkan frame kustom dulu." };
+		templates = [
+			...templates.filter((template) => template.source !== "campaign").map((template) => ({ ...template, source: template.source === "custom" ? "custom" as const : "preset" as const, campaignId: undefined, displayChance: undefined, alwaysShow: undefined })),
+			...protectedCampaignTemplates,
+		];
+	}
+	if (components.includes("find_friends") && staff.role !== "destination_manager") {
 		const { data: linkedCampaignPoints, error: linkedCampaignError } = await staff.supabase.from("promotion_campaign_minigames")
 			.select("qr_point_id").eq("assignment_id", assignmentId).not("qr_point_id", "is", null);
 		if (linkedCampaignError) return { error: "Data QR bonus campaign belum dapat dibaca. Jalankan migration campaign placement redesign." };

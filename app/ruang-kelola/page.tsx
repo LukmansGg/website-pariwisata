@@ -24,7 +24,16 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	if (claimsError || !userId) redirect("/login");
 
 	const { data: staff, error: roleError } = await supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
-	if (roleError || !staff || !["admin", "editor"].includes(staff.role)) redirect("/login");
+	if (roleError || !staff || !["admin", "editor", "destination_manager"].includes(staff.role)) redirect("/login");
+	const managerRole = staff.role === "destination_manager";
+	const [accessResult, reviewResult] = await Promise.all([
+		managerRole || staff.role === "admin"
+			? supabase.from("user_destination_access").select("user_id,destination_id").order("created_at", { ascending: false })
+			: Promise.resolve({ data: [], error: null }),
+		supabase.from("destination_review_requests").select("id,destination_id,manager_user_id,status,feedback,submitted_at,reviewed_at,created_at").order("created_at", { ascending: false }),
+	]);
+	const managedAccess = accessResult.data ?? [];
+	const managerDestinationIds = [...new Set(managedAccess.filter((access) => managerRole ? access.user_id === userId : true).map((access) => access.destination_id))];
 
 	const [destinationQuery, partnersResult, qrPointsResult, promotionsResult, driveResult, assignmentsResult, programsResult] = await Promise.all([
 		supabase.from("destinations").select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, mascot_mode, mascot_image_url, is_published, is_featured, created_at").order("created_at", { ascending: false }),
@@ -45,7 +54,7 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 		destinationRows = legacyDestinations.data as WorkspaceData["destinations"] | null;
 		destinationError = legacyDestinations.error;
 	}
-	const destinations = destinationRows ?? [];
+	const destinations = (destinationRows ?? []).filter((destination) => !managerRole || managerDestinationIds.includes(destination.id));
 	const partnerById = new Map((partnersResult.data ?? []).map((partner) => [partner.id, partner.business_name]));
 	const destinationById = new Map(destinations.map((destination) => [destination.id, destination.name]));
 	const qrPoints = (qrPointsResult.data ?? []).map((point) => ({
@@ -62,27 +71,39 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	}).filter((item): item is NonNullable<typeof item> => item !== null);
 	const dataIssues = [
 		destinationError ? `destinations: ${databaseIssue(destinationError)}` : null,
-		partnersResult.error ? `tourism_partners: ${databaseIssue(partnersResult.error)}` : null,
+		staff.role === "admin" && accessResult.error ? `user_destination_access: ${databaseIssue(accessResult.error)} Jalankan migration 20261028000000_destination_manager_review.sql.` : null,
+		staff.role === "admin" && reviewResult.error ? `destination_review_requests: ${databaseIssue(reviewResult.error)} Jalankan migration 20261028000000_destination_manager_review.sql.` : null,
+		!managerRole && partnersResult.error ? `tourism_partners: ${databaseIssue(partnersResult.error)}` : null,
 		qrPointsResult.error ? `qr_points: ${databaseIssue(qrPointsResult.error)}` : null,
-		promotionsResult.error ? `promotion_campaigns: ${databaseIssue(promotionsResult.error)}` : null,
+		!managerRole && promotionsResult.error ? `promotion_campaigns: ${databaseIssue(promotionsResult.error)}` : null,
 	].filter((issue): issue is string => issue !== null);
 
 	const data: WorkspaceData = {
-		role: staff.role as "admin" | "editor",
+		role: staff.role as WorkspaceData["role"],
 		email: typeof claimsData?.claims.email === "string" ? claimsData.claims.email : "Petugas Pariwisata",
 		destinations,
-		partners: (partnersResult.data ?? []).map((partner) => ({
+		partners: managerRole ? [] : (partnersResult.data ?? []).map((partner) => ({
 			...partner,
 			destination_name: partner.destination_id ? destinationById.get(partner.destination_id) ?? null : null,
 		})),
 		qrPoints,
-		promotions: (promotionsResult.data ?? []).map((campaign) => ({
+		promotions: managerRole ? [] : (promotionsResult.data ?? []).map((campaign) => ({
 			...campaign,
 			has_form: Array.isArray(campaign.form_schema) && campaign.form_schema.some((block: { type?: string }) => ["input", "choice", "dropdown"].includes(block?.type ?? "")),
 			partner_name: campaign.partner_id ? partnerById.get(campaign.partner_id) ?? "Mitra tidak diketahui" : "Campaign sistem",
 			qr_label: campaign.qr_point_id ? qrById.get(campaign.qr_point_id)?.name ?? "QR campaign" : "Tanpa QR khusus",
 		})),
 		minigames,
+		reviewRequests: (reviewResult.data ?? []).filter((request) => managerRole ? request.manager_user_id === userId : staff.role === "admin").map((request) => ({
+			id: request.id,
+			destination_id: request.destination_id,
+			manager_user_id: request.manager_user_id,
+			status: request.status,
+			feedback: request.feedback,
+			submitted_at: request.submitted_at,
+			created_at: request.created_at,
+		})),
+		managedDestinationIds: staff.role === "admin" ? managerDestinationIds : [],
 		driveConnected: Boolean(driveResult.data?.id),
 		driveConnectedEmail: driveResult.data?.connected_email ?? undefined,
 		driveOwnerEmail: googleDriveOwnerEmail(),
