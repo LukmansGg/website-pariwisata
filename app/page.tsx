@@ -170,20 +170,6 @@ const IconSparkle = () => (
 		<path d="m19 14 1 2.5 2.5 1-2.5 1L19 21l-1-2.5-2.5-1 2.5-1L19 14Z" />
 	</svg>
 );
-const IconMessage = () => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		width="24"
-		height="24"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2"
-		strokeLinecap="round"
-		strokeLinejoin="round">
-		<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-	</svg>
-);
 const IconX = () => (
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
@@ -797,11 +783,13 @@ const DiscoveryMap = ({
 						<div className="glass-panel flex items-center rounded-2xl border border-[var(--home-glass-border)] p-1.5 shadow-[0_10px_40px_-10px_var(--home-bloom)] sm:rounded-full">
 							<div className="pl-3 text-[var(--home-accent)] sm:pl-4"><IconSearch /></div>
 							<input type="text" aria-label="Cari wisata atau area Madiun" placeholder="Cari wisata atau area Madiun..." className="w-full min-w-0 border-none bg-transparent px-3 py-3 font-medium text-[var(--home-ink)] outline-none placeholder:text-[var(--home-ink)]/40 sm:px-4" value={selectedArea ? selectedArea.name : searchQuery} onFocus={() => setSearchOpen(true)} onBlur={() => window.setTimeout(() => setSearchOpen(false), 140)} onChange={(event) => { setSelectedArea(null); onSearchChange(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Enter" && areaSuggestions.length + destinationSuggestions.length === 1) { event.preventDefault(); if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } }} />
+							{(searchQuery || selectedArea || selectedSpot) && <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearMapSelection} aria-label="Tutup pencarian dan tampilkan semua destinasi" title="Tutup pencarian" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--home-ink)]/55 transition hover:bg-[var(--home-soft)] hover:text-[var(--home-ink)]"><IconX /></button>}
 							<button type="button" onClick={() => { if (areaSuggestions.length + destinationSuggestions.length === 1) { if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } else setSearchOpen(true); }} className="shrink-0 rounded-xl bg-[var(--home-accent)] px-4 py-3 font-bold text-[var(--home-on-accent)] shadow-sm transition-colors hover:bg-[var(--home-primary)] hover:text-white sm:rounded-full sm:px-6">Cari</button>
 						</div>
 						{searchOpen && (areaSuggestions.length > 0 || destinationSuggestions.length > 0) && <div className="absolute left-0 right-0 top-full mt-2 max-h-[min(55vh,360px)] overflow-y-auto rounded-2xl border border-sky-100 bg-white/95 p-2 shadow-xl backdrop-blur-xl">
 							{areaSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Wilayah</p>{areaSuggestions.map((area) => <button key={area.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => moveToArea(area)} className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-800 transition hover:bg-sky-50"><span>{area.name}</span><span className="text-xs font-semibold text-sky-700">Tampilkan →</span></button>)}</>}
 							{destinationSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Destinasi terdaftar</p>{destinationSuggestions.map((destination) => <button key={destination.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => focusDestination(destination)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-sky-50"><span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-800">{destination.title}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{destination.category}</span></span><span className="shrink-0 text-xs font-semibold text-sky-700">Lihat peta →</span></button>)}</>}
+							<button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setSearchOpen(false)} className="mt-1 min-h-10 w-full rounded-xl border-t border-sky-100 px-3 text-left text-xs font-bold text-sky-800 transition hover:bg-sky-50">Tutup hasil pencarian</button>
 						</div>}
 					</div>
 				</div>
@@ -809,7 +797,6 @@ const DiscoveryMap = ({
 				<div className="rounded-[1.75rem] border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-3 shadow-[0_18px_55px_-36px_var(--home-bloom)] backdrop-blur-xl sm:rounded-[2rem] sm:p-5">
 					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1">
 						<div><p className="text-sm font-extrabold text-[var(--home-ink)]">Wilayah Madiun</p><p className="mt-0.5 text-xs text-[var(--home-ink)]/55">{markers.length} destinasi dengan titik lokasi</p></div>
-						<span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300"><i className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>Peta siap dijelajahi</span>
 					</div>
 					<div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
 						<div className={`min-w-0 ${selectedSpot ? "order-2 lg:order-1" : "order-1"}`}>
@@ -848,14 +835,14 @@ const DiscoveryMap = ({
 						</div>
 
 						<aside className={`min-w-0 overflow-hidden rounded-[1.35rem] border border-[var(--home-glass-border)] bg-white/60 p-4 dark:bg-slate-950/25 sm:p-5 lg:flex lg:min-h-[clamp(620px,72vh,840px)] lg:flex-col ${selectedSpot ? "order-1 lg:order-2" : "order-2"}`}>
-							<div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.17em] text-[var(--home-primary)]">PROFIL DESTINASI</p><h3 className="mt-1 text-lg font-black text-[var(--home-ink)]">{selectedSpot ? selectedSpot.title : selectedArea ? selectedArea.name : "Pilih sebuah spot"}</h3></div>{selectedSpot?.featured && <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">Unggulan</span>}</div>
+							<div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.17em] text-[var(--home-primary)]">{selectedSpot ? "PROFIL DESTINASI" : selectedArea ? "WILAYAH TERPILIH" : searchQuery ? "HASIL PENCARIAN" : "PILIHAN WISATA"}</p><h3 className="mt-1 break-words text-lg font-black text-[var(--home-ink)]">{selectedSpot ? selectedSpot.title : selectedArea ? selectedArea.name : searchQuery ? "Destinasi yang cocok" : "Spot wisata"}</h3></div><div className="flex shrink-0 items-center gap-2">{selectedSpot?.featured && <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">Unggulan</span>}{(selectedSpot || selectedArea || searchQuery) && <button type="button" onClick={clearMapSelection} aria-label="Tutup pilihan dan tampilkan semua destinasi" title="Tutup pilihan" className="grid h-10 w-10 place-items-center rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-ink)]/65 transition hover:bg-[var(--home-soft)] hover:text-[var(--home-ink)]"><IconX /></button>}</div></div>
 							{selectedSpot ? <>
 								<div className="relative mt-4 aspect-[16/10] overflow-hidden rounded-2xl bg-sky-100 dark:bg-slate-800">{selectedSpot.image ? <Image src={selectedSpot.image} alt={selectedSpot.title} fill sizes="(min-width: 1024px) 380px, 100vw" className="object-cover"/> : <div className="grid h-full place-items-center text-3xl">📍</div>}<span className="absolute bottom-3 left-3 max-w-[85%] truncate rounded-full border border-white/40 bg-white/90 px-3 py-1.5 text-[10px] font-extrabold text-slate-900 shadow-sm backdrop-blur">{selectedSpot.category}</span></div>
 								<p className="mt-4 line-clamp-4 text-sm leading-6 text-[var(--home-ink)]/70">{selectedSpot.shortDescription || selectedSpot.description || "Buka profil destinasi untuk melihat cerita dan informasi lengkap tempat ini."}</p>
 								{selectedSpot.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{selectedSpot.tags.slice(0, 4).map((tag) => <span key={tag} className="rounded-full bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold text-sky-800 dark:text-sky-200">#{tag}</span>)}</div>}
 								<div className="mt-auto flex flex-col gap-2 pt-5"><Link href={`/wisata/${encodeURIComponent(selectedSpot.slug)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--home-primary)] px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-sky-900/10 transition hover:-translate-y-0.5">Buka profil wisata <IconArrowRight/></Link><button type="button" onClick={clearMapSelection} className="min-h-10 rounded-xl px-3 py-2 text-xs font-bold text-[var(--home-ink)]/65 transition hover:bg-[var(--home-soft)]">Tampilkan semua destinasi</button></div>
 							</> : <>
-								<div className="mt-4 rounded-2xl border border-sky-200/60 bg-sky-500/5 p-4 dark:border-sky-300/10"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-sky-500/10 text-sky-700 dark:text-sky-200"><IconMapPin/></span><p className="mt-3 text-sm font-bold text-[var(--home-ink)]">{selectedArea ? "Wilayah sudah ditandai" : "Cari atau pilih marker"}</p><p className="mt-1 text-xs leading-5 text-[var(--home-ink)]/65">{selectedArea ? "Pilih salah satu pin wisata untuk melihat profilnya." : "Pilih destinasi dari pencarian atau ketuk pin pada peta untuk membuka profilnya di sini."}</p>{selectedArea && <button type="button" onClick={clearMapSelection} className="mt-3 text-xs font-extrabold text-sky-800 underline decoration-sky-400/50 underline-offset-4 dark:text-sky-200">Tampilkan seluruh wilayah</button>}</div>
+								{selectedArea && <div className="mt-3 rounded-xl border border-sky-200/60 bg-sky-500/5 px-3 py-2 text-xs text-[var(--home-ink)]/70 dark:border-sky-300/10">Wilayah ditandai di peta. <button type="button" onClick={clearMapSelection} className="font-extrabold text-sky-800 underline underline-offset-2 dark:text-sky-200">Lihat semua</button></div>}
 								{destinations.length > 0 && <div className="mt-4 min-h-0 lg:flex-1"><p className="mb-2 text-[10px] font-black uppercase tracking-[.15em] text-[var(--home-ink)]/55">{searchQuery ? "Hasil pencarian" : "Spot tersedia"}</p><div className="space-y-1.5 lg:max-h-[min(34vh,340px)] lg:overflow-y-auto lg:pr-1">{destinations.slice(0, 6).map((destination) => <button key={destination.id} type="button" onClick={() => focusDestination(destination)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-sky-500/10"><span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-sky-100 dark:bg-slate-800">{destination.image ? <Image src={destination.image} alt="" fill sizes="44px" className="object-cover"/> : <span className="grid h-full place-items-center">📍</span>}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[var(--home-ink)]">{destination.title}</span><span className="mt-0.5 block truncate text-[10px] text-[var(--home-ink)]/55">{destination.category}</span></span><span className="text-sm text-sky-700 dark:text-sky-300">→</span></button>)}</div></div>}
 							</>}
 						</aside>
@@ -869,15 +856,20 @@ const DiscoveryMap = ({
 const MoodCategories = ({
 	selectedCategories,
 	onSelect,
+	compactLabel = "",
+	onClear,
 	compact = false,
 }: {
 	selectedCategories: string[];
 	onSelect: (categories: string[]) => void;
+	compactLabel?: string;
+	onClear?: () => void;
 	compact?: boolean;
 }) => (
 	<section id="kuliner" className={`mx-auto max-w-7xl px-6 ${compact ? "order-[10] sticky top-16 z-30 mt-16 py-3" : "order-[30] py-20"}`}>
 		{!compact && <div className="mb-12 animate-fade-up text-center"><h2 className="mb-4 text-3xl font-extrabold text-[var(--home-ink)]">Pilih kategori</h2><p className="text-[var(--home-ink)]/70">Pilih satu atau beberapa kategori untuk menyaring destinasi.</p></div>}
 
+		{compact && <div className="mb-2 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[var(--home-glass-border)] bg-[var(--home-glass)]/90 px-3 py-2 shadow-sm backdrop-blur-xl"><span className="min-w-0 truncate text-xs font-bold text-[var(--home-ink)]">{compactLabel ? `Sedang melihat · ${compactLabel}` : "Filter destinasi aktif"}</span><button type="button" onClick={onClear} className="min-h-9 shrink-0 rounded-lg px-3 text-xs font-extrabold text-sky-800 transition hover:bg-sky-500/10 dark:text-sky-200">Tutup mode ×</button></div>}
 		<div className={`flex flex-wrap gap-2 animate-fade-up ${compact ? "justify-start rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-2 shadow-lg backdrop-blur-xl" : "justify-center gap-3 delay-200"}`}>
 			{MOODS.map((mood) => (
 				<button
@@ -1145,81 +1137,6 @@ const PromotionalSection = () => {
 	);
 };
 
-const AssistantTirta = ({
-	onSearch,
-}: {
-	onSearch: (query: string) => void;
-}) => {
-	const [isOpen, setIsOpen] = useState(false);
-	const [query, setQuery] = useState("");
-
-	function handleSearch(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		if (!query.trim()) return;
-		onSearch(query.trim());
-		setIsOpen(false);
-		requestAnimationFrame(() =>
-			document
-				.getElementById("destinasi")
-				?.scrollIntoView({ behavior: "smooth" }),
-		);
-	}
-
-	return (
-		<div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-			{/* Chat Bubble */}
-			{isOpen && (
-				<div className="bg-[var(--home-glass)] rounded-3xl rounded-br-none shadow-2xl border border-[var(--home-glass-border)] w-80 mb-4 overflow-hidden animate-fade-up origin-bottom-right transition-all">
-					<div className="bg-[var(--home-primary)] p-4 text-white flex justify-between items-center">
-						<div className="flex items-center gap-3">
-							<div className="w-10 h-10 bg-[var(--home-glass)]/20 rounded-full flex items-center justify-center text-xl">
-								💧
-							</div>
-							<div>
-								<div className="font-bold">Tirta</div>
-								<div className="text-xs text-white/70">Pencarian destinasi</div>
-							</div>
-						</div>
-						<button
-							onClick={() => setIsOpen(false)}
-							className="hover:bg-[var(--home-glass)]/20 p-2 rounded-full transition-colors">
-							<IconX />
-						</button>
-					</div>
-					<div className="p-6 h-64 bg-[var(--home-soft)]/30 flex flex-col justify-end">
-						<div className="bg-[var(--home-soft)] text-[var(--home-ink)] p-3 rounded-2xl rounded-tl-none inline-block max-w-[85%] text-sm mb-4 shadow-sm border border-[var(--home-ink)]/5">
-							Halo! Aku Tirta. Sebut nama tempat, kuliner, atau suasana yang
-							ingin kamu cari.
-						</div>
-						<form onSubmit={handleSearch} className="flex gap-2">
-							<input
-								type="search"
-								value={query}
-								onChange={(event) => setQuery(event.target.value)}
-								placeholder="Cari destinasi..."
-								className="min-w-0 flex-1 bg-[var(--home-glass)] border border-[var(--home-ink)]/20 rounded-full px-4 py-2 text-sm outline-none focus:border-[var(--home-accent)]"
-							/>
-							<button
-								type="submit"
-								aria-label="Cari destinasi"
-								className="bg-[var(--home-primary)] text-white p-2 w-10 h-10 rounded-full flex items-center justify-center hover:bg-[var(--home-accent)] hover:text-[var(--home-ink)] transition-colors">
-								<IconArrowRight />
-							</button>
-						</form>
-					</div>
-				</div>
-			)}
-
-			{/* Floating Action Button */}
-			<button
-				onClick={() => setIsOpen(!isOpen)}
-				className="w-16 h-16 bg-[var(--home-primary)] text-white rounded-full shadow-[0_10px_25px_-5px_var(--home-bloom)] flex items-center justify-center hover:scale-110 hover:bg-[var(--home-accent)] transition-all duration-300">
-				{isOpen ? <IconX /> : <IconMessage />}
-			</button>
-		</div>
-	);
-};
-
 const Footer = () => {
 	return (
 	<footer id="tentang" className="bg-[var(--home-glass)] pt-20 pb-10 px-6 border-t border-[var(--home-glass-border)]">
@@ -1366,6 +1283,7 @@ export default function TiLocApp() {
 	const hasActiveFilters = Boolean(searchQuery.trim()) || selectedCategories.length > 0;
 	const categoryFocused = selectedCategories.length > 0;
 	const compactDiscovery = categoryFocused || mapFocusPanelOpen;
+	const compactLabel = selectedMapSpot?.title ?? (searchQuery.trim() ? `Pencarian: ${searchQuery.trim()}` : selectedCategories.join(", "));
 	const handleMapSearchChange = (value: string) => {
 		setSearchQuery(value);
 		setSelectedMapSpot(null);
@@ -1409,7 +1327,7 @@ export default function TiLocApp() {
 				<main className="relative z-10">
 					<div className="flex flex-col">
 						{!compactDiscovery && <div className="order-10"><HeroSection /></div>}
-						<MoodCategories selectedCategories={selectedCategories} onSelect={handleCategorySelect} compact={compactDiscovery} />
+						<MoodCategories selectedCategories={selectedCategories} onSelect={handleCategorySelect} compact={compactDiscovery} compactLabel={compactLabel} onClear={clearDiscoveryFilters} />
 						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={clearDiscoveryFilters} compact={compactDiscovery} selectedDestinationId={selectedMapSpot?.id ?? null} />
 						<DiscoveryMap searchQuery={searchQuery} onSearchChange={handleMapSearchChange} destinations={visibleDestinations} selectedDestinationId={selectedMapSpot?.id ?? null} selectedSpot={selectedMapSpot} onSpotSelected={handleMapSpotSelected} onClearSelectedSpot={clearDiscoveryFilters} compact={compactDiscovery} />
 					</div>
@@ -1417,14 +1335,6 @@ export default function TiLocApp() {
 					<SystemCampaignPrompt pageKey="home" />
 				</main>
 
-				<AssistantTirta
-					onSearch={(query) => {
-						setSearchQuery(query);
-						setSelectedCategories([]);
-						setSelectedMapSpot(null);
-						setMapFocusPanelOpen(Boolean(query.trim()));
-					}}
-				/>
 				<Footer />
 			</div>
 		</>

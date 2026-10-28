@@ -117,6 +117,7 @@ create trigger destinations_protect_manager_fields
   for each row execute function public.protect_destination_manager_fields();
 
 drop policy if exists "Staff can read all destinations" on public.destinations;
+drop policy if exists "Staff and owners can read destinations" on public.destinations;
 create policy "Staff and owners can read destinations"
   on public.destinations for select to authenticated
   using (is_published or (select public.has_staff_role('editor')) or (select public.can_manage_destination(id)));
@@ -133,6 +134,7 @@ create policy "Staff can add destinations"
   );
 
 drop policy if exists "Staff can edit destinations" on public.destinations;
+drop policy if exists "Staff and owners can edit destinations" on public.destinations;
 create policy "Staff and owners can edit destinations"
   on public.destinations for update to authenticated
   using ((select public.has_staff_role('editor')) or (select public.can_manage_destination(id)))
@@ -318,12 +320,34 @@ begin
 end;
 $$;
 
+create or replace function public.revoke_destination_manager_access(p_manager_user_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.user_roles where user_id = (select auth.uid()) and role = 'admin'
+  ) then return jsonb_build_object('error', 'ADMIN_REQUIRED'); end if;
+  if not exists (
+    select 1 from public.user_roles where user_id = p_manager_user_id and role = 'destination_manager'
+  ) then return jsonb_build_object('error', 'MANAGER_NOT_FOUND'); end if;
+
+  delete from public.user_destination_access where user_id = p_manager_user_id;
+  delete from public.user_roles where user_id = p_manager_user_id and role = 'destination_manager';
+  return jsonb_build_object('status', 'revoked');
+end;
+$$;
+
 revoke all on function public.submit_destination_for_review(uuid) from public, anon;
 revoke all on function public.review_destination_submission(uuid, text, text) from public, anon;
 revoke all on function public.take_down_managed_destination(uuid, text) from public, anon;
+revoke all on function public.revoke_destination_manager_access(uuid) from public, anon;
 grant execute on function public.submit_destination_for_review(uuid) to authenticated;
 grant execute on function public.review_destination_submission(uuid, text, text) to authenticated;
 grant execute on function public.take_down_managed_destination(uuid, text) to authenticated;
+grant execute on function public.revoke_destination_manager_access(uuid) to authenticated;
 
 drop policy if exists "Staff manage minigame programs" on public.tourism_minigame_programs;
 create policy "Staff manage minigame programs" on public.tourism_minigame_programs
@@ -412,24 +436,145 @@ $$;
 revoke all on function public.create_destination_manager_minigame_program(text, text, boolean, text[], text[], uuid[], text) from public, anon;
 grant execute on function public.create_destination_manager_minigame_program(text, text, boolean, text[], text[], uuid[], text) to authenticated;
 
--- Keep all existing minigame validation; permit the assignment owner through the same scoped helper.
-do $$
+-- Preserve the existing validation and make ownership explicit. Replacing the
+-- full function avoids depending on formatting in pg_get_functiondef, which
+-- differs between databases and can make a string-patch abort this migration.
+create or replace function public.configure_tourism_minigame_assignment(
+  p_assignment_id uuid,
+  p_is_enabled boolean,
+  p_components text[],
+  p_required_components text[],
+  p_photobox_access_mode text,
+  p_photobox_templates jsonb,
+  p_caption_template text,
+  p_max_caption_length integer,
+  p_max_dependency_distance_meters integer,
+  p_find_points jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
-  v_signature regprocedure := 'public.configure_tourism_minigame_assignment(uuid,boolean,text[],text[],text,jsonb,text,integer,integer,jsonb)'::regprocedure;
-  v_definition text;
-  v_old text := 'if auth.uid() is null or not public.has_staff_role(''editor'') then return jsonb_build_object(''error'', ''STAFF_REQUIRED''); end if;';
-  v_new text := 'if auth.uid() is null then return jsonb_build_object(''error'', ''STAFF_REQUIRED''); end if;';
+  v_assignment public.tourism_minigame_destinations%rowtype;
+  v_item jsonb;
+  v_point_id uuid;
+  v_cycles boolean;
 begin
-  v_definition := pg_get_functiondef(v_signature);
-  if position(v_old in v_definition) = 0 then
-    raise exception 'Could not safely extend minigame assignment authorization';
+  if auth.uid() is null then return jsonb_build_object('error', 'STAFF_REQUIRED'); end if;
+  select * into v_assignment from public.tourism_minigame_destinations where id = p_assignment_id for update;
+  if not found then return jsonb_build_object('error', 'ASSIGNMENT_NOT_FOUND'); end if;
+  if not public.has_staff_role('editor') and not public.can_manage_destination(v_assignment.destination_id) then
+    return jsonb_build_object('error', 'STAFF_REQUIRED');
   end if;
-  v_definition := replace(v_definition, v_old, v_new);
-  v_old := 'if not found then return jsonb_build_object(''error'', ''ASSIGNMENT_NOT_FOUND''); end if;';
-  v_new := 'if not found then return jsonb_build_object(''error'', ''ASSIGNMENT_NOT_FOUND''); end if; if not public.has_staff_role(''editor'') and not public.can_manage_destination(v_assignment.destination_id) then return jsonb_build_object(''error'', ''STAFF_REQUIRED''); end if;';
-  if position(v_old in v_definition) = 0 then
-    raise exception 'Could not safely add minigame ownership check';
+  if coalesce(p_components, '{}') = '{}'
+    or not (coalesce(p_components, '{}') <@ array['find_friends', 'photobox', 'chat_ai']::text[])
+    or not (coalesce(p_required_components, '{}') <@ coalesce(p_components, '{}'))
+    or 'photobox' = any(coalesce(p_required_components, '{}'))
+    or 'chat_ai' = any(coalesce(p_required_components, '{}'))
+    or p_photobox_access_mode is null or p_photobox_access_mode not in ('standalone', 'mission_reward')
+    or jsonb_typeof(coalesce(p_photobox_templates, '[]'::jsonb)) <> 'array'
+    or jsonb_array_length(coalesce(p_photobox_templates, '[]'::jsonb)) > 12
+    or exists (select 1 from jsonb_array_elements(coalesce(p_photobox_templates, '[]'::jsonb)) t where coalesce(t->>'ratio', '') not in ('portrait', 'story', 'square'))
+    or length(coalesce(p_caption_template, '')) > 500
+    or p_max_caption_length is null or p_max_caption_length not between 40 and 1000
+    or p_max_dependency_distance_meters is null or p_max_dependency_distance_meters not between 100 and 10000
+    or jsonb_typeof(coalesce(p_find_points, '[]'::jsonb)) <> 'array'
+    or jsonb_array_length(coalesce(p_find_points, '[]'::jsonb)) > 100 then
+    return jsonb_build_object('error', 'INVALID_ASSIGNMENT');
   end if;
-  execute replace(v_definition, v_old, v_new);
+  if p_photobox_access_mode = 'mission_reward'
+    and (not ('photobox' = any(p_components)) or cardinality(coalesce(p_required_components, '{}')) = 0) then
+    return jsonb_build_object('error', 'PHOTOBOX_REWARD_REQUIRES_REQUIRED_MISSION');
+  end if;
+  if 'photobox' = any(p_components) and not exists (
+    select 1 from jsonb_array_elements(coalesce(p_photobox_templates, '[]'::jsonb)) t
+    where coalesce((t->>'enabled')::boolean, true)
+  ) then return jsonb_build_object('error', 'PHOTOBOX_REQUIRES_ENABLED_TEMPLATE'); end if;
+  if 'find_friends' = any(p_components) and jsonb_array_length(coalesce(p_find_points, '[]'::jsonb)) = 0 then
+    return jsonb_build_object('error', 'FIND_FRIENDS_REQUIRES_QR_POINTS');
+  end if;
+  if 'find_friends' = any(p_components) and not exists (
+    select 1 from jsonb_array_elements(coalesce(p_find_points, '[]'::jsonb)) item
+    where coalesce((item->>'isRequired')::boolean, true)
+  ) then return jsonb_build_object('error', 'FIND_FRIENDS_REQUIRES_REQUIRED_POINT'); end if;
+  if 'find_friends' = any(p_components) and exists (
+    select 1 from jsonb_array_elements(coalesce(p_find_points, '[]'::jsonb)) item
+    where not exists (
+      select 1 from public.qr_points q where q.id = (item->>'qrPointId')::uuid
+        and q.destination_id = v_assignment.destination_id and q.is_active
+    )
+  ) then return jsonb_build_object('error', 'QR_POINT_NOT_IN_DESTINATION'); end if;
+  if 'find_friends' = any(p_components) and exists (
+    select 1 from jsonb_array_elements(coalesce(p_find_points, '[]'::jsonb)) item
+    cross join lateral jsonb_array_elements_text(coalesce(item->'requires', '[]'::jsonb)) dep(value)
+    where not exists (
+      select 1 from jsonb_array_elements(coalesce(p_find_points, '[]'::jsonb)) other
+      where other->>'qrPointId' = dep.value
+    )
+  ) then return jsonb_build_object('error', 'DEPENDENCY_NOT_IN_GROUP'); end if;
+  if 'find_friends' = any(p_components) and exists (
+    select 1 from jsonb_array_elements(coalesce(p_find_points, '[]'::jsonb)) item
+    cross join lateral jsonb_array_elements_text(coalesce(item->'requires', '[]'::jsonb)) dep(value)
+    join public.qr_points child on child.id = (item->>'qrPointId')::uuid
+    join public.qr_points prerequisite on prerequisite.id = dep.value::uuid
+    where child.latitude is null or child.longitude is null or prerequisite.latitude is null or prerequisite.longitude is null
+      or 6371000 * 2 * asin(sqrt(least(1::double precision,
+        power(sin(radians((child.latitude - prerequisite.latitude)::double precision) / 2), 2)
+        + cos(radians(child.latitude::double precision)) * cos(radians(prerequisite.latitude::double precision))
+        * power(sin(radians((child.longitude - prerequisite.longitude)::double precision) / 2), 2)
+      ))) > p_max_dependency_distance_meters
+  ) then return jsonb_build_object('error', 'DEPENDENCY_TOO_FAR'); end if;
+
+  update public.tourism_minigame_destinations set is_enabled = coalesce(p_is_enabled, false),
+    components = coalesce(p_components, '{}'), required_components = coalesce(p_required_components, '{}'),
+    photobox_access_mode = p_photobox_access_mode,
+    photobox_templates = coalesce(p_photobox_templates, '[]'::jsonb),
+    caption_template = coalesce(nullif(trim(p_caption_template), ''), 'Kenangan seru di {destination}! #TiLoc'),
+    max_caption_length = p_max_caption_length,
+    max_dependency_distance_meters = p_max_dependency_distance_meters, updated_at = now()
+  where id = p_assignment_id;
+
+  if not ('find_friends' = any(p_components)) then
+    return jsonb_build_object('status', 'saved');
+  end if;
+
+  delete from public.tourism_minigame_qr_points where assignment_id = p_assignment_id;
+  for v_item in select value from jsonb_array_elements(coalesce(p_find_points, '[]'::jsonb)) loop
+    v_point_id := (v_item->>'qrPointId')::uuid;
+    insert into public.tourism_minigame_qr_points(assignment_id, qr_point_id, is_required, friend_name, friend_image_url)
+    values (p_assignment_id, v_point_id, coalesce((v_item->>'isRequired')::boolean, true), nullif(trim(v_item->>'friendName'), ''), nullif(trim(v_item->>'friendImageUrl'), ''));
+  end loop;
+
+  for v_item in select value from jsonb_array_elements(coalesce(p_find_points, '[]'::jsonb)) loop
+    v_point_id := (v_item->>'qrPointId')::uuid;
+    insert into public.tourism_minigame_qr_dependencies(assignment_id, qr_point_id, prerequisite_qr_point_id)
+    select p_assignment_id, v_point_id, dep.value::uuid
+    from jsonb_array_elements_text(coalesce(v_item->'requires', '[]'::jsonb)) dep(value)
+    where dep.value::uuid <> v_point_id;
+  end loop;
+
+  with recursive walk(start_id, node_id, path, has_cycle) as (
+    select d.qr_point_id, d.prerequisite_qr_point_id,
+      array[d.qr_point_id, d.prerequisite_qr_point_id], d.qr_point_id = d.prerequisite_qr_point_id
+    from public.tourism_minigame_qr_dependencies d where d.assignment_id = p_assignment_id
+    union all
+    select w.start_id, d.prerequisite_qr_point_id, w.path || d.prerequisite_qr_point_id,
+      d.prerequisite_qr_point_id = any(w.path)
+    from walk w join public.tourism_minigame_qr_dependencies d
+      on d.assignment_id = p_assignment_id and d.qr_point_id = w.node_id
+    where not w.has_cycle
+  ) select coalesce(bool_or(has_cycle), false) into v_cycles from walk;
+  if v_cycles then raise exception using errcode = 'P0001', message = 'DEPENDENCY_CYCLE'; end if;
+
+  return jsonb_build_object('status', 'saved');
+exception when foreign_key_violation or invalid_text_representation or unique_violation then
+  return jsonb_build_object('error', 'INVALID_QR_DEPENDENCY');
+when sqlstate 'P0001' then
+  return jsonb_build_object('error', 'DEPENDENCY_CYCLE');
 end;
 $$;
+
+revoke all on function public.configure_tourism_minigame_assignment(uuid, boolean, text[], text[], text, jsonb, text, integer, integer, jsonb) from public, anon;
+grant execute on function public.configure_tourism_minigame_assignment(uuid, boolean, text[], text[], text, jsonb, text, integer, integer, jsonb) to authenticated;

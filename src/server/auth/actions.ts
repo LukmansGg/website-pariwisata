@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import { checkLoginLimit } from "@/src/server/auth/rate-limit";
 import { isMinigameComponentKey, minigameComponentRegistry } from "@/src/features/minigames/registry";
@@ -138,6 +139,13 @@ async function requireStaff(): Promise<StaffContext | null> {
 async function requireEditor(): Promise<StaffContext | null> {
 	const staff = await requireStaff();
 	return staff && staff.role !== "destination_manager" ? staff : null;
+}
+
+function getServiceAdminClient() {
+	const serviceKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+	if (!serviceKey || !supabaseUrl) return null;
+	return createSupabaseAdminClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 function value(formData: FormData, key: string, maxLength: number) {
@@ -697,6 +705,74 @@ export async function setPromotionCampaignStatusAction(
 	}
 	refreshWorkspace({ campaigns: true });
 	return { success: nextStatus === "published" ? "Campaign berhasil diaktifkan." : "Campaign dijeda." };
+}
+
+export async function inviteDestinationManagerAction(
+	_previousState: WorkspaceActionState,
+	formData: FormData,
+): Promise<WorkspaceActionState> {
+	const email = value(formData, "email", 254).toLowerCase();
+	const destinationIds = [...new Set(formData.getAll("destination_ids").map((item) => String(item).trim()))];
+	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Masukkan alamat email yang valid untuk undangan." };
+	if (destinationIds.length > 20 || destinationIds.some((id) => !/^[0-9a-f-]{36}$/i.test(id))) return { error: "Pilihan destinasi tidak valid." };
+	const staff = await requireStaff();
+	if (!staff || staff.role !== "admin") return { error: "Hanya admin yang dapat mengundang pengelola wisata." };
+	const admin = getServiceAdminClient();
+	const appOrigin = process.env.APP_ORIGIN;
+	if (!admin) return { error: "Layanan undangan belum disiapkan. Konfigurasikan service key Supabase di server." };
+	if (!appOrigin) return { error: "APP_ORIGIN belum disiapkan untuk tautan undangan." };
+	const { error: migrationError } = await admin.from("user_destination_access").select("destination_id").limit(1);
+	if (migrationError) return { error: "Migration role dan akses pengelola wisata belum diterapkan di Supabase." };
+	let redirectTo: string;
+	try { redirectTo = new URL("/atur-sandi", appOrigin).toString(); }
+	catch { return { error: "APP_ORIGIN tidak valid. Periksa domain utama aplikasi." }; }
+
+	if (destinationIds.length) {
+		const [{ data: destinations, error: destinationError }, { data: occupied, error: occupiedError }] = await Promise.all([
+			admin.from("destinations").select("id").in("id", destinationIds),
+			admin.from("user_destination_access").select("destination_id").in("destination_id", destinationIds),
+		]);
+		if (destinationError || occupiedError) return { error: "Daftar destinasi belum dapat diperiksa. Pastikan migration pengelola wisata sudah diterapkan." };
+		if ((destinations ?? []).length !== destinationIds.length) return { error: "Salah satu destinasi yang dipilih tidak ditemukan." };
+		if ((occupied ?? []).length) return { error: "Destinasi yang dipilih sudah dimiliki akun pengelola lain. Pilih destinasi yang belum ditugaskan." };
+	}
+
+	const { data: invite, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
+	if (inviteError || !invite.user?.id) {
+		const message = inviteError?.message.toLowerCase() ?? "";
+		return { error: message.includes("already") || message.includes("registered") ? "Email ini sudah memiliki akun. Gunakan alamat lain atau kelola role akun tersebut dari Supabase." : "Undangan belum terkirim. Periksa konfigurasi email Supabase dan URL redirect aplikasi." };
+	}
+
+	const invitedUserId = invite.user.id;
+	const { error: roleError } = await admin.from("user_roles").insert({ user_id: invitedUserId, role: "destination_manager" });
+	if (roleError) {
+		await admin.auth.admin.deleteUser(invitedUserId);
+		return { error: "Role pengelola belum dapat disiapkan. Akun undangan dibatalkan agar tidak tertinggal tanpa akses yang benar." };
+	}
+	if (destinationIds.length) {
+		const { error: accessError } = await admin.from("user_destination_access").insert(destinationIds.map((destinationId) => ({ user_id: invitedUserId, destination_id: destinationId, granted_by: staff.userId })));
+		if (accessError) {
+			await admin.auth.admin.deleteUser(invitedUserId);
+			return { error: "Penugasan destinasi gagal. Akun undangan dibatalkan; periksa apakah destinasi baru saja ditugaskan ke akun lain." };
+		}
+	}
+
+	revalidatePath("/ruang-kelola");
+	return { success: `Undangan pengelola dikirim ke ${email}. ${destinationIds.length ? `${destinationIds.length} destinasi ditugaskan.` : "Pengelola dapat mendaftarkan wisata baru sendiri setelah membuat sandi."}` };
+}
+
+export async function revokeDestinationManagerAction(
+	_previousState: WorkspaceActionState,
+	formData: FormData,
+): Promise<WorkspaceActionState> {
+	const managerUserId = value(formData, "manager_user_id", 64);
+	if (!/^[0-9a-f-]{36}$/i.test(managerUserId)) return { error: "Akun pengelola tidak valid." };
+	const staff = await requireStaff();
+	if (!staff || staff.role !== "admin") return { error: "Hanya admin yang dapat mencabut akses pengelola." };
+	const { data, error } = await staff.supabase.rpc("revoke_destination_manager_access", { p_manager_user_id: managerUserId });
+	if (error || data?.error) return { error: data?.error === "MANAGER_NOT_FOUND" ? "Akun ini bukan pengelola wisata aktif." : "Akses belum dapat dicabut. Pastikan migration pengelola wisata telah diterapkan." };
+	revalidatePath("/ruang-kelola");
+	return { success: "Akses dashboard pengelola sudah dicabut. Akun Auth tetap tersedia dan tidak dapat lagi masuk sebagai petugas." };
 }
 
 export async function reviewManagedDestinationAction(

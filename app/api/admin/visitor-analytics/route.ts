@@ -14,7 +14,19 @@ export async function GET(request: Request) {
 	const { data, error } = await supabase.rpc("get_staff_tourism_analytics", { p_days: days });
 	if (error) {
 		console.error("Tourism analytics query failed", { code: error.code });
-		return NextResponse.json({ error: error.code === "42883" ? "Migration insight pengunjung belum diterapkan di Supabase." : "Analitik belum dapat dimuat. Periksa migration dan hak akses petugas." }, { status: 503 });
+		const migrationMissing = ["42883", "42P01"].includes(error.code ?? "");
+		const apiSchemaStale = ["PGRST202", "PGRST205"].includes(error.code ?? "");
+		const accessDenied = ["42501", "PGRST301"].includes(error.code ?? "");
+		const message = migrationMissing
+			? "Data analitik belum tersedia di database. Jalankan migration 20261026000000_visitor_insights_and_campaign_forms.sql di Supabase sampai selesai."
+			: apiSchemaStale
+				? "Fungsi atau tabel analitik belum terbaca oleh Supabase API. Pastikan migration selesai, lalu refresh schema cache Supabase dan muat ulang halaman."
+			: accessDenied
+				? "Akses analitik ditolak. Pastikan akun memiliki role admin/editor dan migration analitik sudah memberi akses petugas."
+				: error.code === "42703"
+					? "Struktur database analitik belum cocok. Periksa apakah migration visitor_insights_and_campaign_forms selesai tanpa error, lalu jalankan ulang jika belum."
+					: "Analitik belum dapat dimuat. Periksa status migration dan log database untuk detail error.";
+		return NextResponse.json({ error: message }, { status: accessDenied ? 403 : 503 });
 	}
 	return NextResponse.json(data, { headers: { "Cache-Control": "no-store, max-age=0" } });
 }

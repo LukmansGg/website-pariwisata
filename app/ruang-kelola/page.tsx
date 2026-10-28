@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import { logoutAction } from "@/src/server/auth/actions";
 import { googleDriveOwnerEmail, isGoogleDriveConfigured } from "@/src/server/storage/google-drive";
@@ -26,6 +27,17 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	const { data: staff, error: roleError } = await supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
 	if (roleError || !staff || !["admin", "editor", "destination_manager"].includes(staff.role)) redirect("/login");
 	const managerRole = staff.role === "destination_manager";
+	const serviceKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+	const staffInviteEnvironmentConfigured = Boolean(serviceKey && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.APP_ORIGIN);
+	const adminClient = staff.role === "admin" && serviceKey && process.env.NEXT_PUBLIC_SUPABASE_URL
+		? createSupabaseAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+		: null;
+	const [managerRoleRows, managerAccessRows, authUsersResult] = adminClient ? await Promise.all([
+		adminClient.from("user_roles").select("user_id").eq("role", "destination_manager"),
+		adminClient.from("user_destination_access").select("user_id,destination_id"),
+		adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+	]) : [null, null, null];
+	const staffInviteConfigured = staffInviteEnvironmentConfigured && Boolean(adminClient && managerRoleRows && managerAccessRows && authUsersResult && !managerRoleRows.error && !managerAccessRows.error && !authUsersResult.error);
 	const [accessResult, reviewResult] = await Promise.all([
 		managerRole || staff.role === "admin"
 			? supabase.from("user_destination_access").select("user_id,destination_id").order("created_at", { ascending: false })
@@ -55,6 +67,18 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 		destinationError = legacyDestinations.error;
 	}
 	const destinations = (destinationRows ?? []).filter((destination) => !managerRole || managerDestinationIds.includes(destination.id));
+	const staffManagerError = staff.role === "admin" && adminClient && (managerRoleRows?.error || managerAccessRows?.error || authUsersResult?.error)
+		? "Daftar pengelola belum dapat dimuat. Pastikan migration pengelola wisata sudah diterapkan dan service key server valid."
+		: undefined;
+	const managerAccessByUser = new Map<string, string[]>();
+	for (const access of managerAccessRows?.data ?? []) managerAccessByUser.set(access.user_id, [...(managerAccessByUser.get(access.user_id) ?? []), access.destination_id]);
+	const destinationNames = new Map(destinations.map((destination) => [destination.id, destination.name]));
+	const authUsers = authUsersResult?.data?.users ?? [];
+	const staffManagers = (managerRoleRows?.data ?? []).map((manager) => {
+		const user = authUsers.find((item) => item.id === manager.user_id);
+		const destinationIds = managerAccessByUser.get(manager.user_id) ?? [];
+		return { user_id: manager.user_id, email: user?.email ?? "Email akun tidak tersedia", has_confirmed_email: Boolean(user?.email_confirmed_at), destination_ids: destinationIds, destination_names: destinationIds.map((id) => destinationNames.get(id) ?? "Wisata tidak ditemukan") };
+	});
 	const partnerById = new Map((partnersResult.data ?? []).map((partner) => [partner.id, partner.business_name]));
 	const destinationById = new Map(destinations.map((destination) => [destination.id, destination.name]));
 	const qrPoints = (qrPointsResult.data ?? []).map((point) => ({
@@ -104,6 +128,9 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 			created_at: request.created_at,
 		})),
 		managedDestinationIds: staff.role === "admin" ? managerDestinationIds : [],
+		staffManagers,
+		staffInviteConfigured,
+		staffManagerError,
 		driveConnected: Boolean(driveResult.data?.id),
 		driveConnectedEmail: driveResult.data?.connected_email ?? undefined,
 		driveOwnerEmail: googleDriveOwnerEmail(),
