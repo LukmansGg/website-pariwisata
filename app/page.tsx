@@ -905,6 +905,7 @@ const Highlights = ({
 	hasActiveFilters,
 	incompleteCount,
 	compact = false,
+	selectedDestinationId = null,
 }: {
 	destinations: DestinationCard[];
 	loading: boolean;
@@ -913,8 +914,9 @@ const Highlights = ({
 	hasActiveFilters: boolean;
 	incompleteCount: number;
 	compact?: boolean;
+	selectedDestinationId?: string | null;
 }) => (
-	<section id="destinasi" className={`mx-auto max-w-7xl px-6 ${compact ? selectedMapSpot ? "order-[30] py-6" : "order-[20] py-6" : "order-[40] py-20"}`}>
+	<section id="destinasi" className={`mx-auto max-w-7xl px-6 ${compact ? selectedDestinationId ? "order-[30] py-6" : "order-[20] py-6" : "order-[40] py-20"}`}>
 		<div className={`flex justify-between items-end animate-fade-up ${compact ? "mb-6" : "mb-12"}`}>
 			<div>
 				<p className="mb-3 text-xs font-black uppercase tracking-[.22em] text-[var(--home-primary)]">Curated for your next story</p>
@@ -970,7 +972,7 @@ const Highlights = ({
 						href={`/wisata/${encodeURIComponent(dest.slug)}`}
 						key={dest.id}
 						style={{ animationDelay: `${Math.min((i + 1) * 100, 500)}ms` }}
-						className={`glass-panel group rounded-[1.75rem] p-3 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-fade-up ${selectedMapSpot?.id === dest.id ? "!border-sky-400 !ring-2 !ring-sky-400/25" : ""}`}>
+						className={`glass-panel group rounded-[1.75rem] p-3 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-fade-up ${selectedDestinationId === dest.id ? "!border-sky-400 !ring-2 !ring-sky-400/25" : ""}`}>
 						<div className="relative w-full h-56 rounded-[1.25rem] overflow-hidden mb-4 bg-gradient-to-br from-[var(--home-soft)] to-[var(--home-accent)]/50">
 							{dest.image ? (
 								<Image
@@ -1408,7 +1410,7 @@ export default function TiLocApp() {
 					<div className="flex flex-col">
 						{!compactDiscovery && <div className="order-10"><HeroSection /></div>}
 						<MoodCategories selectedCategories={selectedCategories} onSelect={handleCategorySelect} compact={compactDiscovery} />
-						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={clearDiscoveryFilters} compact={compactDiscovery} />
+						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={clearDiscoveryFilters} compact={compactDiscovery} selectedDestinationId={selectedMapSpot?.id ?? null} />
 						<DiscoveryMap searchQuery={searchQuery} onSearchChange={handleMapSearchChange} destinations={visibleDestinations} selectedDestinationId={selectedMapSpot?.id ?? null} selectedSpot={selectedMapSpot} onSpotSelected={handleMapSpotSelected} onClearSelectedSpot={clearDiscoveryFilters} compact={compactDiscovery} />
 					</div>
 					<PromotionalSection />
