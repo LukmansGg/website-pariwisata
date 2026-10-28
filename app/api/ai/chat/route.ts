@@ -1,21 +1,34 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/src/infrastructure/supabase/server";
-import { answerTourismQuestion } from "@/src/server/ai/gemini";
-import { checkAiChatLimit } from "@/src/server/ai/rate-limit";
+import { streamTourismQuestion } from "@/src/server/ai/openrouter";
+import { checkAiChatLimit, reserveOpenRouterRequest } from "@/src/server/ai/rate-limit";
+import { searchWikipedia, shouldSearchWikipedia } from "@/src/server/ai/wikipedia";
 
-type ChatTurn = { role: "user" | "model"; text: string };
+export const maxDuration = 60;
 
-function validHistory(value: unknown): ChatTurn[] | null {
-	if (value === undefined) return [];
-	if (!Array.isArray(value) || value.length > 6) return null;
-	const turns: ChatTurn[] = [];
-	for (const item of value) {
-		if (!item || typeof item !== "object") return null;
-		const { role, text } = item as Record<string, unknown>;
-		if ((role !== "user" && role !== "model") || typeof text !== "string" || !text.trim() || text.length > 1200) return null;
-		turns.push({ role, text: text.trim() });
+const SERVER_TIMEOUT_MS = 48_000;
+
+function errorMessage(error: unknown, timedOut: boolean) {
+	if (timedOut) return "Pemandu masih sibuk menyusun jawaban. Coba kirim lagi sebentar ya.";
+	if (!(error instanceof Error)) return "Pemandu belum berhasil terhubung. Coba lagi sebentar ya.";
+	switch (error.message) {
+		case "AI_VISITOR_LIMIT":
+			return "Kamu sedang banyak bertanya dalam waktu singkat. Istirahat sebentar lalu coba lagi ya.";
+		case "AI_RATE_LIMITER_UNAVAILABLE":
+			return "Layanan chat belum siap. Coba lagi nanti ya.";
+		case "DESTINATION_LOOKUP_FAILED":
+			return "Info destinasi belum dapat dimuat. Coba lagi sebentar ya.";
+		case "DESTINATION_NOT_FOUND":
+			return "Destinasi ini belum tersedia untuk pemandu AI.";
+		case "OPENROUTER_DAILY_LIMIT":
+			return "Kuota AI gratis hari ini sudah penuh. Coba lagi setelah kuota harian pulih ya.";
+		case "OPENROUTER_MINUTE_LIMIT":
+			return "Pemandu sedang ramai dipakai. Tunggu sebentar lalu coba lagi ya.";
+		case "OPENROUTER_UPSTREAM_RATE_LIMITED":
+			return "Model AI gratis sedang sibuk. Coba lagi sebentar ya.";
+		default:
+			return "Pemandu belum berhasil terhubung. Coba lagi sebentar ya.";
 	}
-	return turns;
 }
 
 export async function POST(request: Request) {
@@ -26,54 +39,130 @@ export async function POST(request: Request) {
 		const rawBody = await request.text();
 		if (new TextEncoder().encode(rawBody).byteLength > 20_000) return NextResponse.json({ error: "Permintaan terlalu besar." }, { status: 413 });
 		body = JSON.parse(rawBody);
-	} catch { return NextResponse.json({ error: "Permintaan tidak valid." }, { status: 400 }); }
+	} catch {
+		return NextResponse.json({ error: "Permintaan tidak valid." }, { status: 400 });
+	}
 	if (!body || typeof body !== "object") return NextResponse.json({ error: "Permintaan tidak valid." }, { status: 400 });
-	const { destinationSlug, message, history } = body as Record<string, unknown>;
+	const { destinationSlug, message } = body as Record<string, unknown>;
 	if (typeof destinationSlug !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(destinationSlug) || typeof message !== "string" || !message.trim() || message.length > 600) {
 		return NextResponse.json({ error: "Pertanyaan wajib diisi dan maksimal 600 karakter." }, { status: 400 });
 	}
-	const safeHistory = validHistory(history);
-	if (!safeHistory) return NextResponse.json({ error: "Riwayat percakapan tidak valid." }, { status: 400 });
 
+	const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+	if (!apiKey) return NextResponse.json({ error: "Pemandu AI belum dikonfigurasi." }, { status: 503 });
 	const ipAddress = request.headers.get("x-real-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-	try {
-		const limit = await checkAiChatLimit(ipAddress);
-		if (!limit.allowed) {
-			return NextResponse.json({ error: "Batas pertanyaan tercapai. Silakan coba lagi nanti." }, { status: 429, headers: { "Retry-After": String(Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000))) } });
-		}
-	} catch (error) {
-		console.error("AI rate limiter unavailable", error);
-		return NextResponse.json({ error: "Layanan chat belum siap. Periksa konfigurasi Redis." }, { status: 503 });
-	}
+	const encoder = new TextEncoder();
+	const abortController = new AbortController();
+	let cancelled = false;
+	let timedOut = false;
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-	try {
-		const supabase = await createClient();
-		const { data: destination, error } = await supabase
-			.from("destinations")
-			.select("name, category, categories, short_description, address, description, tags")
-			.eq("slug", destinationSlug)
-			.eq("is_published", true)
-			.not("image_url", "is", null)
-			.not("latitude", "is", null)
-			.not("longitude", "is", null)
-			.maybeSingle();
-		if (error) {
-			console.error("AI destination lookup failed", error);
-			return NextResponse.json({ error: "Data destinasi belum dapat dimuat." }, { status: 500 });
-		}
-		if (!destination) return NextResponse.json({ error: "Destinasi tidak ditemukan atau belum tayang." }, { status: 404 });
+	const stream = new ReadableStream<Uint8Array>({
+		start(controller) {
+			let closed = false;
+			const emit = (event: string, data: unknown) => {
+				if (closed || cancelled) return;
+				try {
+					controller.enqueue(encoder.encode("event: " + event + "\ndata: " + JSON.stringify(data) + "\n\n"));
+				} catch {
+					cancelled = true;
+					abortController.abort();
+				}
+			};
+			const close = () => {
+				if (closed || cancelled) return;
+				closed = true;
+				controller.close();
+			};
 
-		const reply = await answerTourismQuestion({ destination, history: safeHistory, message: message.trim() });
-		return NextResponse.json({ reply }, { headers: { "Cache-Control": "no-store" } });
-	} catch (error) {
-		if (error instanceof Error && error.name === "TimeoutError") return NextResponse.json({ error: "Asisten sedang lambat merespons. Coba lagi sebentar." }, { status: 504 });
-		const reason = error instanceof Error ? error.message : "";
-		if (reason === "AI_PROVIDER_NOT_CONFIGURED") return NextResponse.json({ error: "AI belum aktif. Tambahkan GEMINI_API_KEY atau OPENROUTER_API_KEY di environment server." }, { status: 503 });
-		if (reason === "OPENROUTER_FALLBACK_LIMIT_REACHED") return NextResponse.json({ error: "Kuota cadangan AI gratis hari ini sudah tercapai. Coba lagi besok." }, { status: 429, headers: { "Retry-After": "86400" } });
-		if (reason === "AI_FALLBACK_GUARD_UNAVAILABLE") return NextResponse.json({ error: "Layanan AI sedang tidak tersedia. Coba lagi nanti." }, { status: 503 });
-		if (reason === "OPENROUTER_FREE_MODEL_REQUIRED") return NextResponse.json({ error: "Model fallback harus memakai model gratis OpenRouter (:free)." }, { status: 503 });
-		if (reason === "AI_PROVIDERS_UNAVAILABLE" || reason === "OPENROUTER_REQUEST_FAILED" || reason === "OPENROUTER_EMPTY_RESPONSE") return NextResponse.json({ error: "Layanan AI sedang tidak tersedia. Coba lagi nanti." }, { status: 503 });
-		console.error("Tourism AI request failed", error);
-		return NextResponse.json({ error: "Jawaban belum dapat dibuat. Coba lagi nanti." }, { status: 502 });
-	}
+			void (async () => {
+				try {
+					timeoutId = setTimeout(() => {
+						timedOut = true;
+						abortController.abort();
+					}, SERVER_TIMEOUT_MS);
+					emit("status", { message: "Memeriksa akses pemandu…" });
+					let visitorLimit;
+					try {
+						visitorLimit = await checkAiChatLimit(ipAddress);
+					} catch {
+						throw new Error("AI_RATE_LIMITER_UNAVAILABLE");
+					}
+					if (!visitorLimit.allowed) throw new Error("AI_VISITOR_LIMIT");
+
+					emit("status", { message: "Membaca info destinasi dari pengelola…" });
+					const supabase = await createClient();
+					const { data: destination, error } = await supabase
+						.from("destinations")
+						.select("name, category, categories, short_description, address, description, tags")
+						.eq("slug", destinationSlug)
+						.eq("is_published", true)
+						.maybeSingle();
+					if (error) {
+						console.error("AI destination lookup failed", { code: error.code });
+						throw new Error("DESTINATION_LOOKUP_FAILED");
+					}
+					if (!destination) throw new Error("DESTINATION_NOT_FOUND");
+
+					let providerLimit;
+					try {
+						providerLimit = await reserveOpenRouterRequest();
+					} catch {
+						throw new Error("AI_RATE_LIMITER_UNAVAILABLE");
+					}
+					if (!providerLimit.allowed) {
+						throw new Error(providerLimit.reason === "minute" ? "OPENROUTER_MINUTE_LIMIT" : "OPENROUTER_DAILY_LIMIT");
+					}
+
+					let wikipediaSources = [] as Awaited<ReturnType<typeof searchWikipedia>>;
+					if (shouldSearchWikipedia(message)) {
+						emit("status", { message: "Mencari referensi sejarah dan budaya di Wikipedia…" });
+						wikipediaSources = await searchWikipedia(destination.name, message, abortController.signal);
+					}
+					if (wikipediaSources.length > 0) {
+						emit("status", { message: "Referensi ditemukan. Menyusun jawaban yang jelas…" });
+					} else {
+						emit("status", { message: "Menyusun jawaban dari info destinasi dan pengetahuan umum…" });
+					}
+
+					await streamTourismQuestion({
+						apiKey,
+						destination,
+						message,
+						wikipediaSources,
+						signal: abortController.signal,
+						onToken: (text) => emit("token", { text }),
+					});
+					emit("done", {
+						wikipediaSearched: wikipediaSources.length > 0,
+						sources: wikipediaSources.map(({ title, url, language }) => ({ title, url, language })),
+					});
+				} catch (error) {
+					if (!cancelled) {
+						const reason = error instanceof Error ? error.message : "unknown";
+						if (reason === "OPENROUTER_RATE_LIMITED") error = new Error("OPENROUTER_UPSTREAM_RATE_LIMITED");
+						console.warn("Tourism AI request ended", { reason: timedOut ? "timeout" : reason });
+						emit("error", { message: errorMessage(error, timedOut) });
+					}
+				} finally {
+					if (timeoutId) clearTimeout(timeoutId);
+					close();
+				}
+			})();
+		},
+		cancel() {
+			cancelled = true;
+			if (timeoutId) clearTimeout(timeoutId);
+			abortController.abort();
+		},
+	});
+
+	return new Response(stream, {
+		headers: {
+			"Content-Type": "text/event-stream; charset=utf-8",
+			"Cache-Control": "no-cache, no-transform",
+			Connection: "keep-alive",
+			"X-Accel-Buffering": "no",
+		},
+	});
 }

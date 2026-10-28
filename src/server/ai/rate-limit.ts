@@ -6,6 +6,7 @@ import { createHmac } from "node:crypto";
 
 let minuteLimiter: Ratelimit | undefined;
 let dailyLimiter: Ratelimit | undefined;
+let openRouterMinuteLimiter: Ratelimit | undefined;
 let redisClient: Redis | undefined;
 
 function getRedisClient() {
@@ -39,13 +40,30 @@ export async function checkAiChatLimit(ipAddress: string) {
 	};
 }
 
-export async function reserveOpenRouterFallback() {
-	const configuredLimit = Number(process.env.OPENROUTER_DAILY_FALLBACK_LIMIT ?? 40);
+export async function reserveOpenRouterRequest() {
+	const configuredLimit = Number(process.env.OPENROUTER_DAILY_REQUEST_LIMIT ?? process.env.OPENROUTER_DAILY_FALLBACK_LIMIT ?? 40);
 	const dailyLimit = Number.isInteger(configuredLimit) && configuredLimit >= 1 && configuredLimit <= 49 ? configuredLimit : 40;
 	const redis = getRedisClient();
+	if (!openRouterMinuteLimiter) {
+		openRouterMinuteLimiter = new Ratelimit({
+			redis,
+			limiter: Ratelimit.slidingWindow(18, "60 s"),
+			prefix: "tourism-ai-openrouter-minute",
+			analytics: false,
+		});
+	}
+	const minute = await openRouterMinuteLimiter.limit("shared");
+	if (!minute.success) {
+		return { allowed: false, reason: "minute" as const, remaining: 0, resetAt: minute.reset };
+	}
 	const date = new Date().toISOString().slice(0, 10);
 	const key = `tourism-ai-openrouter-fallback:${date}`;
 	const count = await redis.incr(key);
 	if (count === 1) await redis.expire(key, 172_800);
-	return { allowed: count <= dailyLimit, remaining: Math.max(0, dailyLimit - count), resetAt: Date.now() + 86_400_000 };
+	return {
+		allowed: count <= dailyLimit,
+		reason: count <= dailyLimit ? null : "daily" as const,
+		remaining: Math.max(0, dailyLimit - count),
+		resetAt: Date.now() + 86_400_000,
+	};
 }
