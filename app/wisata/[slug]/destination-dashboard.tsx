@@ -405,6 +405,138 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.mascot-spark{position:absolute;z-index:20;color:#e7a939;text-shadow:0 0 12px rgba(255,255,255,.9);animation:spark-dance 3.4s ease-in-out infinite}.mascot-spark--one{right:16%;top:28%;font-size:1.6rem}.mascot-spark--two{left:12%;top:52%;font-size:1.2rem;animation-delay:-1.4s}
 			.mascot-crew{position:absolute;inset:0;pointer-events:none;animation:mascot-float 4.2s ease-in-out infinite}.mascot-crew img{object-fit:contain;filter:drop-shadow(0 14px 18px rgba(22,88,123,.25));animation:mascot-pose-in .58s cubic-bezier(.2,.8,.2,1) both}.mascot-crew.lower img{transform:scaleX(-1)}
 			.tourism-chat-scroll::-webkit-scrollbar{width:6px}.tourism-chat-scroll::-webkit-scrollbar-thumb{background:rgba(132,179,206,.65);border-radius:99px}
+			.game-quest-card-container{container-type:inline-size;container-name:gameQuest;isolation:isolate}
+			.game-quest-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:23rem;gap:1rem;align-items:stretch}
+			@container gameQuest (min-width:640px){.game-quest-layout{grid-template-columns:minmax(0,1.03fr) minmax(17rem,.97fr);min-height:24rem;gap:1.25rem}}
+			.game-card-dots{background-image:radial-gradient(rgba(32,119,175,.13) 1px,transparent 1px);background-size:18px 18px;mask-image:linear-gradient(135deg,black,transparent 75%)}
+			.game-card-orb{border-radius:50%;filter:blur(30px);opacity:.62;animation:game-orb-drift 9s ease-in-out infinite alternate}
+			.game-card-orb--one{background:radial-gradient(circle,#91e7ff 0%,rgba(97,187,244,.32) 48%,transparent 73%)}.game-card-orb--two{background:radial-gradient(circle,#bcf5df 0%,rgba(130,225,203,.25) 48%,transparent 73%);animation-delay:-4s}
+			.game-quest-spark{z-index:1;color:#4daed8;font-size:1.3rem;text-shadow:0 0 8px rgba(255,255,255,.95),0 0 18px rgba(56,189,248,.35);animation:game-spark-idle 3.7s ease-in-out infinite}.game-quest-spark--two{animation-delay:-1.8s;color:#f0b948;font-size:1.05rem}
+			.game-quest-label{position:relative;overflow:hidden;border-color:rgba(105,187,226,.5);background:linear-gradient(135deg,#e2f6ff,#f7fcff);color:#12608b}
+			.game-quest-label:after{content:"";position:absolute;inset:0 auto 0 -60%;width:38%;transform:skewX(-24deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);animation:game-label-shine 6.4s ease-in-out infinite}
+			.game-label-fire{display:grid;place-items:center;animation:game-spark-idle 2.2s ease-in-out infinite}
+			.game-quest-mascot{background:linear-gradient(145deg,#9ce6ff,#d8f8ff 55%,#e8f3ff);transform-origin:50% 75%;animation:game-mascot-bob 4.1s ease-in-out infinite}
+			.game-quest-copy .game-xp-chip{position:relative;overflow:hidden}.game-xp-star{display:inline-block;filter:drop-shadow(0 1px 3px rgba(183,127,16,.25));animation:game-xp-twinkle 2.8s ease-in-out infinite}
+			.game-progress-panel{overflow:visible;transition:transform .24s ease,border-color .24s ease,box-shadow .24s ease}
+			.game-panel-spark{color:#168bb6;animation:game-spark-idle 2.8s ease-in-out infinite}
+			.game-progress-track{isolation:isolate}
+			.game-progress-fill{background:linear-gradient(90deg,#25a9dc 0%,#40bfd0 45%,#69cead 100%);box-shadow:inset 0 -3px 0 rgba(20,93,127,.16),0 0 12px rgba(56,189,248,.25);transition:width .95s cubic-bezier(.2,.8,.2,1)}
+			.game-progress-fill:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 20%,rgba(255,255,255,.42) 48%,transparent 72%);transform:translateX(-110%);animation:game-progress-shine 3.8s ease-in-out infinite}
+			.game-progress-stripes{opacity:.2;background-image:repeating-linear-gradient(135deg,transparent 0 9px,rgba(255,255,255,.8) 9px 14px)}
+			.game-progress-star{z-index:2;color:#fff;font-size:1rem;line-height:1;text-shadow:0 1px 3px rgba(8,63,111,.55),0 0 9px rgba(255,255,255,.95);filter:drop-shadow(0 0 5px rgba(37,155,218,.8));transition:left .95s cubic-bezier(.2,.8,.2,1);animation:game-progress-star-glow 1.9s ease-in-out infinite}
+			.game-mission-status{display:flex;align-items:center}
+			.game-primary-action{position:relative;isolation:isolate;overflow:hidden;transform:translateZ(0)}
+			.game-primary-action:after{content:"";position:absolute;z-index:-1;inset:-20% auto -20% -48%;width:28%;transform:skewX(-24deg);background:linear-gradient(90deg,transparent,rgba(255,255,255,.38),transparent);animation:game-button-shine 6s ease-in-out infinite}
+			.game-cta-idle{animation:game-cta-idle 5.4s ease-in-out infinite}
+			.game-cta-arrow{display:inline-block;transition:transform .2s ease}.game-primary-action:hover .game-cta-arrow{transform:translateX(4px)}
+			.game-complete-check{display:inline-grid;place-items:center;width:1rem;height:1rem;border-radius:50%;background:#45b987;color:white;font-size:.68rem;animation:game-check-pop .55s cubic-bezier(.2,.9,.25,1.3) both}
+			.game-quest-label--complete{border-color:#9bdcc1;background:linear-gradient(135deg,#e5fff2,#f4fffa);color:#08744e}
+			.game-card--complete{border-color:#9bdcc1;box-shadow:8px 9px 0 rgba(16,125,83,.07),0 20px 42px -28px rgba(19,142,102,.35)}
+			.game-card--complete .game-quest-mascot{background:linear-gradient(145deg,#c6ffe5,#eafff4 60%,#d6f9ff);animation:game-trophy-pop .8s cubic-bezier(.2,.85,.25,1.25) both}
+			.game-card--complete .game-cta-idle{animation:none}
+			.game-card--complete .game-progress-panel{border-color:#9bdcc1;background:linear-gradient(150deg,#e8fff4,#f5fffb 70%,#eafaff)}
+			.game-card--complete .game-progress-fill{background:linear-gradient(90deg,#18a978,#63d6a6)}
+			.game-card--complete .game-progress-count{color:#08744e}
+			.game-card--complete .game-mission-status{border-color:#bcebd2;background:#f3fff8;color:#08744e}
+			.game-card--complete .game-unlocked-ribbon{border-color:#bcebd2;background:linear-gradient(90deg,#e6fff0,#f1fff8);color:#08744e}
+			.game-reward-hint{box-shadow:0 3px 0 rgba(183,134,31,.08)}
+			.game-completion-burst .game-burst-particle{position:absolute;top:75%;color:#17a5d5;font-size:1.2rem;text-shadow:0 0 8px rgba(255,255,255,.9);animation:game-confetti-pop 1.6s cubic-bezier(.16,.7,.3,1) both}
+			.game-completion-burst .game-burst-particle:nth-child(3n){color:#f2b847}.game-completion-burst .game-burst-particle:nth-child(3n + 1){color:#40bd91}
+			.game-card--photobox{border-color:rgba(255,255,255,.94);background:radial-gradient(ellipse at 76% 16%,rgba(210,194,255,.42),transparent 34%),radial-gradient(ellipse at 15% 90%,rgba(144,224,255,.5),transparent 42%),linear-gradient(135deg,#f2fbff 0%,#e6f5ff 49%,#f6f0ff 100%);box-shadow:8px 9px 0 rgba(22,88,123,.08),0 22px 48px -30px rgba(64,103,177,.42)}
+			.game-card--photobox .game-card-dots,.game-card--photobox .game-card-orb,.game-card--photobox .game-quest-spark{display:none}
+			.game-photobox-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:23rem;gap:.75rem;align-items:center;animation:game-photobox-reveal .8s cubic-bezier(.2,.85,.25,1.12) both}
+			@container gameQuest (min-width:640px){.game-photobox-layout{grid-template-columns:minmax(0,.92fr) minmax(18rem,1.08fr);min-height:24rem;gap:1rem}}
+			.game-photobox-dots{z-index:-1;opacity:.45;background-image:radial-gradient(rgba(79,140,190,.19) 1.3px,transparent 1.3px);background-size:20px 20px;mask-image:linear-gradient(145deg,black,transparent 86%)}
+			.game-photobox-orb{z-index:-1;border-radius:50%;filter:blur(35px);opacity:.48;animation:game-orb-drift 11s ease-in-out infinite alternate}.game-photobox-orb--one{background:radial-gradient(circle,#ffc6df 0%,rgba(180,157,255,.25) 48%,transparent 73%)}.game-photobox-orb--two{background:radial-gradient(circle,#9de9ff 0%,rgba(115,198,255,.2) 48%,transparent 73%);animation-delay:-5s}
+			.game-photobox-ticket{border-color:rgba(89,155,207,.42);background:linear-gradient(120deg,#dff5ff,#eef0ff);color:#225d91;transform:rotate(-2deg)}.game-photobox-ticket--reward{border-color:rgba(104,179,224,.48);background:linear-gradient(120deg,#e2f8ff,#e9e6ff);color:#315ca0}
+			.game-photobox-title-accent{background:linear-gradient(100deg,#1d9ece,#4f7be8 55%,#8c66dc);background-clip:text;-webkit-background-clip:text;color:transparent;animation:game-title-glow 3.2s ease-in-out infinite alternate}
+			.game-photobox-description{border-color:rgba(255,255,255,.92);background:rgba(255,255,255,.58);backdrop-filter:blur(9px)}
+			.game-camera-ready{justify-content:center}.game-camera-ready-dot{background:#49c28f;box-shadow:0 0 0 3px rgba(73,194,143,.14),0 0 12px rgba(73,194,143,.4);animation:game-ready-pulse 2.3s ease-in-out infinite}
+			.game-camera-icon{display:inline-block;animation:game-camera-bob 3s ease-in-out infinite}
+			.game-photobox-gallery{isolation:isolate}.game-gallery-glow{z-index:-1;background:radial-gradient(circle,rgba(251,210,130,.52),rgba(121,205,243,.3) 52%,transparent 75%);animation:game-gallery-breathe 4.8s ease-in-out infinite alternate}
+			.game-polaroid{padding:.58rem .58rem 2.45rem;border:1px solid rgba(29,78,116,.12);border-radius:.7rem;background:linear-gradient(145deg,#fff,#f9fcff);box-shadow:0 13px 24px rgba(28,58,89,.2),inset 0 1px rgba(255,255,255,.98);transform-origin:50% 80%;transition:filter .25s,box-shadow .25s}
+			.game-polaroid--back{animation:game-photo-float-reverse 5.4s ease-in-out infinite}.game-polaroid--front{animation:game-photo-float 4.4s ease-in-out infinite}
+			.game-polaroid:hover{z-index:30;filter:saturate(1.08);box-shadow:0 18px 32px rgba(28,58,89,.28)}
+			.game-polaroid-shot{aspect-ratio:4/3;border-radius:.35rem;background:linear-gradient(140deg,#8bd9f3,#5388e6 55%,#aa8be9)}.game-polaroid-shot--front{background:linear-gradient(135deg,#b3b2ff,#6cc8ed 58%,#ffb9d1)}
+			.game-photo-placeholder{font-size:3.3rem;filter:drop-shadow(0 7px 6px rgba(14,42,72,.2));animation:game-photo-pose 4.1s ease-in-out infinite}.game-polaroid-shot--front .game-photo-placeholder{animation-delay:-1.3s}
+			.game-polaroid-caption{position:absolute;right:.5rem;bottom:.58rem;left:.5rem;color:#294861;text-align:center;font-family:cursive;font-size:.77rem;font-weight:800;letter-spacing:.015em}
+			.game-photo-tape{border:1px solid rgba(255,255,255,.65);background:linear-gradient(100deg,rgba(174,229,255,.84),rgba(220,211,255,.82));box-shadow:0 2px 5px rgba(22,63,91,.12)}
+			.game-photo-star{z-index:3;color:#fff;font-size:.85rem;text-shadow:0 0 6px rgba(255,255,255,.9),0 0 12px rgba(40,113,203,.6);animation:game-spark-idle 2.5s ease-in-out infinite}
+			.game-photo-star--two{animation-delay:-1.1s;font-size:1.1rem}
+			.game-social-bubble{z-index:5;animation:game-social-float 4.7s ease-in-out infinite;transform-origin:center}
+			.game-social-bubble--heart{background:linear-gradient(145deg,#ff8eae,#f65e91);color:#fff;box-shadow:0 5px 0 #c93d72,0 9px 16px rgba(132,41,88,.18);animation-delay:-.5s}
+			.game-social-bubble--music{background:linear-gradient(145deg,#173b68,#0e2c52);color:#b8edff;box-shadow:0 5px 0 #0a1e38,0 9px 16px rgba(12,41,75,.2);animation-delay:-1.8s}
+			.game-social-bubble--chat{background:linear-gradient(145deg,#63cff0,#3d90de);color:#fff;box-shadow:0 5px 0 #2675b9,0 9px 16px rgba(21,91,150,.18);animation-delay:-2.6s}
+			.game-social-bubble--spark{background:linear-gradient(145deg,#ffe99c,#ffc957);color:#95631d;box-shadow:0 5px 0 #d99b38,0 9px 16px rgba(142,104,35,.15);animation-delay:-1.2s}
+			.game-photo-confetti span{position:absolute;top:80%;color:#398dd0;font-size:1.25rem;text-shadow:0 0 8px rgba(255,255,255,.95);animation:game-confetti-pop 1.7s cubic-bezier(.16,.7,.3,1) both}.game-photo-confetti span:nth-child(2n){color:#f0b847}
+			.game-camera-flash{background:radial-gradient(circle at 50% 48%,rgba(255,255,255,.9),rgba(197,239,255,.78) 38%,rgba(112,183,238,.34) 100%);mix-blend-mode:screen;animation:game-camera-flash .26s ease-out both}
+			.game-card--switching .game-quest-layout--switching{transform-style:preserve-3d;perspective:900px;animation:game-reward-swap-out .72s cubic-bezier(.55,.05,.8,.3) .72s both}
+			@keyframes game-photobox-reveal{0%{opacity:0;transform:perspective(900px) rotateY(-24deg) scale(.93);filter:blur(3px)}72%{opacity:1;transform:perspective(900px) rotateY(4deg) scale(1.015);filter:blur(0)}100%{opacity:1;transform:perspective(900px) rotateY(0) scale(1);filter:blur(0)}}
+			@keyframes game-reward-swap-out{0%{opacity:1;transform:rotateY(0) scale(1)}100%{opacity:0;transform:rotateY(68deg) scale(.94)}}
+			@keyframes game-title-glow{from{filter:drop-shadow(0 1px 0 rgba(255,255,255,.2))}to{filter:drop-shadow(0 4px 12px rgba(72,131,217,.22))}}
+			@keyframes game-ready-pulse{0%,100%{transform:scale(.92);opacity:.75}50%{transform:scale(1.12);opacity:1}}
+			@keyframes game-camera-bob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-3px) rotate(4deg)}}
+			@keyframes game-gallery-breathe{from{transform:scale(.92);opacity:.62}to{transform:scale(1.08);opacity:1}}
+			@keyframes game-photo-float{0%,100%{transform:translateY(0) rotate(7deg)}50%{transform:translateY(-7px) rotate(9deg)}}
+			@keyframes game-photo-float-reverse{0%,100%{transform:translateY(0) rotate(-11deg)}50%{transform:translateY(6px) rotate(-13deg)}}
+			@keyframes game-photo-pose{0%,100%{transform:translateY(0) rotate(-2deg) scale(1)}50%{transform:translateY(-3px) rotate(2deg) scale(1.06)}}
+			@keyframes game-social-float{0%,100%{translate:0 0;rotate:-4deg}50%{translate:0 -6px;rotate:5deg}}
+			@keyframes game-camera-flash{0%{opacity:0}24%{opacity:.88}100%{opacity:0}}
+			.destination-shell--night .minigame-hub-shell .game-program-card{background:radial-gradient(ellipse at 94% 0%,rgba(56,189,248,.15),transparent 42%),linear-gradient(145deg,#0c3452,#082640 62%,#0b304a);border-color:rgba(139,217,255,.28);box-shadow:7px 8px 0 rgba(0,0,0,.16),0 24px 50px -32px rgba(0,0,0,.76),inset 0 1px rgba(226,247,255,.12)}
+			.destination-shell--night .minigame-hub-shell .game-program-card:hover{border-color:rgba(139,217,255,.5);box-shadow:8px 11px 0 rgba(0,0,0,.18),0 28px 52px -28px rgba(0,0,0,.8),0 0 25px rgba(56,189,248,.12),inset 0 1px rgba(226,247,255,.14)}
+			.destination-shell--night .minigame-hub-shell .game-card--complete{border-color:rgba(111,223,174,.55);background:radial-gradient(ellipse at 94% 0%,rgba(68,211,155,.14),transparent 44%),linear-gradient(145deg,#0b3a43,#082f3c 65%,#0b3548)}
+			.destination-shell--night .minigame-hub-shell .game-card-dots{background-image:radial-gradient(rgba(153,221,255,.13) 1px,transparent 1px)}
+			.destination-shell--night .minigame-hub-shell .game-card-orb{opacity:.22}
+			.destination-shell--night .minigame-hub-shell .game-quest-spark{color:#9de6ff;text-shadow:0 0 9px rgba(115,211,255,.5),0 0 18px rgba(56,189,248,.3)}
+			.destination-shell--night .minigame-hub-shell .game-quest-spark--two{color:#ffd477}
+			.destination-shell--night .minigame-hub-shell .game-quest-label{border-color:rgba(139,217,255,.25);background:linear-gradient(135deg,rgba(26,93,132,.7),rgba(13,58,91,.85));color:#bdeeff}
+			.destination-shell--night .minigame-hub-shell .game-quest-label--complete{border-color:rgba(111,223,174,.38);background:linear-gradient(135deg,rgba(20,105,82,.52),rgba(8,67,67,.7));color:#aaf2cd}
+			.destination-shell--night .minigame-hub-shell .game-quest-mascot{border-color:rgba(205,241,255,.18);background:linear-gradient(145deg,#16527a,#123c61 65%,#0c3452);box-shadow:0 8px 22px rgba(0,0,0,.24)}
+			.destination-shell--night .minigame-hub-shell .game-quest-mascot--complete{background:linear-gradient(145deg,#17624e,#0d494a 65%,#123c61)}
+			.destination-shell--night .minigame-hub-shell .game-xp-chip{border-color:rgba(246,207,104,.28);background:linear-gradient(135deg,rgba(123,89,30,.48),rgba(92,65,29,.42));color:#ffe7a8}
+			.destination-shell--night .minigame-hub-shell .game-free-chip{border-color:rgba(111,223,174,.25);background:rgba(22,101,75,.28);color:#a7f3d0}
+			.destination-shell--night .minigame-hub-shell .game-component-chip{border-color:rgba(139,217,255,.2);background:rgba(22,83,119,.55);color:#c8edff}
+			.destination-shell--night .minigame-hub-shell .game-progress-panel{border-color:rgba(139,217,255,.24);background:linear-gradient(155deg,rgba(11,54,82,.94),rgba(8,37,62,.94));box-shadow:inset 0 1px rgba(225,246,255,.09),0 8px 18px rgba(0,0,0,.12)}
+			.destination-shell--night .minigame-hub-shell .game-card--complete .game-progress-panel{border-color:rgba(111,223,174,.36);background:linear-gradient(150deg,rgba(10,76,65,.72),rgba(8,48,62,.92))}
+			.destination-shell--night .minigame-hub-shell .game-panel-spark{border-color:rgba(139,217,255,.18);background:rgba(23,91,129,.72);color:#c7f1ff}
+			.destination-shell--night .minigame-hub-shell .game-progress-track{border-color:rgba(205,241,255,.13);background:rgba(2,17,32,.68);box-shadow:inset 0 2px 5px rgba(0,0,0,.3)}
+			.destination-shell--night .minigame-hub-shell .game-progress-count{color:#9fe7ff}
+			.destination-shell--night .minigame-hub-shell .game-card--complete .game-progress-count{color:#aaf2cd}
+			.destination-shell--night .minigame-hub-shell .game-bonus-chip{background:rgba(123,89,30,.28);color:#ffe7a8}
+			.destination-shell--night .minigame-hub-shell .game-progress-fill{background:linear-gradient(90deg,#159bd0,#28afc8 48%,#48c398);box-shadow:inset 0 -3px 0 rgba(1,32,48,.25),0 0 14px rgba(56,189,248,.19)}
+			.destination-shell--night .minigame-hub-shell .game-card--complete .game-progress-fill{background:linear-gradient(90deg,#17976e,#52c995)}
+			.destination-shell--night .minigame-hub-shell .game-mission-status{border-color:rgba(139,217,255,.15);background:rgba(4,28,48,.58);color:rgba(224,244,255,.75)}
+			.destination-shell--night .minigame-hub-shell .game-card--complete .game-mission-status,.destination-shell--night .minigame-hub-shell .game-unlocked-ribbon{border-color:rgba(111,223,174,.24);background:rgba(18,91,68,.36);color:#b7f6d3}
+			.destination-shell--night .minigame-hub-shell .game-reward-hint{border-color:rgba(250,211,117,.2);background:rgba(123,89,30,.25);color:#ffe7a8}
+			.destination-shell--night .minigame-hub-shell .game-secondary-action{background:rgba(11,42,67,.88);border-color:rgba(139,217,255,.3);color:#e6f7ff}
+			.destination-shell--night .minigame-hub-shell .game-program-card.game-card--photobox{border-color:rgba(165,222,255,.3);background:radial-gradient(ellipse at 80% 10%,rgba(102,105,194,.2),transparent 34%),radial-gradient(ellipse at 18% 90%,rgba(29,160,205,.2),transparent 42%),linear-gradient(140deg,#0b3150,#102a4e 54%,#172c52);box-shadow:7px 8px 0 rgba(0,0,0,.18),0 24px 52px -32px rgba(0,0,0,.78),inset 0 1px rgba(226,247,255,.12)}
+			.destination-shell--night .minigame-hub-shell .game-program-card.game-card--photobox:hover{border-color:rgba(165,222,255,.45);box-shadow:8px 11px 0 rgba(0,0,0,.2),0 28px 54px -30px rgba(0,0,0,.82),0 0 26px rgba(56,189,248,.12)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photobox-dots{opacity:.22;background-image:radial-gradient(rgba(182,226,255,.3) 1.2px,transparent 1.2px)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photobox-orb{opacity:.22}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photobox-ticket{border-color:rgba(139,217,255,.25);background:linear-gradient(120deg,rgba(28,94,132,.75),rgba(47,65,122,.72));color:#c8f1ff}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photobox-description{border-color:rgba(190,226,255,.13);background:rgba(4,25,46,.62);color:rgba(230,245,255,.8)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photobox-title-accent{background-image:linear-gradient(100deg,#74dcff,#a5b9ff 55%,#ddb4ff)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-camera-ready{color:rgba(210,236,255,.68)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-gallery-glow{background:radial-gradient(circle,rgba(236,194,112,.28),rgba(47,144,206,.2) 52%,transparent 75%)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-social-bubble--heart{background:linear-gradient(145deg,#bd5d83,#933b67);box-shadow:0 5px 0 #6c2e52,0 9px 16px rgba(0,0,0,.25)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-social-bubble--music{background:linear-gradient(145deg,#1c4d76,#14395f);box-shadow:0 5px 0 #0a2744,0 9px 16px rgba(0,0,0,.25)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-social-bubble--chat{background:linear-gradient(145deg,#397da8,#28699b);box-shadow:0 5px 0 #174d7b,0 9px 16px rgba(0,0,0,.25)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-social-bubble--spark{background:linear-gradient(145deg,#c8a354,#a87c36);color:#fff1c7;box-shadow:0 5px 0 #765828,0 9px 16px rgba(0,0,0,.25)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-polaroid{border-color:rgba(226,240,255,.2);background:linear-gradient(145deg,#f4f8ff,#dfeafa);box-shadow:0 15px 28px rgba(0,0,0,.36),inset 0 1px rgba(255,255,255,.96)}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-polaroid-caption{color:#203c57}
+			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photo-tape{background:linear-gradient(100deg,rgba(123,204,238,.78),rgba(178,164,240,.76))}
+			@keyframes game-orb-drift{0%{transform:translate3d(0,0,0) scale(.94)}100%{transform:translate3d(-10px,10px,0) scale(1.08)}}
+			@keyframes game-spark-idle{0%,100%{transform:translateY(0) rotate(-5deg) scale(.95);opacity:.74}50%{transform:translateY(-4px) rotate(8deg) scale(1.08);opacity:1}}
+			@keyframes game-mascot-bob{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-4px) rotate(2deg)}}
+			@keyframes game-xp-twinkle{0%,100%{transform:rotate(-8deg) scale(.94)}50%{transform:rotate(9deg) scale(1.13)}}
+			@keyframes game-label-shine{0%,68%,100%{left:-60%;opacity:0}74%{opacity:.85}86%{left:130%;opacity:0}}
+			@keyframes game-progress-shine{0%,55%,100%{transform:translateX(-110%)}78%{transform:translateX(110%)}}
+			@keyframes game-progress-star-glow{0%,100%{transform:translate(-50%,-50%) scale(.94) rotate(0);filter:drop-shadow(0 0 4px rgba(37,155,218,.5))}50%{transform:translate(-50%,-50%) scale(1.16) rotate(25deg);filter:drop-shadow(0 0 8px rgba(255,255,255,.95))}}
+			@keyframes game-button-shine{0%,70%,100%{left:-48%;opacity:0}76%{opacity:1}90%{left:130%;opacity:0}}
+			@keyframes game-cta-idle{0%,82%,100%{transform:translateY(0)}87%{transform:translateY(-2px)}91%{transform:translateY(1px)}}
+			@keyframes game-check-pop{0%{transform:scale(.2) rotate(-35deg);opacity:0}70%{transform:scale(1.25) rotate(8deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+			@keyframes game-trophy-pop{0%{transform:scale(.76) rotate(-12deg)}70%{transform:scale(1.12) rotate(5deg)}100%{transform:scale(1) rotate(0)}}
+			@keyframes game-confetti-pop{0%{transform:translateY(0) scale(.4) rotate(0);opacity:0}18%{opacity:1}100%{transform:translateY(-110px) scale(.3) rotate(130deg);opacity:0}}
 			@keyframes brand-bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-2px) rotate(2deg)}}@keyframes mascot-float{0%,100%{translate:0 0}50%{translate:0 -9px}}@keyframes mascot-pose-in{from{opacity:.4}to{opacity:1}}@keyframes spark-dance{0%,100%{transform:translateY(0) rotate(0) scale(.92);opacity:.78}50%{transform:translateY(-7px) rotate(16deg) scale(1.12);opacity:1}}@keyframes twinkle{0%,100%{opacity:.58;transform:scale(.86) rotate(0);filter:brightness(.9)}50%{opacity:1;transform:scale(1.18) rotate(45deg);filter:brightness(1.35)}}@keyframes sky-drift{to{transform:translate(42px,28px) scale(1.1)}}@keyframes aurora{to{transform:rotate(6deg) translateX(5%);opacity:.65}}
 			@media(prefers-reduced-motion:reduce){.destination-shell *, .destination-shell *::before,.destination-shell *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 		`}</style>
