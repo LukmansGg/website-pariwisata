@@ -489,7 +489,7 @@ function Navbar({ isDark, onToggleTheme, discoveryMode = false, discoveryLabel =
 				</a>
 				<div className="hidden items-center gap-8 font-medium text-[var(--home-ink)] md:flex">
 					<a href="#destinasi" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Destinasi</a>
-					<a href="#kuliner" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Kuliner</a>
+					<a href="#destinasi" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Wisata</a>
 					<a href="#promo" className="relative transition-colors after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-[var(--home-accent)] after:transition-all hover:text-[var(--home-accent)] hover:after:w-full">Promo</a>
 					<Link href="/scan" className="transition-colors hover:text-[var(--home-accent)]">Scan QR</Link>
 				</div>

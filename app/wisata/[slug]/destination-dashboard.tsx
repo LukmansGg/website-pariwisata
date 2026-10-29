@@ -35,6 +35,8 @@ const GREETINGS = [
 	"Hai, {name}! Petualangan di {destination} dimulai. Ada yang ingin kamu ketahui?",
 	"Selamat datang, {name}! Semoga betah di {destination}. Yuk, tanya apa saja tentang tempat ini.",
 ];
+const VISITOR_NICKNAMES = ["Bintang Ceria", "Kancil Jelajah", "Awan Kecil", "Pipit Petualang", "Kompas Mini"];
+const DEFAULT_VISITOR_NICKNAME = "Bintang Ceria";
 const GUIDE_ITEMS = [
 	{ icon: "💬", title: "Tanya TiLoc! Guide", text: "Minta cerita singkat, ide kegiatan, atau tips berkunjung." },
 	{ icon: "📍", title: "Temukan titik QR", text: "Scan QR di lokasi untuk mencatat kunjungan dan membuka progres misi." },
@@ -108,7 +110,7 @@ function Icon({ name, className = "" }: { name: "back" | "sun" | "moon" | "pin" 
 
 export default function DestinationDashboard({ destination, initialQrCode, initialQrSource = "qr_link", chatAiEnabled = true }: { destination: Destination; initialQrCode?: string; initialQrSource?: "qr_link" | "camera"; chatAiEnabled?: boolean }) {
 	const { isDark: dark, toggleTheme } = useTheme();
-	const [visitorName, setVisitorName] = useState("Teman");
+	const [visitorName, setVisitorName] = useState(DEFAULT_VISITOR_NICKNAME);
 	const [nameInput, setNameInput] = useState("");
 	const [showNameModal, setShowNameModal] = useState(false);
 	const [showGuideModal, setShowGuideModal] = useState(false);
@@ -122,11 +124,14 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	const [chatError, setChatError] = useState("");
 	const [aiStatus, setAiStatus] = useState("");
 	const [streamingReply, setStreamingReply] = useState("");
-	const [isSpeaking, setIsSpeaking] = useState(false);
+	const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
 	const [currentTime, setCurrentTime] = useState(0);
 	const chatEndRef = useRef<HTMLDivElement>(null);
 	const chatAbortRef = useRef<AbortController | null>(null);
 	const chatAbortReasonRef = useRef<"manual" | "timeout" | null>(null);
+	const speechSequenceRef = useRef(0);
+	const lastSpeechTapRef = useRef<{ index: number; time: number } | null>(null);
+	const greetingNameRef = useRef(DEFAULT_VISITOR_NICKNAME);
 	const chatStorageKey = "mt_tourism_chat_v1:" + destination.slug;
 	const location = destination.address?.trim();
 	const latitude = Number(destination.latitude);
@@ -162,9 +167,20 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 
 	useEffect(() => {
 		const hydrationTimer = window.setTimeout(() => {
-		const savedName = sessionStorage.getItem("mt_visitor_name");
-		if (savedName) setVisitorName(savedName);
-		else if (!sessionStorage.getItem("mt_visitor_started")) setShowNameModal(true);
+		const storedName = sessionStorage.getItem("mt_visitor_name");
+		const journeyStarted = sessionStorage.getItem("mt_visitor_started") === "1";
+		let savedName = storedName;
+		if (!savedName || savedName === "Teman") {
+			if (journeyStarted) {
+				savedName = VISITOR_NICKNAMES[Math.floor(Math.random() * VISITOR_NICKNAMES.length)];
+				sessionStorage.setItem("mt_visitor_name", savedName);
+			} else {
+				savedName = DEFAULT_VISITOR_NICKNAME;
+			}
+		}
+		greetingNameRef.current = savedName;
+		setVisitorName(savedName);
+		if (!journeyStarted) setShowNameModal(true);
 		const cachedChat = sessionStorage.getItem(chatStorageKey);
 		let restored: ChatMessage[] | null = null;
 		if (cachedChat) {
@@ -182,7 +198,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			setChatHistory(restored);
 		} else {
 			const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)]
-				.replace("{name}", savedName || "Teman")
+				.replace("{name}", savedName)
 				.replace("{destination}", destination.name);
 			const initialChat: ChatMessage[] = [{ role: "model", text: greeting, local: true }];
 			setChatHistory(initialChat);
@@ -192,6 +208,11 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 		}, 0);
 		return () => window.clearTimeout(hydrationTimer);
 	}, [chatStorageKey, destination.name, startSession]);
+
+	useEffect(() => () => {
+		speechSequenceRef.current += 1;
+		window.speechSynthesis?.cancel();
+	}, []);
 
 	useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [chatHistory, isTyping, streamingReply, aiStatus]);
 	useEffect(() => {
@@ -338,22 +359,60 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	function submitChat(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void sendPrompt(message); }
 	function commitJourney(name: string) {
 		const cleanName = name.trim().slice(0, 32);
-		if (cleanName) { setVisitorName(cleanName); sessionStorage.setItem("mt_visitor_name", cleanName); }
-		else { setVisitorName("Teman"); sessionStorage.removeItem("mt_visitor_name"); }
+		const nickname = cleanName || VISITOR_NICKNAMES[Math.floor(Math.random() * VISITOR_NICKNAMES.length)];
+		setVisitorName(nickname);
+		sessionStorage.setItem("mt_visitor_name", nickname);
+		const oldGreetingName = greetingNameRef.current;
+		greetingNameRef.current = nickname;
+		const updatedChat = chatHistory.map((item, index) => index === 0 && item.local
+			? { ...item, text: item.text.replace(oldGreetingName, nickname) }
+			: item);
+		if (updatedChat.some((item, index) => item !== chatHistory[index])) {
+			setChatHistory(updatedChat);
+			sessionStorage.setItem(chatStorageKey, JSON.stringify(updatedChat));
+		}
 		sessionStorage.setItem("mt_visitor_started", "1");
 		setShowNameModal(false);
 	}
 	function startJourney(event: FormEvent<HTMLFormElement>) { event.preventDefault(); commitJourney(nameInput); }
 	function skipName() { setNameInput(""); commitJourney(""); }
-	function speakLastReply() {
+	function speakMessages(messages: Array<{ index: number; text: string }>) {
 		if (!("speechSynthesis" in window)) return;
-		const latest = [...chatHistory].reverse().find((item) => item.role === "model")?.text;
-		if (!latest) return;
+		const spokenMessages = messages.map((item) => ({ ...item, text: item.text.trim() })).filter((item) => item.text);
+		if (!spokenMessages.length) return;
+		const sequence = speechSequenceRef.current + 1;
+		speechSequenceRef.current = sequence;
 		window.speechSynthesis.cancel();
-		const utterance = new SpeechSynthesisUtterance(latest);
-		utterance.lang = "id-ID"; utterance.rate = 1.02; utterance.pitch = 1.08;
-		utterance.onstart = () => setIsSpeaking(true); utterance.onend = () => setIsSpeaking(false); utterance.onerror = () => setIsSpeaking(false);
-		window.speechSynthesis.speak(utterance);
+		setSpeakingMessageIndex(null);
+		spokenMessages.forEach((item, index) => {
+			const utterance = new SpeechSynthesisUtterance(item.text);
+			utterance.lang = "id-ID";
+			utterance.rate = 1.02;
+			utterance.pitch = 1.08;
+			utterance.onstart = () => {
+				if (speechSequenceRef.current === sequence) setSpeakingMessageIndex(item.index);
+			};
+			utterance.onend = () => {
+				if (speechSequenceRef.current === sequence && index === spokenMessages.length - 1) setSpeakingMessageIndex(null);
+			};
+			utterance.onerror = () => {
+				if (speechSequenceRef.current === sequence) setSpeakingMessageIndex(null);
+			};
+			window.speechSynthesis.speak(utterance);
+		});
+	}
+	function speakChatMessage(index: number) {
+		const messageToRead = chatHistory[index];
+		if (!messageToRead) return;
+		const now = Date.now();
+		const previousTap = lastSpeechTapRef.current;
+		if (previousTap?.index === index && now - previousTap.time <= 480) {
+			lastSpeechTapRef.current = null;
+			speakMessages(chatHistory.map((item, messageIndex) => ({ index: messageIndex, text: item.text })));
+			return;
+		}
+		lastSpeechTapRef.current = { index, time: now };
+		speakMessages([{ index, text: messageToRead.text }]);
 	}
 
 	return <div className={"destination-shell " + (dark ? "destination-shell--night" : "")}>
@@ -385,7 +444,6 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.destination-shell--night .mascot-speech{background:rgba(6,23,42,.8);border-color:rgba(132,202,235,.24)}
 			.destination-shell--night .tourism-chat-scroll .assistant-bubble,.destination-shell--night .source-pill,.destination-shell--night .chat-quick,.destination-shell--night .chat-input-shell,.destination-shell--night .chat-error{background:rgba(6,23,42,.82);border-color:rgba(132,202,235,.25)}
 			.destination-shell--night .guide-step{background:rgba(6,23,42,.78);border-color:rgba(132,202,235,.25)}
-			.destination-shell--night .minigame-hub-shell{background:radial-gradient(ellipse at 92% 0%,rgba(76,190,239,.18),transparent 34%),linear-gradient(145deg,rgba(9,42,69,.97),rgba(5,23,42,.98) 62%,rgba(7,40,66,.96));border-color:rgba(139,217,255,.3);box-shadow:0 28px 70px -38px rgba(0,0,0,.74),inset 0 1px rgba(225,246,255,.12)}
 			.destination-shell--night .minigame-hub-shell .game-program-card{background:radial-gradient(ellipse at 100% 0%,rgba(66,160,204,.14),transparent 42%),linear-gradient(145deg,rgba(13,53,82,.94),rgba(7,34,57,.97));border-color:rgba(139,217,255,.24);box-shadow:0 18px 38px -25px rgba(0,0,0,.72),inset 0 1px rgba(226,247,255,.1)}
 			.destination-shell--night .minigame-hub-shell .game-program-card:hover{border-color:rgba(139,217,255,.48);box-shadow:0 26px 48px -24px rgba(0,0,0,.72),0 0 28px rgba(56,189,248,.12),inset 0 1px rgba(226,247,255,.14)}
 			.destination-shell--night .minigame-hub-shell .game-program-card .bg-sky-100{background:rgba(56,152,196,.2);color:#d9f5ff}
@@ -417,7 +475,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.game-label-fire{display:grid;place-items:center;animation:game-spark-idle 2.2s ease-in-out infinite}
 			.game-quest-mascot{background:linear-gradient(145deg,#9ce6ff,#d8f8ff 55%,#e8f3ff);transform-origin:50% 75%;animation:game-mascot-bob 4.1s ease-in-out infinite}
 			.game-quest-copy .game-xp-chip{position:relative;overflow:hidden}.game-xp-star{display:inline-block;filter:drop-shadow(0 1px 3px rgba(183,127,16,.25));animation:game-xp-twinkle 2.8s ease-in-out infinite}
-			.game-progress-panel{overflow:visible;transition:transform .24s ease,border-color .24s ease,box-shadow .24s ease}
+			.game-progress-panel{overflow:visible}
 			.game-panel-spark{color:#168bb6;animation:game-spark-idle 2.8s ease-in-out infinite}
 			.game-progress-track{isolation:isolate}
 			.game-progress-fill{background:linear-gradient(90deg,#25a9dc 0%,#40bfd0 45%,#69cead 100%);box-shadow:inset 0 -3px 0 rgba(20,93,127,.16),0 0 12px rgba(56,189,248,.25);transition:width .95s cubic-bezier(.2,.8,.2,1)}
@@ -434,15 +492,13 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.game-card--complete{border-color:#9bdcc1;box-shadow:8px 9px 0 rgba(16,125,83,.07),0 20px 42px -28px rgba(19,142,102,.35)}
 			.game-card--complete .game-quest-mascot{background:linear-gradient(145deg,#c6ffe5,#eafff4 60%,#d6f9ff);animation:game-trophy-pop .8s cubic-bezier(.2,.85,.25,1.25) both}
 			.game-card--complete .game-cta-idle{animation:none}
-			.game-card--complete .game-progress-panel{border-color:#9bdcc1;background:linear-gradient(150deg,#e8fff4,#f5fffb 70%,#eafaff)}
 			.game-card--complete .game-progress-fill{background:linear-gradient(90deg,#18a978,#63d6a6)}
 			.game-card--complete .game-progress-count{color:#08744e}
-			.game-card--complete .game-mission-status{border-color:#bcebd2;background:#f3fff8;color:#08744e}
+			.game-card--complete .game-mission-status{border-color:#79c9a3;background:transparent;color:#08744e}
 			.game-card--complete .game-unlocked-ribbon{border-color:#bcebd2;background:linear-gradient(90deg,#e6fff0,#f1fff8);color:#08744e}
 			.game-reward-hint{box-shadow:0 3px 0 rgba(183,134,31,.08)}
 			.game-completion-burst .game-burst-particle{position:absolute;top:75%;color:#17a5d5;font-size:1.2rem;text-shadow:0 0 8px rgba(255,255,255,.9);animation:game-confetti-pop 1.6s cubic-bezier(.16,.7,.3,1) both}
 			.game-completion-burst .game-burst-particle:nth-child(3n){color:#f2b847}.game-completion-burst .game-burst-particle:nth-child(3n + 1){color:#40bd91}
-			.game-card--photobox{border-color:rgba(255,255,255,.94);background:radial-gradient(ellipse at 76% 16%,rgba(210,194,255,.42),transparent 34%),radial-gradient(ellipse at 15% 90%,rgba(144,224,255,.5),transparent 42%),linear-gradient(135deg,#f2fbff 0%,#e6f5ff 49%,#f6f0ff 100%);box-shadow:8px 9px 0 rgba(22,88,123,.08),0 22px 48px -30px rgba(64,103,177,.42)}
 			.game-card--photobox .game-card-dots,.game-card--photobox .game-card-orb,.game-card--photobox .game-quest-spark{display:none}
 			.game-photobox-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:23rem;gap:.75rem;align-items:center;animation:game-photobox-reveal .8s cubic-bezier(.2,.85,.25,1.12) both}
 			@container gameQuest (min-width:640px){.game-photobox-layout{grid-template-columns:minmax(0,.92fr) minmax(18rem,1.08fr);min-height:24rem;gap:1rem}}
@@ -496,8 +552,6 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.destination-shell--night .minigame-hub-shell .game-xp-chip{border-color:rgba(246,207,104,.28);background:linear-gradient(135deg,rgba(123,89,30,.48),rgba(92,65,29,.42));color:#ffe7a8}
 			.destination-shell--night .minigame-hub-shell .game-free-chip{border-color:rgba(111,223,174,.25);background:rgba(22,101,75,.28);color:#a7f3d0}
 			.destination-shell--night .minigame-hub-shell .game-component-chip{border-color:rgba(139,217,255,.2);background:rgba(22,83,119,.55);color:#c8edff}
-			.destination-shell--night .minigame-hub-shell .game-progress-panel{border-color:rgba(139,217,255,.24);background:linear-gradient(155deg,rgba(11,54,82,.94),rgba(8,37,62,.94));box-shadow:inset 0 1px rgba(225,246,255,.09),0 8px 18px rgba(0,0,0,.12)}
-			.destination-shell--night .minigame-hub-shell .game-card--complete .game-progress-panel{border-color:rgba(111,223,174,.36);background:linear-gradient(150deg,rgba(10,76,65,.72),rgba(8,48,62,.92))}
 			.destination-shell--night .minigame-hub-shell .game-panel-spark{border-color:rgba(139,217,255,.18);background:rgba(23,91,129,.72);color:#c7f1ff}
 			.destination-shell--night .minigame-hub-shell .game-progress-track{border-color:rgba(205,241,255,.13);background:rgba(2,17,32,.68);box-shadow:inset 0 2px 5px rgba(0,0,0,.3)}
 			.destination-shell--night .minigame-hub-shell .game-progress-count{color:#9fe7ff}
@@ -505,12 +559,10 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.destination-shell--night .minigame-hub-shell .game-bonus-chip{background:rgba(123,89,30,.28);color:#ffe7a8}
 			.destination-shell--night .minigame-hub-shell .game-progress-fill{background:linear-gradient(90deg,#159bd0,#28afc8 48%,#48c398);box-shadow:inset 0 -3px 0 rgba(1,32,48,.25),0 0 14px rgba(56,189,248,.19)}
 			.destination-shell--night .minigame-hub-shell .game-card--complete .game-progress-fill{background:linear-gradient(90deg,#17976e,#52c995)}
-			.destination-shell--night .minigame-hub-shell .game-mission-status{border-color:rgba(139,217,255,.15);background:rgba(4,28,48,.58);color:rgba(224,244,255,.75)}
-			.destination-shell--night .minigame-hub-shell .game-card--complete .game-mission-status,.destination-shell--night .minigame-hub-shell .game-unlocked-ribbon{border-color:rgba(111,223,174,.24);background:rgba(18,91,68,.36);color:#b7f6d3}
+			.destination-shell--night .minigame-hub-shell .game-mission-status{border-color:rgba(139,217,255,.5);background:transparent;color:rgba(224,244,255,.75)}
+			.destination-shell--night .minigame-hub-shell .game-card--complete .game-mission-status,.destination-shell--night .minigame-hub-shell .game-unlocked-ribbon{border-color:rgba(111,223,174,.5);background:transparent;color:#b7f6d3}
 			.destination-shell--night .minigame-hub-shell .game-reward-hint{border-color:rgba(250,211,117,.2);background:rgba(123,89,30,.25);color:#ffe7a8}
 			.destination-shell--night .minigame-hub-shell .game-secondary-action{background:rgba(11,42,67,.88);border-color:rgba(139,217,255,.3);color:#e6f7ff}
-			.destination-shell--night .minigame-hub-shell .game-program-card.game-card--photobox{border-color:rgba(165,222,255,.3);background:radial-gradient(ellipse at 80% 10%,rgba(102,105,194,.2),transparent 34%),radial-gradient(ellipse at 18% 90%,rgba(29,160,205,.2),transparent 42%),linear-gradient(140deg,#0b3150,#102a4e 54%,#172c52);box-shadow:7px 8px 0 rgba(0,0,0,.18),0 24px 52px -32px rgba(0,0,0,.78),inset 0 1px rgba(226,247,255,.12)}
-			.destination-shell--night .minigame-hub-shell .game-program-card.game-card--photobox:hover{border-color:rgba(165,222,255,.45);box-shadow:8px 11px 0 rgba(0,0,0,.2),0 28px 54px -30px rgba(0,0,0,.82),0 0 26px rgba(56,189,248,.12)}
 			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photobox-dots{opacity:.22;background-image:radial-gradient(rgba(182,226,255,.3) 1.2px,transparent 1.2px)}
 			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photobox-orb{opacity:.22}
 			.destination-shell--night .minigame-hub-shell .game-card--photobox .game-photobox-ticket{border-color:rgba(139,217,255,.25);background:linear-gradient(120deg,rgba(28,94,132,.75),rgba(47,65,122,.72));color:#c8f1ff}
@@ -567,10 +619,18 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 				<div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#16587B]/60">TEMAN JELAJAHMU</p><h2 id="guide-chat-title" className="mt-1 text-2xl font-black tracking-tight text-[#16587B] sm:text-3xl">Tanya, yuk! <span className="text-[#3d9bc2]">✦</span></h2><p className="mt-1 text-xs font-medium text-[#16587B]/65 sm:text-sm">Cerita destinasi, ide kegiatan, atau rencana jalan-jalan.</p></div><span className="hidden rounded-full border border-[#84B3CE]/35 bg-white/60 px-3 py-1.5 text-[10px] font-bold text-[#16587B]/65 sm:inline-flex">Jawaban mengalir langsung</span></div>
 				<div className="grid min-w-0 items-stretch gap-4 lg:grid-cols-[minmax(0,1.38fr)_minmax(250px,.72fr)]">
 					<section className="tourism-glass order-2 flex min-h-[560px] min-w-0 flex-col rounded-[2rem] p-4 sm:rounded-[2.35rem] sm:p-6 lg:order-1" aria-label="Percakapan dengan TiLoc! Guide">
-						<div className="mb-3 flex items-center justify-between gap-3 border-b border-[#84B3CE]/30 pb-3"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#16587B] text-xl text-white shadow-lg shadow-[#16587B]/20">✦</span><div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[.18em] text-[#16587B]/55">PEMANDU AI</p><p className="mt-0.5 truncate text-base font-black text-[#16587B]">TiLoc! Guide</p></div></div><div className="flex items-center gap-2"><span className="hidden items-center gap-1.5 rounded-full bg-emerald-100/80 px-2.5 py-1 text-[9px] font-black text-emerald-800 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>SIAP MENEMANI</span><button type="button" onClick={speakLastReply} aria-label={isSpeaking ? "Sedang membacakan jawaban" : "Dengarkan jawaban terakhir"} title="Dengarkan jawaban terakhir" className={"grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition " + (isSpeaking ? "border-[#16587B] bg-[#16587B] text-white" : "border-[#84B3CE]/40 bg-white/80 text-[#16587B] hover:bg-[#84B3CE]/20")}><Icon name="sound" className="h-4 w-4" /></button></div></div>
-						<details className="ai-privacy-note mb-3 rounded-xl border border-[#84B3CE]/30 bg-[#EAF6FC]/65 px-3 py-2 text-[10px] leading-4 text-[#16587B]/70"><summary className="cursor-pointer font-bold">🔒 Pertanyaan saat ini saja yang dikirim</summary><p className="mt-1.5">Riwayat chat tidak dikirim. Model gratis melalui OpenRouter dapat mencatat permintaan untuk keamanan dan peningkatan layanan; hindari data pribadi atau rahasia.</p></details>
+						<div className="mb-3 flex items-center justify-between gap-3 border-b border-[#84B3CE]/30 pb-3"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#16587B] text-xl text-white shadow-lg shadow-[#16587B]/20">✦</span><div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[.18em] text-[#16587B]/55">PEMANDU AI</p><p className="mt-0.5 truncate text-base font-black text-[#16587B]">TiLoc! Guide</p></div></div><span className="hidden items-center gap-1.5 rounded-full bg-emerald-100/80 px-2.5 py-1 text-[9px] font-black text-emerald-800 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>SIAP MENEMANI</span></div>
+						<p className="ai-privacy-note mb-2 rounded-xl border border-[#84B3CE]/30 bg-[#EAF6FC]/65 px-3 py-2 text-[10px] font-semibold leading-4 text-[#16587B]/70">🔒 Hindari data pribadi atau rahasia.</p>
+						<p className="mb-1 text-[9px] font-semibold text-[#16587B]/50">🔊 Ketuk sekali untuk satu pesan · dua kali cepat untuk semua chat</p>
 						<div aria-live="polite" aria-relevant="additions" className="tourism-chat-scroll min-h-[240px] flex-1 space-y-4 overflow-y-auto px-0.5 py-2 pr-1">
-							{chatHistory.map((item, index) => <div key={index} className={"flex min-w-0 flex-col " + (item.role === "user" ? "items-end" : "items-start")}><div className={"max-w-[92%] whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm font-medium leading-6 sm:max-w-[86%] " + (item.role === "user" ? "rounded-br-md bg-[#16587B] text-white shadow-lg shadow-[#16587B]/15" : "assistant-bubble rounded-bl-md border border-[#84B3CE]/30 bg-white/85 text-[#16587B] shadow-sm")}>{item.role === "model" ? renderLinkedAnswer(item.text) : item.text}</div>{item.role === "model" && item.sources?.length ? <div className="mt-2 flex max-w-[92%] flex-wrap gap-1.5 px-1">{item.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer noopener" className="source-pill rounded-full border border-[#84B3CE]/40 bg-white/75 px-2.5 py-1 text-[10px] font-bold text-[#16587B] underline decoration-[#84B3CE] underline-offset-2">{source.title} · Wikipedia{source.language === "en" ? " EN" : ""}</a>)}</div> : null}{item.role === "model" && index === chatHistory.length - 1 && <span className="mt-1.5 px-2 text-[9px] font-bold uppercase tracking-wider text-[#16587B]/55">ⓘ Fakta pengelola · ide ramah</span>}</div>)}
+							{chatHistory.map((item, index) => <div key={index} className={"flex min-w-0 flex-col " + (item.role === "user" ? "items-end" : "items-start")}>
+								<div className={"flex max-w-[96%] min-w-0 items-end gap-1.5 " + (item.role === "user" ? "flex-row-reverse" : "")}>
+									<div className={"max-w-[calc(100%-2.75rem)] whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm font-medium leading-6 " + (item.role === "user" ? "rounded-br-md bg-[#16587B] text-white shadow-lg shadow-[#16587B]/15" : "assistant-bubble rounded-bl-md border border-[#84B3CE]/30 bg-white/85 text-[#16587B] shadow-sm")}>{item.role === "model" ? renderLinkedAnswer(item.text) : item.text}</div>
+									<button type="button" onClick={() => speakChatMessage(index)} aria-label={`Baca pesan ${index + 1}; ketuk dua kali cepat untuk membaca seluruh chat`} title="Sekali: baca pesan ini · dua kali cepat: baca seluruh chat" className={"grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition active:scale-90 " + (speakingMessageIndex === index ? "border-[#16587B] bg-[#16587B] text-white shadow-md shadow-[#16587B]/20" : "border-[#84B3CE]/35 bg-white/70 text-[#16587B]/65 hover:-translate-y-0.5 hover:bg-white hover:text-[#16587B]")}><Icon name="sound" className="h-4 w-4" /></button>
+								</div>
+								{item.role === "model" && item.sources?.length ? <div className="mt-2 flex max-w-[92%] flex-wrap gap-1.5 px-1">{item.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer noopener" className="source-pill rounded-full border border-[#84B3CE]/40 bg-white/75 px-2.5 py-1 text-[10px] font-bold text-[#16587B] underline decoration-[#84B3CE] underline-offset-2">{source.title} · Wikipedia{source.language === "en" ? " EN" : ""}</a>)}</div> : null}
+								{item.role === "model" && index === chatHistory.length - 1 && <span className="mt-1.5 px-2 text-[9px] font-bold uppercase tracking-wider text-[#16587B]/55">ⓘ Fakta pengelola · ide ramah</span>}
+							</div>)}
 							{isTyping && <div className="flex max-w-[92%] flex-col items-start gap-2"><div className="flex items-center gap-1.5 rounded-3xl rounded-bl-md border border-[#84B3CE]/30 bg-white/85 px-4 py-3"><span className="h-2 w-2 animate-bounce rounded-full bg-[#16587B]" /><span className="h-2 w-2 animate-bounce rounded-full bg-[#84B3CE] [animation-delay:120ms]" /><span className="h-2 w-2 animate-bounce rounded-full bg-[#16587B] [animation-delay:240ms]" /><span className="ml-2 text-xs text-[#16587B]/65">{streamingReply ? renderLinkedAnswer(streamingReply) : "Siap-siap, sebentar ya…"}</span></div>{aiStatus && <span className="px-2 text-[10px] text-[#16587B]/55">{aiStatus}</span>}</div>}<div ref={chatEndRef} />
 						</div>
 						{chatError && <p role="alert" className="chat-error mt-2 rounded-xl border border-[#84B3CE]/40 bg-[#EAF6FC] px-3 py-2 text-xs font-semibold leading-5 text-[#16587B]">{chatError}</p>}
@@ -588,8 +648,8 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 		</main>
 
 		{showNameModal && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#102F43]/55 p-4 backdrop-blur-md"><section role="dialog" aria-modal="true" aria-labelledby="welcome-title" className="tourism-glass relative my-auto w-full max-w-md overflow-hidden rounded-[2.5rem] border-2 border-white/80 p-7 text-center shadow-2xl sm:p-9"><div aria-hidden="true" className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-[#84B3CE]/30 blur-3xl" /><div className="relative mx-auto mb-3 h-36 w-52"><MascotCrew group="upper" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div>
-			<h2 id="welcome-title" className="relative text-3xl font-black text-[#16587B]">Halo, Teman! 👋</h2><p className="relative mt-3 text-sm leading-6 text-[#16587B]/75">Sebelum jalan-jalan di <strong>{destination.name}</strong>, mau pakai nama panggilan?</p>
-			<form onSubmit={startJourney} className="relative mt-6"><label htmlFor="visitor-name" className="mb-2 block text-left text-xs font-extrabold text-[#16587B]">Nama panggilan <span className="font-medium text-[#16587B]/55">(opsional)</span></label><input id="visitor-name" type="text" value={nameInput} onChange={(event) => setNameInput(event.currentTarget.value.slice(0, 32))} maxLength={32} placeholder="mis. Kelinci Ceria" autoComplete="nickname" className="mb-4 min-h-12 w-full rounded-2xl border-2 border-[#84B3CE]/40 bg-white/85 px-4 text-center font-bold text-[#16587B] outline-none transition placeholder:font-medium placeholder:text-[#16587B]/40 focus:border-[#16587B] focus:ring-4 focus:ring-[#84B3CE]/20" /><button type="submit" className="min-h-13 w-full rounded-2xl bg-[#16587B] px-5 py-3.5 text-base font-black text-white shadow-lg shadow-[#16587B]/25 transition hover:-translate-y-0.5 hover:bg-[#10445f]">Mulai Perjalanan ✨</button><button type="button" onClick={skipName} className="mt-3 min-h-11 w-full rounded-2xl px-4 text-sm font-bold text-[#16587B]/75 transition hover:bg-[#84B3CE]/15">Lewati, lanjut sebagai Teman</button></form>
+			<h2 id="welcome-title" className="relative text-3xl font-black text-[#16587B]">Halo, petualang! 👋</h2><p className="relative mt-3 text-sm leading-6 text-[#16587B]/75">Sebelum jalan-jalan di <strong>{destination.name}</strong>, mau pakai nama panggilan?</p>
+			<form onSubmit={startJourney} className="relative mt-6"><label htmlFor="visitor-name" className="mb-2 block text-left text-xs font-extrabold text-[#16587B]">Nama panggilan <span className="font-medium text-[#16587B]/55">(opsional)</span></label><input id="visitor-name" type="text" value={nameInput} onChange={(event) => setNameInput(event.currentTarget.value.slice(0, 32))} maxLength={32} placeholder="mis. Kelinci Ceria" autoComplete="nickname" className="mb-4 min-h-12 w-full rounded-2xl border-2 border-[#84B3CE]/40 bg-white/85 px-4 text-center font-bold text-[#16587B] outline-none transition placeholder:font-medium placeholder:text-[#16587B]/40 focus:border-[#16587B] focus:ring-4 focus:ring-[#84B3CE]/20" /><button type="submit" className="min-h-13 w-full rounded-2xl bg-[#16587B] px-5 py-3.5 text-base font-black text-white shadow-lg shadow-[#16587B]/25 transition hover:-translate-y-0.5 hover:bg-[#10445f]">Mulai Perjalanan ✨</button><button type="button" onClick={skipName} className="mt-3 min-h-11 w-full rounded-2xl px-4 text-sm font-bold text-[#16587B]/75 transition hover:bg-[#84B3CE]/15">Pilihkan nama lucu untukku ✨</button></form>
 		</section></div>}
 
 		{showSessionModal && <div className="fixed inset-0 z-50 grid place-items-center bg-[#102F43]/55 p-4 backdrop-blur-md"><section role="dialog" aria-modal="true" aria-labelledby="session-title" className="tourism-glass w-full max-w-md rounded-[2.5rem] p-7 text-center shadow-2xl sm:p-9">
