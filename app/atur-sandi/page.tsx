@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { TiLocBrand } from "@/src/components/tiloc-brand";
 import { createClient } from "@/src/infrastructure/supabase/client";
 
 export default function SetPasswordPage() {
@@ -54,7 +55,7 @@ export default function SetPasswordPage() {
 
 	return <main className="grid min-h-dvh place-items-center bg-[radial-gradient(circle_at_15%_0%,#e0f2fe_0,#f5fbff_42%,#dbeafe_100%)] p-4 text-[#123b56] dark:bg-[radial-gradient(circle_at_15%_0%,#152640_0,#08111f_55%,#030713_100%)] dark:text-sky-50 sm:p-8">
 		<section className="w-full max-w-xl rounded-[2rem] border border-white/75 bg-white/80 p-6 shadow-[0_32px_90px_-48px_rgba(2,132,199,.5)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/65 sm:p-9">
-			<div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-sky-400 to-blue-800 text-sm font-black text-white shadow-lg">TL</div>
+			<TiLocBrand markClassName="h-14 w-14" wordmarkClassName="text-xl font-black tracking-tight text-sky-950 dark:text-sky-50" accentClassName="text-amber-500" tagline="Titik Lokasi"/>
 			<p className="mt-6 text-[10px] font-black uppercase tracking-[.22em] text-sky-700 dark:text-sky-300">AKSES PENGELOLA WISATA</p>
 			<h1 className="mt-2 text-3xl font-black tracking-tight">Buat sandi akun</h1>
 			{!ready ? <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">Memeriksa undangan…</p> : isManager ? <>

@@ -3,17 +3,12 @@
 import { useActionState, useEffect, useState } from 'react';
 import { loginAction, type LoginState } from '@/src/server/auth/actions';
 import { useTheme } from '@/src/components/theme-provider';
+import { TiLocBrand } from '@/src/components/tiloc-brand';
 
 const initialState: LoginState = {};
 const MAX_ATTEMPTS = 3;
 
 // --- IKON & ASET SVG REUSABLE (STRICT PALETTE) ---
-const IconDroplet = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8">
-    <path fillRule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-  </svg>
-);
-
 const IconEye = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
     <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
@@ -341,14 +336,7 @@ export default function StaffLoginPage() {
             
             {/* Header / Identitas */}
             <header className="flex items-center justify-between mb-10 md:mb-12 animate-entrance-stagger-1">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="text-[var(--text-primary)]">
-                  <IconDroplet />
-                </div>
-                <h1 className="text-xl sm:text-2xl font-black text-[var(--text-primary)] tracking-tight">
-                  TiLoc<span className="text-[var(--rock-blue)]">.</span>
-                </h1>
-              </div>
+              <TiLocBrand markClassName="h-9 w-9 sm:h-10 sm:w-10" wordmarkClassName="text-xl sm:text-2xl font-black tracking-tight text-[var(--text-primary)]" accentClassName="text-[var(--rock-blue)]"/>
               <div className="flex items-center gap-2 sm:gap-3">
               <button type="button" onClick={toggleTheme} aria-label={isDark ? 'Aktifkan tema terang' : 'Aktifkan tema gelap'} title={isDark ? 'Tema terang' : 'Tema gelap'} className="theme-transition relative flex h-10 w-10 items-center justify-center rounded-full border border-[var(--badge-border)] bg-[var(--badge-bg)] text-[var(--text-secondary)] shadow-sm btn-smooth-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400">
                 <IconSun className={`absolute h-5 w-5 transition-all duration-500 ${isDark ? 'rotate-90 scale-50 opacity-0' : 'rotate-0 scale-100 opacity-100'}`} />

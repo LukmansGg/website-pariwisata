@@ -99,7 +99,7 @@ export function VisitorExperienceInsights() {
 	}, [route]);
 
 	if (!route.enabled || eligibleKey !== targetKey || readyKey !== targetKey || dismissedKey === targetKey) return null;
-	const scopeLabel = route.scope === "destination" ? "wisata · " + (targetName || "destinasi ini") : "pengalaman website TiLoc";
+	const scopeLabel = route.scope === "destination" ? "wisata · " + (targetName || "destinasi ini") : "pengalaman website TiLoc!";
 
 	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -134,6 +134,6 @@ export function VisitorExperienceInsights() {
 				{message && <p role="alert" className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-300">{message}</p>}
 				<div className="mt-3 flex gap-2"><button type="button" onClick={() => { setDismissedKey(targetKey); try { sessionStorage.setItem("tiloc-survey-dismissed:" + targetKey, "1"); } catch { /* This only snoozes the prompt for this tab. */ } }} className="min-h-11 flex-1 rounded-xl border border-slate-200 px-3 text-xs font-bold dark:border-white/15">Nanti</button><button type="submit" disabled={rating < 1 || busy} className="min-h-11 flex-[1.3] rounded-xl bg-[#16587B] px-3 text-xs font-black text-white disabled:opacity-45 dark:bg-sky-500 dark:text-slate-950">{busy ? "Mengirim…" : "Kirim penilaian"}</button></div>
 			</form>}
-		</section> : submittedKey === targetKey ? <p role="status" className="ml-auto w-fit rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-black text-emerald-800 shadow-xl dark:border-emerald-300/15 dark:bg-emerald-950 dark:text-emerald-200">{message}</p> : <button type="button" onClick={() => setOpen(true)} className="ml-auto flex min-h-12 items-center gap-2 rounded-full border border-white/80 bg-white/90 px-4 text-left text-xs font-black shadow-xl backdrop-blur-xl transition hover:-translate-y-0.5 dark:border-white/10 dark:bg-slate-900/90 dark:text-white"><span className="grid h-8 w-8 place-items-center rounded-full bg-amber-100 text-lg text-amber-500">★</span><span>Beri nilai <span className="font-semibold text-slate-500 dark:text-slate-300">· {route.scope === "destination" ? "wisata" : "TiLoc"}</span></span></button>}
+		</section> : submittedKey === targetKey ? <p role="status" className="ml-auto w-fit rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-black text-emerald-800 shadow-xl dark:border-emerald-300/15 dark:bg-emerald-950 dark:text-emerald-200">{message}</p> : <button type="button" onClick={() => setOpen(true)} className="ml-auto flex min-h-12 items-center gap-2 rounded-full border border-white/80 bg-white/90 px-4 text-left text-xs font-black shadow-xl backdrop-blur-xl transition hover:-translate-y-0.5 dark:border-white/10 dark:bg-slate-900/90 dark:text-white"><span className="grid h-8 w-8 place-items-center rounded-full bg-amber-100 text-lg text-amber-500">★</span><span>Beri nilai <span className="font-semibold text-slate-500 dark:text-slate-300">· {route.scope === "destination" ? "wisata" : "TiLoc!"}</span></span></button>}
 	</aside>;
 }

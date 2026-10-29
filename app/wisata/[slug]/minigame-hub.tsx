@@ -94,7 +94,7 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 		};
 	}, [destinationSlug, initialQrCode, source]);
 
-	if (error) return <section role="alert" className="rounded-3xl border border-amber-200 bg-amber-50/90 p-5 text-sm text-amber-900"><strong>Petualangan belum tersambung.</strong><p className="mt-1">{error}</p></section>;
+	if (error) return <section role="alert" className="rounded-3xl border border-amber-200 bg-amber-50/90 p-5 text-sm text-amber-900 dark:border-amber-300/15 dark:bg-amber-950/40 dark:text-amber-100"><strong>Petualangan belum tersambung.</strong><p className="mt-1">{error}</p></section>;
 	if (snapshot && !snapshot.programs.length) return null;
 	return <section className="minigame-hub-shell relative overflow-hidden rounded-[2rem] border border-sky-200/80 bg-[radial-gradient(circle_at_94%_7%,#d8f2ff_0,transparent_26%),linear-gradient(145deg,#eaf8ff,#f8fcff_60%,#f0faff)] p-5 text-[#16587B] shadow-[0_24px_58px_-34px_rgba(22,88,123,.42)] sm:rounded-[2.4rem] sm:p-7" aria-labelledby="minigame-hub-title">
 		<div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-14 h-48 w-48 rounded-full border border-[#84B3CE]/25"/><div aria-hidden="true" className="pointer-events-none absolute -bottom-24 left-1/3 h-52 w-52 rounded-full bg-[#a9e5ef]/40 blur-3xl"/>
