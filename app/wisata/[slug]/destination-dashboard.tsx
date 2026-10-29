@@ -18,13 +18,76 @@ type VisitorSession = { id: string; destination_id: string | null; started_at: s
 type ChatSource = { title: string; url: string; language?: "id" | "en" };
 type ChatMessage = { role: "user" | "model"; text: string; local?: boolean; sources?: ChatSource[]; wikipediaUsed?: boolean };
 
-function renderLinkedAnswer(text: string): ReactNode {
-	const parts = text.split(/(\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g);
+function renderInlineAnswer(text: string): ReactNode[] {
+	const parts = text.split(/(\*\*[^*]+?\*\*|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g);
 	return parts.map((part, index) => {
-		const match = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
-		if (!match) return part;
-		return <a key={index} href={match[2]} target="_blank" rel="noreferrer noopener" className="font-bold text-[#16587B] underline decoration-[#84B3CE] underline-offset-2">{match[1]}</a>;
+		if (part.startsWith("**") && part.endsWith("**")) return <strong key={index} className="font-black">{part.slice(2, -2)}</strong>;
+		const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+		if (link) return <a key={index} href={link[2]} target="_blank" rel="noreferrer noopener" className="font-bold text-[#16587B] underline decoration-[#84B3CE] underline-offset-2">{link[1]}</a>;
+		return part.replace(/\*\*/g, "");
 	});
+}
+
+function renderLinkedAnswer(text: string): ReactNode {
+	const nodes: ReactNode[] = [];
+	let list: { kind: "bullet" | "numbered"; key: number; items: string[] } | null = null;
+	const flushList = () => {
+		if (!list) return;
+		const current = list;
+		const items = current.items.map((item, index) => <li key={`${current.key}-${index}`}>{renderInlineAnswer(item)}</li>);
+		nodes.push(current.kind === "numbered"
+			? <ol key={`ordered-${current.key}`} className="my-1.5 list-decimal space-y-1 pl-5">{items}</ol>
+			: <ul key={`bullets-${current.key}`} className="my-1.5 list-disc space-y-1 pl-5">{items}</ul>);
+		list = null;
+	};
+
+	text.replace(/\r\n?/g, "\n").split("\n").forEach((rawLine, index, lines) => {
+		const line = rawLine.trim();
+		if (!line) {
+			flushList();
+			if (index < lines.length - 1) nodes.push(<span key={`space-${index}`} className="block h-2" aria-hidden="true" />);
+			return;
+		}
+		const heading = line.match(/^#{1,3}\s+(.+)$/);
+		if (heading) {
+			flushList();
+			nodes.push(<span key={`heading-${index}`} className="mb-1 block font-black">{renderInlineAnswer(heading[1])}</span>);
+			return;
+		}
+		const bullet = line.match(/^[-*•]\s+(.+)$/);
+		const numbered = line.match(/^\d+[.)]\s+(.+)$/);
+		if (bullet || numbered) {
+			const kind = numbered ? "numbered" : "bullet";
+			if (list?.kind !== kind) {
+				flushList();
+				list = { kind, key: index, items: [] };
+			}
+			list.items.push((numbered ?? bullet)![1]);
+			return;
+		}
+		flushList();
+		nodes.push(<span key={`line-${index}`} className="block">{renderInlineAnswer(line)}</span>);
+	});
+	flushList();
+	return nodes;
+}
+
+function prepareSpeechText(text: string) {
+	return text
+		.replace(/\[([^\]]+)\]\(https?:\/\/[^)\s]+\)/g, "$1")
+		.replace(/\*\*(.+?)\*\*/g, "$1")
+		.replace(/^#{1,3}\s+/gm, "")
+		.replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, "")
+		.replace(/\n+/g, ", ")
+		.trim();
+}
+
+function personalizeGreeting(text: string, name: string) {
+	const prefix = text.match(/^(?:Hai|Halo|Selamat datang),\s*/)?.[0];
+	if (!prefix) return text;
+	const greetingEnd = text.indexOf("!", prefix.length);
+	if (greetingEnd < 0) return text;
+	return prefix + name + text.slice(greetingEnd);
 }
 
 const MASCOT_FRAMES = Array.from({ length: 6 }, (_, index) => `/maskot/frame_${index}.png`);
@@ -131,7 +194,6 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	const chatAbortReasonRef = useRef<"manual" | "timeout" | null>(null);
 	const speechSequenceRef = useRef(0);
 	const lastSpeechTapRef = useRef<{ index: number; time: number } | null>(null);
-	const greetingNameRef = useRef(DEFAULT_VISITOR_NICKNAME);
 	const chatStorageKey = "mt_tourism_chat_v1:" + destination.slug;
 	const location = destination.address?.trim();
 	const latitude = Number(destination.latitude);
@@ -178,7 +240,6 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 				savedName = DEFAULT_VISITOR_NICKNAME;
 			}
 		}
-		greetingNameRef.current = savedName;
 		setVisitorName(savedName);
 		if (!journeyStarted) setShowNameModal(true);
 		const cachedChat = sessionStorage.getItem(chatStorageKey);
@@ -195,7 +256,11 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			} catch { sessionStorage.removeItem(chatStorageKey); }
 		}
 		if (restored?.length) {
-			setChatHistory(restored);
+			const synchronizedChat = restored.map((item, index) => index === 0 && item.local
+				? { ...item, text: personalizeGreeting(item.text, savedName!) }
+				: item);
+			setChatHistory(synchronizedChat);
+			if (synchronizedChat[0]?.text !== restored[0]?.text) sessionStorage.setItem(chatStorageKey, JSON.stringify(synchronizedChat));
 		} else {
 			const greeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)]
 				.replace("{name}", savedName)
@@ -362,10 +427,8 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 		const nickname = cleanName || VISITOR_NICKNAMES[Math.floor(Math.random() * VISITOR_NICKNAMES.length)];
 		setVisitorName(nickname);
 		sessionStorage.setItem("mt_visitor_name", nickname);
-		const oldGreetingName = greetingNameRef.current;
-		greetingNameRef.current = nickname;
 		const updatedChat = chatHistory.map((item, index) => index === 0 && item.local
-			? { ...item, text: item.text.replace(oldGreetingName, nickname) }
+			? { ...item, text: personalizeGreeting(item.text, nickname) }
 			: item);
 		if (updatedChat.some((item, index) => item !== chatHistory[index])) {
 			setChatHistory(updatedChat);
@@ -378,7 +441,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 	function skipName() { setNameInput(""); commitJourney(""); }
 	function speakMessages(messages: Array<{ index: number; text: string }>) {
 		if (!("speechSynthesis" in window)) return;
-		const spokenMessages = messages.map((item) => ({ ...item, text: item.text.trim() })).filter((item) => item.text);
+		const spokenMessages = messages.map((item) => ({ ...item, text: prepareSpeechText(item.text) })).filter((item) => item.text);
 		if (!spokenMessages.length) return;
 		const sequence = speechSequenceRef.current + 1;
 		speechSequenceRef.current = sequence;
@@ -422,7 +485,8 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.destination-shell--night [class*="text-[#16587B]"]{color:#EAF6FF!important}
 			.destination-shell--night header{background:rgba(6,23,42,.9);border-color:rgba(132,202,235,.25)}
 			.brand-link{transition:transform .24s ease}.brand-link:hover{transform:translateY(-1px)}.brand-link svg{animation:brand-bob 4.2s ease-in-out infinite}
-			.destination-shell--night header .back-link,.destination-shell--night header .session-toggle,.destination-shell--night header .guide-toggle,.destination-shell--night header .theme-toggle{background:rgba(234,246,255,.94);color:#16587B!important;border-color:rgba(132,202,235,.42)}
+			.destination-shell--night header .back-link,.destination-shell--night header .session-toggle,.destination-shell--night header .guide-toggle,.destination-shell--night header .theme-toggle{background:linear-gradient(145deg,rgba(17,57,87,.96),rgba(8,32,54,.96));color:#d9f3ff!important;border-color:rgba(139,217,255,.28);box-shadow:inset 0 1px rgba(234,246,255,.08),0 6px 16px rgba(0,0,0,.22)}
+			.destination-shell--night header .back-link:hover,.destination-shell--night header .session-toggle:hover,.destination-shell--night header .guide-toggle:hover,.destination-shell--night header .theme-toggle:hover{background:linear-gradient(145deg,rgba(26,76,111,.98),rgba(11,44,72,.98));border-color:rgba(139,217,255,.48);box-shadow:inset 0 1px rgba(234,246,255,.12),0 8px 20px rgba(0,0,0,.28)}
 			.destination-shell--night .destination-category{color:#16587B!important}
 			.destination-shell--night .intro-location{background:rgba(6,23,42,.62);border-color:rgba(132,202,235,.24)}
 			.tourism-sky{position:absolute;inset:0;z-index:-2;overflow:hidden;pointer-events:none;background:radial-gradient(ellipse at 12% 0%,rgba(102,189,232,.42),transparent 43%),radial-gradient(ellipse at 88% 35%,rgba(255,255,255,.72),transparent 42%),linear-gradient(145deg,#EAF6FC,#DDF1FA 56%,#C6E7F6)}
@@ -498,6 +562,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.game-card--complete{border-color:#9bdcc1;box-shadow:8px 9px 0 rgba(16,125,83,.07),0 20px 42px -28px rgba(19,142,102,.35)}
 			.game-card--complete .game-quest-mascot{background:linear-gradient(145deg,#c6ffe5,#eafff4 60%,#d6f9ff);animation:game-trophy-pop .8s cubic-bezier(.2,.85,.25,1.25) both}
 			.game-card--complete .game-cta-idle{animation:none}
+			.game-card--complete .game-progress-panel{border-color:#9bdcc1;background:linear-gradient(150deg,#e8fff4,#f5fffb 70%,#eafaff)}
 			.game-card--complete .game-progress-fill{background:linear-gradient(90deg,#18a978,#63d6a6)}
 			.game-card--complete .game-progress-count{color:#08744e}
 			.game-card--complete .game-mission-status{border-color:#79c9a3;background:transparent;color:#08744e}
@@ -558,6 +623,8 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.destination-shell--night .minigame-hub-shell .game-xp-chip{border-color:rgba(246,207,104,.28);background:linear-gradient(135deg,rgba(123,89,30,.48),rgba(92,65,29,.42));color:#ffe7a8}
 			.destination-shell--night .minigame-hub-shell .game-free-chip{border-color:rgba(111,223,174,.25);background:rgba(22,101,75,.28);color:#a7f3d0}
 			.destination-shell--night .minigame-hub-shell .game-component-chip{border-color:rgba(139,217,255,.2);background:rgba(22,83,119,.55);color:#c8edff}
+			.destination-shell--night .minigame-hub-shell .game-progress-panel{border-color:rgba(139,217,255,.24);background:linear-gradient(155deg,rgba(11,54,82,.96),rgba(8,37,62,.96));box-shadow:inset 0 1px rgba(225,246,255,.09),0 8px 18px rgba(0,0,0,.18)}
+			.destination-shell--night .minigame-hub-shell .game-card--complete .game-progress-panel{border-color:rgba(111,223,174,.34);background:linear-gradient(150deg,rgba(10,76,65,.76),rgba(8,48,62,.94))}
 			.destination-shell--night .minigame-hub-shell .game-panel-spark{border-color:rgba(139,217,255,.18);background:rgba(23,91,129,.72);color:#c7f1ff}
 			.destination-shell--night .minigame-hub-shell .game-progress-track{border-color:rgba(205,241,255,.13);background:rgba(2,17,32,.68);box-shadow:inset 0 2px 5px rgba(0,0,0,.3)}
 			.destination-shell--night .minigame-hub-shell .game-progress-count{color:#9fe7ff}
@@ -659,12 +726,12 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 		</main>
 
 		{showNameModal && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#102F43]/55 p-4 backdrop-blur-md"><section role="dialog" aria-modal="true" aria-labelledby="welcome-title" className="tourism-glass relative my-auto w-full max-w-md overflow-hidden rounded-[2.5rem] border-2 border-white/80 p-7 text-center shadow-2xl sm:p-9"><div aria-hidden="true" className="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-[#84B3CE]/30 blur-3xl" /><div className="relative mx-auto mb-3 h-36 w-52"><MascotCrew group="upper" imageUrl={destination.mascot_mode === "custom" ? destination.mascot_image_url : undefined} /></div>
-			<h2 id="welcome-title" className="relative text-3xl font-black text-[#16587B]">Halo, petualang! 👋</h2><p className="relative mt-3 text-sm leading-6 text-[#16587B]/75">Sebelum jalan-jalan di <strong>{destination.name}</strong>, mau pakai nama panggilan?</p>
+			<h2 id="welcome-title" className="relative text-3xl font-black text-[#16587B]">Halo, {nameInput.trim() || visitorName}! 👋</h2><p className="relative mt-3 text-sm leading-6 text-[#16587B]/75">Sebelum jalan-jalan di <strong>{destination.name}</strong>, mau pakai nama panggilan?</p>
 			<form onSubmit={startJourney} className="relative mt-6"><label htmlFor="visitor-name" className="mb-2 block text-left text-xs font-extrabold text-[#16587B]">Nama panggilan <span className="font-medium text-[#16587B]/55">(opsional)</span></label><input id="visitor-name" type="text" value={nameInput} onChange={(event) => setNameInput(event.currentTarget.value.slice(0, 32))} maxLength={32} placeholder="mis. Kelinci Ceria" autoComplete="nickname" className="mb-4 min-h-12 w-full rounded-2xl border-2 border-[#84B3CE]/40 bg-white/85 px-4 text-center font-bold text-[#16587B] outline-none transition placeholder:font-medium placeholder:text-[#16587B]/40 focus:border-[#16587B] focus:ring-4 focus:ring-[#84B3CE]/20" /><button type="submit" className="min-h-13 w-full rounded-2xl bg-[#16587B] px-5 py-3.5 text-base font-black text-white shadow-lg shadow-[#16587B]/25 transition hover:-translate-y-0.5 hover:bg-[#10445f]">Mulai Perjalanan ✨</button><button type="button" onClick={skipName} className="mt-3 min-h-11 w-full rounded-2xl px-4 text-sm font-bold text-[#16587B]/75 transition hover:bg-[#84B3CE]/15">Pilihkan nama lucu untukku ✨</button></form>
 		</section></div>}
 
 		{showSessionModal && <div className="fixed inset-0 z-50 grid place-items-center bg-[#102F43]/55 p-4 backdrop-blur-md"><section role="dialog" aria-modal="true" aria-labelledby="session-title" className="tourism-glass w-full max-w-md rounded-[2.5rem] p-7 text-center shadow-2xl sm:p-9">
-			<div className="mb-4 text-5xl" aria-hidden="true">{sessionLoading ? "⏳" : sessionIsActive ? "✨" : "🧭"}</div><h2 id="session-title" className="text-2xl font-black text-[#16587B]">{sessionLoading ? "Memeriksa sesi…" : sessionIsActive ? "Perjalananmu masih aktif" : "Sesi perjalanan selesai"}</h2><p className="mt-3 text-sm leading-6 text-[#16587B]/75">{sessionError || (sessionIsActive ? "Kamu bisa terus menjelajahi destinasi dan bertanya kepada pemandu." : "Mulai lagi untuk memperbarui sesi dan melanjutkan petualangan.")}</p>
+			<div className="mb-4 text-5xl" aria-hidden="true">{sessionLoading ? "⏳" : sessionIsActive ? "✨" : "🧭"}</div><p className="mb-1 text-xs font-black uppercase tracking-[.16em] text-[#16587B]/55">Hai, {visitorName}!</p><h2 id="session-title" className="text-2xl font-black text-[#16587B]">{sessionLoading ? "Memeriksa sesi…" : sessionIsActive ? "Perjalananmu masih aktif" : "Sesi perjalanan selesai"}</h2><p className="mt-3 text-sm leading-6 text-[#16587B]/75">{sessionError || (sessionIsActive ? "Kamu bisa terus menjelajahi destinasi dan bertanya kepada pemandu." : "Mulai lagi untuk memperbarui sesi dan melanjutkan petualangan.")}</p>
 			{session && <div className="mt-5 rounded-2xl border border-[#84B3CE]/35 bg-white/65 p-4 text-left text-xs text-[#16587B]"><p><strong>Status:</strong> {session.status === "active" && !sessionIsActive ? "segera berakhir" : session.status}</p><p className="mt-1"><strong>Berakhir:</strong> {new Date(session.expires_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</p></div>}
 			<div className="mt-6 flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => setShowSessionModal(false)} className="min-h-12 flex-1 rounded-2xl border border-[#84B3CE]/45 bg-white/70 px-4 font-bold text-[#16587B] hover:bg-white">Kembali menjelajah</button><button type="button" onClick={() => { void startSession().then((success) => { if (success) setShowSessionModal(false); }); }} disabled={sessionLoading} className="min-h-12 flex-1 rounded-2xl bg-[#16587B] px-4 font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-60">{sessionIsActive ? "Perbarui sesi" : "Lanjutkan perjalanan"}</button></div>
 		</section></div>}
