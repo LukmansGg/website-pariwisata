@@ -220,6 +220,13 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 				: mission.pendingRequiredCount > 0
 					? "Titik ini sudah di-scan. Temukan prasyaratnya untuk membuka progres."
 					: "Cari QR di sekitar, scan, lalu temukan semua teman.";
+			const ctaProgressState = mission.completed
+				? "game-quest-cta--complete"
+				: mission.completionPercent >= 66
+					? "game-quest-cta--progress-two"
+					: mission.foundRequiredCount > 0
+						? "game-quest-cta--progress-one"
+						: "";
 			const heroIcon = hasMission ? "🐾" : hasPhotobox ? "📸" : "✨";
 			return <article key={program.assignmentId} className={`game-program-card game-quest-card-container group relative isolate flex min-w-0 flex-col overflow-hidden rounded-[1.8rem] border-[3px] border-white/90 bg-[linear-gradient(145deg,#fff_0%,#effaff_52%,#e5f6ff_100%)] p-4 text-[#16587B] shadow-[8px_9px_0_rgba(22,88,123,.08),0_20px_42px_-28px_rgba(22,88,123,.48)] transition duration-300 hover:-translate-y-1 hover:shadow-[9px_12px_0_rgba(22,88,123,.08),0_28px_48px_-27px_rgba(22,88,123,.5)] sm:rounded-[2rem] sm:p-5 ${program.progress.completed ? "game-card--complete" : ""} ${showPhotoboxCard ? "game-card--photobox" : ""} ${switchingToPhotobox ? "game-card--switching" : ""}`}>
 				<div aria-hidden="true" className="game-card-dots pointer-events-none absolute inset-0 opacity-40" />
@@ -258,7 +265,7 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 							<p className={`game-mission-status mt-2 min-h-8 border-l-2 border-sky-300 py-1 pl-2 text-[10px] font-bold leading-4 text-[#16587B]/70 sm:text-[11px] ${mission.completed ? "game-mission-status--complete" : ""}`} aria-live="polite">{missionStatus}</p>
 							{hasPhotobox && photoboxLocked && <p className="game-reward-hint mt-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[9px] font-extrabold text-amber-900">🎁 Frame Photobox terbuka setelah misi</p>}
 							<div className="mt-auto flex flex-wrap gap-2 pt-4">
-								<Link href={`/minigame/${encodeURIComponent(program.programSlug)}/${encodeURIComponent(destinationSlug)}`} className="game-primary-action game-cta-idle inline-flex min-h-14 flex-1 items-center justify-center gap-2.5 rounded-2xl border-2 border-blue-950/50 bg-[linear-gradient(180deg,#438ff0,#1760c3)] px-4 py-3 text-center text-xs font-black leading-tight text-white shadow-[0_6px_0_#11488f,0_12px_20px_rgba(23,96,195,.2)] transition duration-200 hover:-translate-y-0.5 hover:saturate-125 hover:shadow-[0_8px_0_#11488f,0_16px_26px_rgba(23,96,195,.25)] active:translate-y-1 active:shadow-[0_2px_0_#11488f,0_5px_10px_rgba(23,96,195,.2)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-300/70"><span className="text-lg" aria-hidden="true">{mission.completed ? "🧭" : "📍"}</span><span>{mission.completed ? "Lihat petualangan" : mission.scannedRequiredCount > 0 ? "Lanjutkan misi" : "Mulai scan QR"}</span><span className="game-cta-arrow" aria-hidden="true">→</span></Link>
+								<Link href={`/minigame/${encodeURIComponent(program.programSlug)}/${encodeURIComponent(destinationSlug)}`} className={`game-quest-cta ${ctaProgressState}`}><span className="game-quest-cta__label">{mission.completed ? "Lihat petualangan" : mission.scannedRequiredCount > 0 ? "Lanjutkan misi" : "Mulai scan QR"}</span><svg className="game-quest-cta__icon" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14m-7-7 7 7-7 7" /></svg></Link>
 								{hasPhotobox && !photoboxLocked && !switchingToPhotobox && <Link href={`/photobox/${encodeURIComponent(program.programSlug)}/${encodeURIComponent(destinationSlug)}`} aria-label="Buka Photobox yang sudah terbuka" className="game-secondary-action inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-[#84B3CE]/45 bg-white/85 px-4 py-3 text-xs font-black text-[#16587B] transition hover:-translate-y-0.5 hover:bg-[#EAF6FC] active:translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#84B3CE]/35"><span className="text-lg" aria-hidden="true">📸</span>Photobox</Link>}
 							</div>
 						</> : <>
