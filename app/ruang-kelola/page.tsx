@@ -28,31 +28,35 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	if (roleError || !staff || !["admin", "editor", "destination_manager"].includes(staff.role)) redirect("/login");
 	const managerRole = staff.role === "destination_manager";
 	const serviceKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-	const staffInviteEnvironmentConfigured = Boolean(serviceKey && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.APP_ORIGIN);
+	const hasAppOrigin = Boolean(process.env.APP_ORIGIN && /^https?:\/\//i.test(process.env.APP_ORIGIN));
+	const hasServiceKey = Boolean(serviceKey);
+	const staffInviteEnvironmentConfigured = Boolean(hasServiceKey && process.env.NEXT_PUBLIC_SUPABASE_URL && hasAppOrigin);
 	const adminClient = staff.role === "admin" && serviceKey && process.env.NEXT_PUBLIC_SUPABASE_URL
 		? createSupabaseAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 		: null;
-	const [managerRoleRows, managerAccessRows, authUsersResult] = adminClient ? await Promise.all([
-		adminClient.from("user_roles").select("user_id").eq("role", "destination_manager"),
+	const [managerRoleRows, managerAccessRows, authUsersResult, scopedMigrationResult] = adminClient ? await Promise.all([
+		adminClient.from("user_roles").select("user_id,role").in("role", ["destination_manager", "editor"]),
 		adminClient.from("user_destination_access").select("user_id,destination_id"),
 		adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-	]) : [null, null, null];
-	const staffInviteConfigured = staffInviteEnvironmentConfigured && Boolean(adminClient && managerRoleRows && managerAccessRows && authUsersResult && !managerRoleRows.error && !managerAccessRows.error && !authUsersResult.error);
+		adminClient.from("promotion_campaigns").select("approval_status").limit(0),
+	]) : [null, null, null, null];
+	const staffInviteDatabaseReady = Boolean(adminClient && managerRoleRows && managerAccessRows && authUsersResult && scopedMigrationResult && !managerRoleRows.error && !managerAccessRows.error && !authUsersResult.error && !scopedMigrationResult.error);
+	const staffInviteConfigured = staffInviteEnvironmentConfigured && staffInviteDatabaseReady;
 	const [accessResult, reviewResult] = await Promise.all([
-		managerRole || staff.role === "admin"
+		staff.role === "destination_manager" || staff.role === "admin"
 			? supabase.from("user_destination_access").select("user_id,destination_id").order("created_at", { ascending: false })
 			: Promise.resolve({ data: [], error: null }),
 		supabase.from("destination_review_requests").select("id,destination_id,manager_user_id,status,feedback,submitted_at,reviewed_at,created_at").order("created_at", { ascending: false }),
 	]);
 	const managedAccess = accessResult.data ?? [];
-	const managerDestinationIds = [...new Set(managedAccess.filter((access) => managerRole ? access.user_id === userId : true).map((access) => access.destination_id))];
+	const managerDestinationIds = [...new Set(managedAccess.filter((access) => staff.role === "destination_manager" ? access.user_id === userId : staff.role === "admin").map((access) => access.destination_id))];
 
 	const [destinationQuery, partnersResult, qrPointsResult, promotionsResult, driveResult, assignmentsResult, programsResult] = await Promise.all([
-		supabase.from("destinations").select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, mascot_mode, mascot_image_url, is_published, is_featured, created_at").order("created_at", { ascending: false }),
-		supabase.from("tourism_partners").select("id, business_name, slug, destination_id, max_distance_meters, business_type, business_categories, latitude, longitude, allow_minigame_integration, address, status, created_at").order("created_at", { ascending: false }),
+		supabase.from("destinations").select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, mascot_mode, mascot_image_url, is_published, is_featured, created_by, created_at").order("created_at", { ascending: false }),
+		staff.role === "admin" ? supabase.from("tourism_partners").select("id, business_name, slug, destination_id, max_distance_meters, business_type, business_categories, latitude, longitude, allow_minigame_integration, address, status, created_at").order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
 		supabase.from("qr_points").select("id, destination_id, name, code, address, latitude, longitude, is_active, created_at").order("created_at", { ascending: false }),
-		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, placement_mode, exposure_mode, status, starts_at, ends_at, created_at, form_schema").order("created_at", { ascending: false }),
-		supabase.from("google_drive_connections").select("id, connected_email, updated_at").eq("id", "primary").maybeSingle(),
+		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, placement_mode, exposure_mode, status, approval_status, approval_feedback, starts_at, ends_at, created_at, form_schema").order("created_at", { ascending: false }),
+		staff.role === "admin" ? supabase.from("google_drive_connections").select("id, connected_email, updated_at").eq("id", "primary").maybeSingle() : Promise.resolve({ data: null, error: null }),
 		supabase.from("tourism_minigame_destinations").select("id, destination_id, program_id, components, is_enabled").eq("is_enabled", true),
 		supabase.from("tourism_minigame_programs").select("id, name, slug, is_enabled").eq("is_enabled", true),
 	]);
@@ -61,13 +65,13 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	let destinationError = destinationQuery.error;
 	if (destinationError?.code === "42703") {
 		const legacyDestinations = await supabase.from("destinations")
-			.select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, is_published, is_featured, created_at")
+			.select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, is_published, is_featured, created_by, created_at")
 			.order("created_at", { ascending: false });
 		destinationRows = legacyDestinations.data as WorkspaceData["destinations"] | null;
 		destinationError = legacyDestinations.error;
 	}
-	const destinations = (destinationRows ?? []).filter((destination) => !managerRole || managerDestinationIds.includes(destination.id));
-	const staffManagerError = staff.role === "admin" && adminClient && (managerRoleRows?.error || managerAccessRows?.error || authUsersResult?.error)
+	const destinations = (destinationRows ?? []).filter((destination) => staff.role === "admin" || (staff.role === "destination_manager" && managerDestinationIds.includes(destination.id)) || (staff.role === "editor" && destination.created_by === userId));
+	const staffManagerError = staff.role === "admin" && adminClient && (managerRoleRows?.error || managerAccessRows?.error || authUsersResult?.error || scopedMigrationResult?.error)
 		? "Daftar pengelola belum dapat dimuat. Pastikan migration pengelola wisata sudah diterapkan dan service key server valid."
 		: undefined;
 	const managerAccessByUser = new Map<string, string[]>();
@@ -76,8 +80,10 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	const authUsers = authUsersResult?.data?.users ?? [];
 	const staffManagers = (managerRoleRows?.data ?? []).map((manager) => {
 		const user = authUsers.find((item) => item.id === manager.user_id);
-		const destinationIds = managerAccessByUser.get(manager.user_id) ?? [];
-		return { user_id: manager.user_id, email: user?.email ?? "Email akun tidak tersedia", has_confirmed_email: Boolean(user?.email_confirmed_at), destination_ids: destinationIds, destination_names: destinationIds.map((id) => destinationNames.get(id) ?? "Wisata tidak ditemukan") };
+		const destinationIds = manager.role === "editor"
+			? (destinationRows ?? []).filter((destination) => destination.created_by === manager.user_id).map((destination) => destination.id)
+			: managerAccessByUser.get(manager.user_id) ?? [];
+		return { user_id: manager.user_id, role: manager.role as "editor" | "destination_manager", email: user?.email ?? "Email akun tidak tersedia", has_confirmed_email: Boolean(user?.email_confirmed_at), destination_ids: destinationIds, destination_names: destinationIds.map((id) => destinationNames.get(id) ?? "Wisata tidak ditemukan") };
 	});
 	const partnerById = new Map((partnersResult.data ?? []).map((partner) => [partner.id, partner.business_name]));
 	const destinationById = new Map(destinations.map((destination) => [destination.id, destination.name]));
@@ -97,28 +103,29 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 		destinationError ? `destinations: ${databaseIssue(destinationError)}` : null,
 		staff.role === "admin" && accessResult.error ? `user_destination_access: ${databaseIssue(accessResult.error)} Jalankan migration 20261028000000_destination_manager_review.sql.` : null,
 		staff.role === "admin" && reviewResult.error ? `destination_review_requests: ${databaseIssue(reviewResult.error)} Jalankan migration 20261028000000_destination_manager_review.sql.` : null,
-		!managerRole && partnersResult.error ? `tourism_partners: ${databaseIssue(partnersResult.error)}` : null,
+		staff.role === "admin" && partnersResult.error ? `tourism_partners: ${databaseIssue(partnersResult.error)}` : null,
 		qrPointsResult.error ? `qr_points: ${databaseIssue(qrPointsResult.error)}` : null,
 		!managerRole && promotionsResult.error ? `promotion_campaigns: ${databaseIssue(promotionsResult.error)}` : null,
 	].filter((issue): issue is string => issue !== null);
 
 	const data: WorkspaceData = {
 		role: staff.role as WorkspaceData["role"],
+		userId,
 		email: typeof claimsData?.claims.email === "string" ? claimsData.claims.email : "Petugas Pariwisata",
 		destinations,
-		partners: managerRole ? [] : (partnersResult.data ?? []).map((partner) => ({
+		partners: staff.role !== "admin" ? [] : (partnersResult.data ?? []).map((partner) => ({
 			...partner,
 			destination_name: partner.destination_id ? destinationById.get(partner.destination_id) ?? null : null,
 		})),
 		qrPoints,
-		promotions: managerRole ? [] : (promotionsResult.data ?? []).map((campaign) => ({
+		promotions: (promotionsResult.data ?? []).map((campaign) => ({
 			...campaign,
 			has_form: Array.isArray(campaign.form_schema) && campaign.form_schema.some((block: { type?: string }) => ["input", "choice", "dropdown"].includes(block?.type ?? "")),
 			partner_name: campaign.partner_id ? partnerById.get(campaign.partner_id) ?? "Mitra tidak diketahui" : "Campaign sistem",
 			qr_label: campaign.qr_point_id ? qrById.get(campaign.qr_point_id)?.name ?? "QR campaign" : "Tanpa QR khusus",
 		})),
 		minigames,
-		reviewRequests: (reviewResult.data ?? []).filter((request) => managerRole ? request.manager_user_id === userId : staff.role === "admin").map((request) => ({
+		reviewRequests: (reviewResult.data ?? []).filter((request) => staff.role === "admin" || request.manager_user_id === userId).map((request) => ({
 			id: request.id,
 			destination_id: request.destination_id,
 			manager_user_id: request.manager_user_id,
@@ -127,9 +134,10 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 			submitted_at: request.submitted_at,
 			created_at: request.created_at,
 		})),
-		managedDestinationIds: staff.role === "admin" ? managerDestinationIds : [],
+		managedDestinationIds: staff.role === "admin" ? [...new Set([...managerDestinationIds, ...(reviewResult.data ?? []).map((request) => request.destination_id)])] : [],
 		staffManagers,
 		staffInviteConfigured,
+		staffInviteReadiness: { hasServiceKey, hasAppOrigin, databaseReady: staffInviteDatabaseReady, appOrigin: (process.env.APP_ORIGIN ?? "").replace(/\/$/, "") },
 		staffManagerError,
 		driveConnected: Boolean(driveResult.data?.id),
 		driveConnectedEmail: driveResult.data?.connected_email ?? undefined,

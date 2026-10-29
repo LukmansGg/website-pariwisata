@@ -34,8 +34,8 @@ export async function GET() {
 		.select("role")
 		.eq("user_id", userId)
 		.maybeSingle();
-	if (roleError || !staff || !["admin", "editor"].includes(staff.role)) {
-		return NextResponse.json({ error: "Pemantauan sesi hanya tersedia untuk petugas." }, { status: 403 });
+	if (roleError || !staff || staff.role !== "admin") {
+		return NextResponse.json({ error: "Pemantauan sesi hanya tersedia untuk admin." }, { status: 403 });
 	}
 
 	const now = new Date();

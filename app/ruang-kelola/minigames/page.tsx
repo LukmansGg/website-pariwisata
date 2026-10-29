@@ -21,16 +21,16 @@ async function MinigamesContent() {
 	if (claimsError || !userId) redirect("/login");
 	const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
 	if (!role || !["admin", "editor", "destination_manager"].includes(role.role)) redirect("/login");
-	const managerRole = role.role === "destination_manager";
-	const accessResult = managerRole
+	const petugasRole = role.role !== "admin";
+	const accessResult = role.role === "destination_manager"
 		? await supabase.from("user_destination_access").select("destination_id").eq("user_id", userId)
 		: null;
-	const ownedDestinationIds = new Set((accessResult?.data ?? []).map((access) => access.destination_id));
+	const assignedDestinationIds = new Set((accessResult?.data ?? []).map((access) => access.destination_id));
 
 	const [programsResult, assignmentsResult, destinationsResult, qrPointsResult, groupPointsResult, dependenciesResult] = await Promise.all([
 		supabase.from("tourism_minigame_programs").select("*").order("created_at", { ascending: false }),
 		supabase.from("tourism_minigame_destinations").select("*"),
-		supabase.from("destinations").select("id,name,slug,is_published").order("name"),
+		supabase.from("destinations").select("id,name,slug,is_published,created_by").order("name"),
 		supabase.from("qr_points").select("id,destination_id,name,code,is_active").order("name"),
 		supabase.from("tourism_minigame_qr_points").select("assignment_id,qr_point_id,is_required,friend_name,friend_image_url"),
 		supabase.from("tourism_minigame_qr_dependencies").select("assignment_id,qr_point_id,prerequisite_qr_point_id"),
@@ -39,11 +39,12 @@ async function MinigamesContent() {
 	if (migrationError) {
 			return <main className="min-h-dvh bg-[#F5EEDD] p-4 text-[#16587B] sm:p-8"><div className="mx-auto max-w-3xl rounded-3xl border border-amber-200 bg-white p-6 shadow-xl sm:p-10"><Link href="/ruang-kelola" className="text-sm font-bold text-[#16587B]">← Kembali ke ruang pengelola</Link><p className="mt-8 text-xs font-black uppercase tracking-[.18em] text-amber-700">Database perlu diperbarui</p><h1 className="mt-2 text-3xl font-black">Minigames belum siap dibuka</h1><p className="mt-3 leading-7 text-[#16587B]/75">Jalankan migration minigame secara berurutan di Supabase SQL Editor, termasuk <code>20261024000000_minigame_progress_configuration_hash.sql</code>, lalu muat ulang halaman ini.</p></div></main>;
 	}
+	const ownedDestinationIds = new Set((destinationsResult.data ?? []).filter((destination) => role.role === "admin" || (role.role === "editor" && destination.created_by === userId) || (role.role === "destination_manager" && (assignedDestinationIds.has(destination.id) || destination.created_by === userId))).map((destination) => destination.id));
 	const data: MinigameConsoleData = {
 		role: role.role as MinigameConsoleData["role"],
 		programs: programsResult.data ?? [],
-		assignments: (assignmentsResult.data ?? []).filter((assignment) => !managerRole || ownedDestinationIds.has(assignment.destination_id)).map((assignment) => managerRole ? { ...assignment, photobox_templates: Array.isArray(assignment.photobox_templates) ? assignment.photobox_templates.filter((template: { source?: string }) => template.source !== "campaign") : [] } : assignment),
-		destinations: (destinationsResult.data ?? []).filter((destination) => !managerRole || ownedDestinationIds.has(destination.id)),
+		assignments: (assignmentsResult.data ?? []).filter((assignment) => !petugasRole || ownedDestinationIds.has(assignment.destination_id)).map((assignment) => petugasRole ? { ...assignment, photobox_templates: Array.isArray(assignment.photobox_templates) ? assignment.photobox_templates.filter((template: { source?: string }) => template.source !== "campaign") : [] } : assignment),
+		destinations: (destinationsResult.data ?? []).filter((destination) => !petugasRole || ownedDestinationIds.has(destination.id)),
 		qrPoints: qrPointsResult.data ?? [],
 		groupPoints: groupPointsResult.data ?? [],
 		dependencies: dependenciesResult.data ?? [],

@@ -365,6 +365,21 @@ const GlobalStyles = () => (
     @keyframes sparkleFloat { 0%,100% { transform: translateY(0) scale(.72) rotate(0); opacity: .32; } 50% { transform: translateY(-12px) scale(1) rotate(28deg); opacity: .74; } }
     .home-page .shooting-star { position:absolute; width:108px; height:1px; border-radius:99px; background:linear-gradient(90deg,transparent,rgba(139,217,255,.8)); box-shadow:0 0 7px rgba(77,180,231,.28); opacity:.72; animation:shootingStar 9.5s linear infinite; }
     .home-page .ambient-sparkle { position:absolute; color:var(--home-accent); opacity:.66; filter:drop-shadow(0 0 5px color-mix(in srgb,var(--home-bloom) 72%,transparent)); animation:sparkleFloat 5.6s ease-in-out infinite; }
+    .home-page .discovery-nav { animation: discoveryNavEnter 480ms cubic-bezier(.2,.8,.2,1) both; }
+    .home-page .discovery-label-enter { animation: discoveryLabelEnter 360ms cubic-bezier(.2,.8,.2,1) both; }
+    .home-page .discovery-chips { scrollbar-width: none; }
+    .home-page .discovery-chips::-webkit-scrollbar { display: none; }
+    .home-page .mood-chip { animation: moodChipEnter 440ms cubic-bezier(.2,.8,.2,1) both; }
+    .home-page .mood-chip:nth-child(2) { animation-delay: 35ms; }
+    .home-page .mood-chip:nth-child(3) { animation-delay: 70ms; }
+    .home-page .mood-chip:nth-child(4) { animation-delay: 105ms; }
+    .home-page .mood-chip:nth-child(5) { animation-delay: 140ms; }
+    .home-page .mood-chip:nth-child(6) { animation-delay: 175ms; }
+    .home-page .mood-chip:nth-child(7) { animation-delay: 210ms; }
+    .home-page .mood-chip:nth-child(8) { animation-delay: 245ms; }
+    @keyframes discoveryNavEnter { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes discoveryLabelEnter { from { opacity: 0; transform: translateY(5px); filter: blur(3px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+    @keyframes moodChipEnter { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
     @keyframes mobileNavEnter {
       from { opacity: 0; transform: translateY(7px); filter: blur(4px); }
@@ -420,7 +435,7 @@ const HOME_SECTIONS = [
 	{ id: "tentang", label: "Tentang" },
 ] as const;
 
-function Navbar({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
+function Navbar({ isDark, onToggleTheme, discoveryMode = false, discoveryLabel = "", resultCount = 0, onExitDiscovery }: { isDark: boolean; onToggleTheme: () => void; discoveryMode?: boolean; discoveryLabel?: string; resultCount?: number; onExitDiscovery?: () => void }) {
 	const [activeSection, setActiveSection] = useState<string>(HOME_SECTIONS[0].id);
 	const [menuOpen, setMenuOpen] = useState(false);
 
@@ -454,6 +469,16 @@ function Navbar({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
 
 	const activeIndex = Math.max(0, HOME_SECTIONS.findIndex((section) => section.id === activeSection));
 	const current = HOME_SECTIONS[activeIndex];
+
+	if (discoveryMode) return <nav aria-label="Mode jelajah" className="discovery-nav fixed inset-x-0 top-0 z-50 border-b border-[var(--home-glass-border)] bg-[var(--home-glass)]/95 shadow-[0_16px_45px_-34px_rgba(3,80,130,.75)] backdrop-blur-2xl">
+		<div className="mx-auto flex min-h-[76px] max-w-7xl items-center gap-3 px-4 py-3 sm:gap-5 sm:px-6">
+			<a href="#kuliner" aria-label="Mode jelajah TiLoc" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-sky-400 to-blue-800 text-xs font-black text-white shadow-[0_8px_22px_rgba(14,116,190,.3)] transition hover:-rotate-6 hover:scale-105">TL</a>
+			<div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[.19em] text-[var(--home-primary)]"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400"/>Mode jelajah<span className="hidden text-[var(--home-ink)]/35 sm:inline">· {resultCount} spot</span></div><p key={discoveryLabel || "all"} className="discovery-label-enter mt-0.5 truncate text-sm font-black text-[var(--home-ink)] sm:text-base">{discoveryLabel || "Pilih suasana perjalananmu"}</p></div>
+			<span className="hidden rounded-full border border-[var(--home-glass-border)] bg-white/45 px-3 py-2 text-[10px] font-bold text-[var(--home-ink)]/65 md:inline-flex">{resultCount} {resultCount === 1 ? "spot cocok" : "spot cocok"}</span>
+			<button type="button" onClick={onExitDiscovery} className="discovery-exit group inline-flex min-h-12 shrink-0 items-center gap-2 rounded-2xl border border-sky-300/60 bg-gradient-to-br from-white/95 to-sky-100 px-4 text-xs font-black text-sky-950 shadow-[0_8px_22px_rgba(14,116,190,.14)] transition duration-300 hover:-translate-y-0.5 hover:border-sky-400 hover:shadow-[0_12px_30px_rgba(14,116,190,.25)] active:scale-95 dark:border-sky-200/15 dark:from-slate-800 dark:to-blue-950 dark:text-sky-50 sm:px-5"><span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-sky-500/10 text-base transition duration-300 group-hover:rotate-90">×</span><span className="hidden sm:inline">Keluar dari mode</span></button>
+			<button type="button" onClick={onToggleTheme} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-ink)] transition hover:-translate-y-0.5" aria-label={isDark ? "Aktifkan tema terang" : "Aktifkan tema gelap"} title={isDark ? "Tema terang" : "Tema gelap"}>{isDark ? <IconSun /> : <IconMoon />}</button>
+		</div>
+	</nav>;
 
 	return (
 		<nav className="glass-panel fixed top-0 z-50 w-full !border-x-0 !border-t-0 !rounded-none bg-[var(--home-glass)]/90 transition-all duration-300">
@@ -856,29 +881,25 @@ const DiscoveryMap = ({
 const MoodCategories = ({
 	selectedCategories,
 	onSelect,
-	compactLabel = "",
-	onClear,
 	compact = false,
 }: {
 	selectedCategories: string[];
 	onSelect: (categories: string[]) => void;
-	compactLabel?: string;
-	onClear?: () => void;
 	compact?: boolean;
 }) => (
-	<section id="kuliner" className={`mx-auto max-w-7xl px-6 ${compact ? "order-[10] sticky top-16 z-30 mt-16 py-3" : "order-[30] py-20"}`}>
+	<section id="kuliner" className={`mx-auto w-full max-w-7xl px-4 sm:px-6 ${compact ? "order-[10] sticky top-[76px] z-30 mt-[76px] py-2" : "order-[30] py-20"}`}>
 		{!compact && <div className="mb-12 animate-fade-up text-center"><h2 className="mb-4 text-3xl font-extrabold text-[var(--home-ink)]">Pilih kategori</h2><p className="text-[var(--home-ink)]/70">Pilih satu atau beberapa kategori untuk menyaring destinasi.</p></div>}
 
-		{compact && <div className="mb-2 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[var(--home-glass-border)] bg-[var(--home-glass)]/90 px-3 py-2 shadow-sm backdrop-blur-xl"><span className="min-w-0 truncate text-xs font-bold text-[var(--home-ink)]">{compactLabel ? `Sedang melihat · ${compactLabel}` : "Filter destinasi aktif"}</span><button type="button" onClick={onClear} className="min-h-9 shrink-0 rounded-lg px-3 text-xs font-extrabold text-sky-800 transition hover:bg-sky-500/10 dark:text-sky-200">Tutup mode ×</button></div>}
-		<div className={`flex flex-wrap gap-2 animate-fade-up ${compact ? "justify-start rounded-2xl border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-2 shadow-lg backdrop-blur-xl" : "justify-center gap-3 delay-200"}`}>
+		{compact && <div className="mb-2 flex items-center justify-between gap-3 px-1"><div><p className="text-[9px] font-black uppercase tracking-[.17em] text-[var(--home-primary)]">SARING PERASAAN</p><p className="mt-0.5 text-[11px] font-medium text-[var(--home-ink)]/60">Pilih satu atau beberapa suasana</p></div><span className="rounded-full bg-[var(--home-accent)]/10 px-3 py-1.5 text-[10px] font-black text-[var(--home-primary)]">{selectedCategories.length ? `${selectedCategories.length} dipilih` : "Semua suasana"}</span></div>}
+		<div className={`flex gap-2.5 animate-fade-up ${compact ? "discovery-chips overflow-x-auto rounded-[1.5rem] border border-[var(--home-glass-border)] bg-[var(--home-glass)]/90 p-2.5 shadow-[0_14px_40px_-34px_rgba(3,80,130,.65)] backdrop-blur-xl sm:flex-wrap sm:overflow-visible" : "flex-wrap justify-center gap-3 delay-200"}`}>
 			{MOODS.map((mood) => (
 				<button
 					key={mood.name}
 					type="button"
 					aria-pressed={selectedCategories.includes(mood.name)}
 					onClick={() => onSelect(selectedCategories.includes(mood.name) ? selectedCategories.filter((item) => item !== mood.name) : [...selectedCategories, mood.name])}
-					className={`group flex items-center gap-2 rounded-full border transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--home-accent)] hover:shadow-md ${compact ? "px-3 py-2 text-xs" : "glass-panel mood-float px-5 py-3.5 text-sm"} ${selectedCategories.includes(mood.name) ? "!border-[var(--home-accent)] !bg-[var(--home-accent)]/20" : ""}`}>
-					<span className={`${compact ? "text-sm" : "text-xl"} transition-transform group-hover:scale-110`}>
+					className={`mood-chip group flex shrink-0 items-center gap-2.5 rounded-full border transition-all duration-300 hover:-translate-y-1 hover:border-[var(--home-accent)] hover:shadow-[0_10px_24px_rgba(14,116,190,.18)] active:scale-95 ${compact ? "px-4 py-2.5 text-xs" : "glass-panel mood-float px-5 py-3.5 text-sm"} ${selectedCategories.includes(mood.name) ? "!border-[var(--home-accent)] !bg-[var(--home-accent)]/20 !shadow-[0_0_0_3px_rgba(56,189,248,.12)]" : ""}`}>
+					<span className={`${compact ? "text-base" : "text-xl"} transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6`}>
 						{mood.icon}
 					</span>
 					<span className="font-bold text-[var(--home-ink)]">{mood.name}</span>
@@ -964,7 +985,7 @@ const Highlights = ({
 						href={`/wisata/${encodeURIComponent(dest.slug)}`}
 						key={dest.id}
 						style={{ animationDelay: `${Math.min((i + 1) * 100, 500)}ms` }}
-						className={`glass-panel group rounded-[1.75rem] p-3 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-fade-up ${selectedDestinationId === dest.id ? "!border-sky-400 !ring-2 !ring-sky-400/25" : ""}`}>
+						className={`glass-panel group rounded-[1.75rem] p-3 shadow-sm transition-all duration-500 hover:-translate-y-2 hover:rotate-[.25deg] hover:border-sky-300/70 hover:shadow-[0_24px_55px_-32px_rgba(14,116,190,.55)] active:scale-[.985] animate-fade-up ${selectedDestinationId === dest.id ? "!border-sky-400 !ring-2 !ring-sky-400/25" : ""}`}>
 						<div className="relative w-full h-56 rounded-[1.25rem] overflow-hidden mb-4 bg-gradient-to-br from-[var(--home-soft)] to-[var(--home-accent)]/50">
 							{dest.image ? (
 								<Image
@@ -1282,7 +1303,7 @@ export default function TiLocApp() {
 	});
 	const hasActiveFilters = Boolean(searchQuery.trim()) || selectedCategories.length > 0;
 	const categoryFocused = selectedCategories.length > 0;
-	const compactDiscovery = categoryFocused || mapFocusPanelOpen;
+	const compactDiscovery = hasActiveFilters || mapFocusPanelOpen;
 	const compactLabel = selectedMapSpot?.title ?? (searchQuery.trim() ? `Pencarian: ${searchQuery.trim()}` : selectedCategories.join(", "));
 	const handleMapSearchChange = (value: string) => {
 		setSearchQuery(value);
@@ -1322,12 +1343,12 @@ export default function TiLocApp() {
 			<GlobalStyles />
 			<div className={`home-page min-h-screen relative selection:bg-[var(--home-accent)] selection:text-white${isDark ? " dark" : ""}`}>
 				<StarParticles isDark={isDark} />
-				<Navbar isDark={isDark} onToggleTheme={toggleTheme} />
+				<Navbar isDark={isDark} onToggleTheme={toggleTheme} discoveryMode={compactDiscovery} discoveryLabel={compactLabel} resultCount={visibleDestinations.length} onExitDiscovery={clearDiscoveryFilters} />
 
 				<main className="relative z-10">
 					<div className="flex flex-col">
 						{!compactDiscovery && <div className="order-10"><HeroSection /></div>}
-						<MoodCategories selectedCategories={selectedCategories} onSelect={handleCategorySelect} compact={compactDiscovery} compactLabel={compactLabel} onClear={clearDiscoveryFilters} />
+						<MoodCategories selectedCategories={selectedCategories} onSelect={handleCategorySelect} compact={compactDiscovery} />
 						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={clearDiscoveryFilters} compact={compactDiscovery} selectedDestinationId={selectedMapSpot?.id ?? null} />
 						<DiscoveryMap searchQuery={searchQuery} onSearchChange={handleMapSearchChange} destinations={visibleDestinations} selectedDestinationId={selectedMapSpot?.id ?? null} selectedSpot={selectedMapSpot} onSpotSelected={handleMapSpotSelected} onClearSelectedSpot={clearDiscoveryFilters} compact={compactDiscovery} />
 					</div>
