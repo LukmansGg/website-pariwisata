@@ -908,7 +908,7 @@ export async function saveTourismMinigameProgramAction(
 	const rpcArgs = scopedProgram ? {
 		p_name: name,
 		p_slug: slug,
-		p_is_enabled: formData.get("is_enabled") === "on",
+		p_is_enabled: false,
 		p_components: components,
 		p_required_components: requiredComponents,
 		p_destination_ids: destinationIds,
@@ -934,7 +934,7 @@ export async function saveTourismMinigameProgramAction(
 	revalidatePath("/ruang-kelola/minigames");
 	revalidatePath("/ruang-kelola");
 	revalidatePath("/");
-	return { success: scopedProgram ? "Program minigame dibuat untuk destinasi milikmu. Atur grup QR dan Photobox per destinasi." : "Program tersimpan. Lanjutkan dengan checklist pengaturan di setiap destinasi." };
+	return { success: scopedProgram ? "Pengajuan minigame tersimpan sebagai draft. Admin akan meninjau sebelum mengaktifkannya." : "Program tersimpan. Lanjutkan dengan checklist pengaturan di setiap destinasi." };
 }
 
 type FindPointConfiguration = { qrPointId: string; isRequired: boolean; requires: string[]; friendName?: string; friendImageUrl?: string };

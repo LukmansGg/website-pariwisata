@@ -887,7 +887,7 @@ const MoodCategories = ({
 	onSelect: (categories: string[]) => void;
 	compact?: boolean;
 }) => (
-	<section id="kuliner" className={`mx-auto w-full max-w-7xl px-4 sm:px-6 ${compact ? "order-[10] sticky top-[76px] z-30 mt-[76px] py-2" : "order-[30] py-20"}`}>
+	<section id="kuliner" className={`mx-auto w-full max-w-7xl px-4 sm:px-6 ${compact ? "order-[10] relative z-10 mt-[76px] py-2" : "order-[30] py-20"}`}>
 		{!compact && <div className="mb-12 animate-fade-up text-center"><h2 className="mb-4 text-3xl font-extrabold text-[var(--home-ink)]">Pilih kategori</h2><p className="text-[var(--home-ink)]/70">Pilih satu atau beberapa kategori untuk menyaring destinasi.</p></div>}
 
 		{compact && <div className="mb-2 flex items-center justify-between gap-3 px-1"><div><p className="text-[9px] font-black uppercase tracking-[.17em] text-[var(--home-primary)]">SARING PERASAAN</p><p className="mt-0.5 text-[11px] font-medium text-[var(--home-ink)]/60">Pilih satu atau beberapa suasana</p></div><span className="rounded-full bg-[var(--home-accent)]/10 px-3 py-1.5 text-[10px] font-black text-[var(--home-primary)]">{selectedCategories.length ? `${selectedCategories.length} dipilih` : "Semua suasana"}</span></div>}

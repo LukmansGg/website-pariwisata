@@ -87,27 +87,32 @@ create policy "Staff delete QR points" on public.qr_points
 
 -- UMKM remains an admin-managed area. Petugas Wisata cannot read or change it.
 drop policy if exists "Staff manage tourism partners" on public.tourism_partners;
+drop policy if exists "Admins manage tourism partners" on public.tourism_partners;
 create policy "Admins manage tourism partners" on public.tourism_partners
   for all to authenticated using ((select public.has_staff_role('admin')))
   with check ((select public.has_staff_role('admin')));
 
 -- Restrict minigame assignments and nested QR configuration by destination.
 drop policy if exists "Staff manage minigame programs" on public.tourism_minigame_programs;
+drop policy if exists "Admins manage minigame programs" on public.tourism_minigame_programs;
 create policy "Admins manage minigame programs" on public.tourism_minigame_programs
   for all to authenticated using ((select public.has_staff_role('admin')))
   with check ((select public.has_staff_role('admin')));
 drop policy if exists "Staff manage minigame destination assignments" on public.tourism_minigame_destinations;
 drop policy if exists "Managers read their minigame assignments" on public.tourism_minigame_destinations;
+drop policy if exists "Staff manage scoped minigame assignments" on public.tourism_minigame_destinations;
 create policy "Staff manage scoped minigame assignments" on public.tourism_minigame_destinations
   for all to authenticated using ((select public.can_manage_destination(destination_id)))
   with check ((select public.can_manage_destination(destination_id)));
 drop policy if exists "Staff manage minigame QR points" on public.tourism_minigame_qr_points;
 drop policy if exists "Managers read their minigame QR groups" on public.tourism_minigame_qr_points;
+drop policy if exists "Staff manage scoped minigame QR groups" on public.tourism_minigame_qr_points;
 create policy "Staff manage scoped minigame QR groups" on public.tourism_minigame_qr_points
   for all to authenticated using (exists (select 1 from public.tourism_minigame_destinations a where a.id = assignment_id and (select public.can_manage_destination(a.destination_id))))
   with check (exists (select 1 from public.tourism_minigame_destinations a where a.id = assignment_id and (select public.can_manage_destination(a.destination_id))));
 drop policy if exists "Staff manage minigame QR dependencies" on public.tourism_minigame_qr_dependencies;
 drop policy if exists "Managers read their minigame QR dependencies" on public.tourism_minigame_qr_dependencies;
+drop policy if exists "Staff manage scoped minigame QR dependencies" on public.tourism_minigame_qr_dependencies;
 create policy "Staff manage scoped minigame QR dependencies" on public.tourism_minigame_qr_dependencies
   for all to authenticated using (exists (select 1 from public.tourism_minigame_destinations a where a.id = assignment_id and (select public.can_manage_destination(a.destination_id))))
   with check (exists (select 1 from public.tourism_minigame_destinations a where a.id = assignment_id and (select public.can_manage_destination(a.destination_id))));
@@ -283,34 +288,45 @@ create trigger promotion_campaigns_protect_petugas before insert or update on pu
 
 drop policy if exists "Staff manage promotion campaigns" on public.promotion_campaigns;
 drop policy if exists "Public can read active promotion campaigns" on public.promotion_campaigns;
+drop policy if exists "Admins manage promotion campaigns" on public.promotion_campaigns;
 create policy "Admins manage promotion campaigns" on public.promotion_campaigns for all to authenticated
   using ((select public.has_staff_role('admin'))) with check ((select public.has_staff_role('admin')));
+drop policy if exists "Petugas read own promotion campaigns" on public.promotion_campaigns;
 create policy "Petugas read own promotion campaigns" on public.promotion_campaigns for select to authenticated
   using (created_by = (select auth.uid()));
+drop policy if exists "Petugas create campaign for review" on public.promotion_campaigns;
 create policy "Petugas create campaign for review" on public.promotion_campaigns for insert to authenticated
   with check (created_by = (select auth.uid()) and partner_id is null and placement_mode = 'nearby' and status = 'draft' and approval_status = 'pending' and exists (select 1 from public.user_roles where user_id = (select auth.uid()) and role in ('editor', 'destination_manager')));
+drop policy if exists "Petugas edit own pending campaigns" on public.promotion_campaigns;
 create policy "Petugas edit own pending campaigns" on public.promotion_campaigns for update to authenticated
   using (created_by = (select auth.uid()) and approval_status in ('pending', 'changes_requested') and exists (select 1 from public.user_roles where user_id = (select auth.uid()) and role in ('editor', 'destination_manager')))
   with check (created_by = (select auth.uid()) and partner_id is null and placement_mode = 'nearby' and status = 'draft' and approval_status in ('pending', 'changes_requested'));
+drop policy if exists "Petugas delete own pending campaigns" on public.promotion_campaigns;
 create policy "Petugas delete own pending campaigns" on public.promotion_campaigns for delete to authenticated
   using (created_by = (select auth.uid()) and approval_status in ('pending', 'changes_requested') and exists (select 1 from public.user_roles where user_id = (select auth.uid()) and role in ('editor', 'destination_manager')));
+drop policy if exists "Public can read active promotion campaigns" on public.promotion_campaigns;
 create policy "Public can read active promotion campaigns" on public.promotion_campaigns for select to anon, authenticated
   using (status = 'published' and approval_status = 'approved' and (starts_at is null or starts_at <= now()) and (ends_at is null or ends_at > now()));
 
 drop policy if exists "Staff manage campaign destinations" on public.promotion_campaign_destinations;
 drop policy if exists "Public read active campaign destinations" on public.promotion_campaign_destinations;
+drop policy if exists "Admins manage campaign destinations" on public.promotion_campaign_destinations;
 create policy "Admins manage campaign destinations" on public.promotion_campaign_destinations for all to authenticated
   using ((select public.has_staff_role('admin'))) with check ((select public.has_staff_role('admin')));
+drop policy if exists "Petugas manage own campaign destinations" on public.promotion_campaign_destinations;
 create policy "Petugas manage own campaign destinations" on public.promotion_campaign_destinations for all to authenticated
   using (exists (select 1 from public.promotion_campaigns c where c.id = campaign_id and c.created_by = (select auth.uid()) and c.placement_mode = 'nearby' and c.status = 'draft' and c.approval_status in ('pending', 'changes_requested')))
   with check (exists (select 1 from public.promotion_campaigns c where c.id = campaign_id and c.created_by = (select auth.uid()) and c.placement_mode = 'nearby' and c.status = 'draft' and c.approval_status in ('pending', 'changes_requested')) and (select public.can_manage_destination(destination_id)));
+drop policy if exists "Public read active campaign destinations" on public.promotion_campaign_destinations;
 create policy "Public read active campaign destinations" on public.promotion_campaign_destinations for select to anon, authenticated
   using (exists (select 1 from public.promotion_campaigns c where c.id = campaign_id and c.status = 'published' and c.approval_status = 'approved' and (c.starts_at is null or c.starts_at <= now()) and (c.ends_at is null or c.ends_at > now())));
 
 drop policy if exists "Staff manage campaign minigames" on public.promotion_campaign_minigames;
 drop policy if exists "Public read active campaign minigames" on public.promotion_campaign_minigames;
+drop policy if exists "Admins manage campaign minigames" on public.promotion_campaign_minigames;
 create policy "Admins manage campaign minigames" on public.promotion_campaign_minigames for all to authenticated
   using ((select public.has_staff_role('admin'))) with check ((select public.has_staff_role('admin')));
+drop policy if exists "Public read active campaign minigames" on public.promotion_campaign_minigames;
 create policy "Public read active campaign minigames" on public.promotion_campaign_minigames for select to anon, authenticated
   using (exists (select 1 from public.promotion_campaigns c where c.id = campaign_id and c.status = 'published' and c.approval_status = 'approved' and (c.starts_at is null or c.starts_at <= now()) and (c.ends_at is null or c.ends_at > now())));
 
