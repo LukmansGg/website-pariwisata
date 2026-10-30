@@ -204,7 +204,7 @@ function MagicBackgrounds() {
 	const particles = useMemo(() => {
 		const random = (seed: number, max: number) => { const value = Math.sin(seed * 12.9898) * 43758.5453; return Math.floor((value - Math.floor(value)) * max); };
 		return {
-			stars: Array.from({ length: 96 }, (_, index) => { const column = index % 12; const row = Math.floor(index / 12); const seed = index + 1; return { left: ((column + .12 + random(seed + 500, 76) / 100) / 12) * 100, top: ((row + .1 + random(seed + 700, 80) / 100) / 8) * 100, size: index % 12 === 0 ? 5 : random(seed + 200, 3) + 2, duration: random(seed + 300, 3000) + 2400, delay: random(seed + 400, 5000), flare: index % 12 === 0 }; }),
+			stars: Array.from({ length: 56 }, (_, index) => { const column = index % 8; const row = Math.floor(index / 8); const seed = index + 1; return { left: ((column + .12 + random(seed + 500, 76) / 100) / 8) * 100, top: ((row + .1 + random(seed + 700, 80) / 100) / 7) * 100, size: index % 28 === 0 ? 3 : random(seed + 200, 2) + 1, duration: random(seed + 300, 3600) + 3000, delay: random(seed + 400, 5000), flare: index % 28 === 0 }; }),
 			zzz: Array.from({ length: 10 }, (_, index) => { const seed = index + 500; return { left: random(seed, 100), top: random(seed + 100, 100), duration: random(seed + 200, 3000) + 3000, delay: random(seed + 300, 5000) }; }),
 			sparkles: Array.from({ length: 15 }, (_, index) => { const seed = index + 700; return { left: random(seed, 100), top: random(seed + 100, 100), duration: random(seed + 200, 2000) + 2000, delay: random(seed + 300, 2000) }; }),
 		};

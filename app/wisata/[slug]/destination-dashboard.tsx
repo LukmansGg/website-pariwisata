@@ -145,15 +145,15 @@ function MascotCrew({ group, imageUrl }: { group: "upper" | "lower"; imageUrl?: 
 }
 
 function MagicBackground({ dark }: { dark: boolean }) {
-	const stars = Array.from({ length: 40 }, (_, index) => {
+	const stars = Array.from({ length: 24 }, (_, index) => {
 		const random = (seed: number) => { const value = Math.sin((index + seed) * 127.1) * 43758.5453; return value - Math.floor(value); };
-		const column = index % 8;
-		const row = Math.floor(index / 8);
-		return { left: ((column + .12 + random(7) * .76) / 8) * 100, top: ((row + .1 + random(23) * .8) / 5) * 100, size: index % 8 === 0 ? 22 : 13 + Math.round(random(41) * 8), delay: (index % 9) * .38 };
+		const column = index % 6;
+		const row = Math.floor(index / 6);
+		return { left: ((column + .12 + random(7) * .76) / 6) * 100, top: ((row + .1 + random(23) * .8) / 4) * 100, size: index % 12 === 0 ? 13 : 8 + Math.round(random(41) * 5), delay: (index % 9) * .52 };
 	});
 	return <div aria-hidden="true" className={"tourism-sky " + (dark ? "is-night" : "is-day")}>
 		<div className="sky-pattern" /><div className="sky-glow sky-glow--one" /><div className="sky-glow sky-glow--two" />
-		{stars.map((star, index) => <span key={index} className={`sky-star${index % 8 === 0 ? " is-flare" : ""}`} style={{ top: `${star.top}%`, left: `${star.left}%`, fontSize: `${star.size}px`, animationDelay: `${star.delay}s` }}>✦</span>)}
+		{stars.map((star, index) => <span key={index} className={`sky-star${index % 12 === 0 ? " is-flare" : ""}`} style={{ top: `${star.top}%`, left: `${star.left}%`, fontSize: `${star.size}px`, animationDelay: `${star.delay}s` }}>✦</span>)}
 		{dark && <><span className="sky-moon" /><span className="sky-aurora" /></>}
 	</div>;
 }
@@ -495,9 +495,9 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			.destination-shell--night .sky-pattern{opacity:.28;background-image:radial-gradient(rgba(194,232,250,.3) 1px,transparent 1px)}
 			.sky-glow{position:absolute;width:25rem;height:25rem;border-radius:50%;filter:blur(72px);background:rgba(132,179,206,.33);animation:sky-drift 18s ease-in-out infinite alternate}
 			.sky-glow--one{top:11%;left:-12rem}.sky-glow--two{right:-12rem;top:47%;animation-delay:-8s;background:rgba(132,179,206,.25)}
-			.sky-star{position:absolute;color:#58a9d2;opacity:.85;animation:twinkle 3.5s ease-in-out infinite;text-shadow:0 0 7px #fff,0 0 18px rgba(56,189,248,.8),0 0 34px rgba(37,133,196,.55);filter:drop-shadow(0 0 4px rgba(56,189,248,.55))}
-			.destination-shell--night .sky-star{color:#eaf8ff;opacity:.9}
-			.sky-star.is-flare{z-index:1;text-shadow:0 0 8px #fff,0 0 24px rgba(56,189,248,.95),0 0 44px rgba(37,133,196,.65)}
+			.sky-star{position:absolute;color:#58a9d2;opacity:.72;animation:twinkle 4.8s ease-in-out infinite;text-shadow:0 0 4px rgba(255,255,255,.72),0 0 9px rgba(56,189,248,.42);filter:drop-shadow(0 0 2px rgba(56,189,248,.3))}
+			.destination-shell--night .sky-star{color:#dff5ff;opacity:.68}
+			.sky-star.is-flare{z-index:1;text-shadow:0 0 5px rgba(255,255,255,.82),0 0 13px rgba(56,189,248,.58)}
 			.sky-moon{position:absolute;right:10%;top:7%;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 34% 35%,#fff 0%,#d6f3ff 58%,rgba(112,204,242,.48) 75%,transparent 78%);filter:drop-shadow(0 0 38px rgba(112,204,242,.52))}
 			.sky-aurora{position:absolute;top:-24%;left:-20%;width:140%;height:48%;background:linear-gradient(100deg,transparent,rgba(70,172,224,.2),rgba(125,211,252,.18),transparent);filter:blur(55px);transform:rotate(-9deg);animation:aurora 13s ease-in-out infinite alternate}
 			.tourism-glass{background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(246,252,255,.9));border:1px solid rgba(255,255,255,.9);box-shadow:0 24px 54px -30px rgba(22,88,123,.38),inset 0 1px rgba(255,255,255,.95);backdrop-filter:blur(22px);transition:transform .28s,box-shadow .28s}
@@ -696,11 +696,11 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 			{chatAiEnabled && <section id="tourism-guide" className="scroll-mt-24" aria-labelledby="guide-chat-title">
 				<div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#16587B]/60">TEMAN JELAJAHMU</p><h2 id="guide-chat-title" className="mt-1 text-2xl font-black tracking-tight text-[#16587B] sm:text-3xl">Tanya, yuk! <span className="text-[#3d9bc2]">✦</span></h2><p className="mt-1 text-xs font-medium text-[#16587B]/65 sm:text-sm">Cerita destinasi, ide kegiatan, atau rencana jalan-jalan.</p></div><span className="hidden rounded-full border border-[#84B3CE]/35 bg-white/60 px-3 py-1.5 text-[10px] font-bold text-[#16587B]/65 sm:inline-flex">Jawaban mengalir langsung</span></div>
 				<div className="grid min-w-0 items-stretch gap-4 lg:grid-cols-[minmax(0,1.38fr)_minmax(250px,.72fr)]">
-					<section className="tourism-glass order-2 flex min-h-[560px] min-w-0 flex-col rounded-[2rem] p-4 sm:rounded-[2.35rem] sm:p-6 lg:order-1" aria-label="Percakapan dengan TiLoc! Guide">
+					<section className="tourism-glass order-2 flex h-[min(72dvh,760px)] min-h-[min(64dvh,480px)] min-w-0 flex-col rounded-[2rem] p-4 sm:rounded-[2.35rem] sm:p-6 lg:order-1" aria-label="Percakapan dengan TiLoc! Guide">
 						<div className="mb-3 flex items-center justify-between gap-3 border-b border-[#84B3CE]/30 pb-3"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#16587B] text-xl text-white shadow-lg shadow-[#16587B]/20">✦</span><div className="min-w-0"><p className="text-[9px] font-black uppercase tracking-[.18em] text-[#16587B]/55">PEMANDU AI</p><p className="mt-0.5 truncate text-base font-black text-[#16587B]">TiLoc! Guide</p></div></div><span className="hidden items-center gap-1.5 rounded-full bg-emerald-100/80 px-2.5 py-1 text-[9px] font-black text-emerald-800 sm:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>SIAP MENEMANI</span></div>
 						<p className="ai-privacy-note mb-2 rounded-xl border border-[#84B3CE]/30 bg-[#EAF6FC]/65 px-3 py-2 text-[10px] font-semibold leading-4 text-[#16587B]/70">🔒 Hindari data pribadi atau rahasia.</p>
 						<p className="mb-1 text-[9px] font-semibold text-[#16587B]/50">🔊 Ketuk sekali untuk satu pesan · dua kali cepat untuk semua chat</p>
-						<div aria-live="polite" aria-relevant="additions" className="tourism-chat-scroll min-h-[240px] flex-1 space-y-4 overflow-y-auto px-0.5 py-2 pr-1">
+						<div aria-live="polite" aria-relevant="additions" className="tourism-chat-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-0.5 py-2 pr-1">
 							{chatHistory.map((item, index) => <div key={index} className={"flex min-w-0 flex-col " + (item.role === "user" ? "items-end" : "items-start")}>
 								<div className={"flex max-w-[96%] min-w-0 items-end gap-1.5 " + (item.role === "user" ? "flex-row-reverse" : "")}>
 									<div className={"max-w-[calc(100%-2.75rem)] whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm font-medium leading-6 " + (item.role === "user" ? "rounded-br-md bg-[#16587B] text-white shadow-lg shadow-[#16587B]/15" : "assistant-bubble rounded-bl-md border border-[#84B3CE]/30 bg-white/85 text-[#16587B] shadow-sm")}>{item.role === "model" ? renderLinkedAnswer(item.text) : item.text}</div>

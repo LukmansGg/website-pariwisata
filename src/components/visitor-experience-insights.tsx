@@ -98,7 +98,7 @@ export function VisitorExperienceInsights() {
 		return () => window.removeEventListener("tiloc:survey-submitted", handleCampaignSurvey);
 	}, [route]);
 
-	if (!route.enabled || eligibleKey !== targetKey || readyKey !== targetKey || dismissedKey === targetKey) return null;
+	if (!route.enabled || route.pageKey === "photobox" || eligibleKey !== targetKey || readyKey !== targetKey || dismissedKey === targetKey) return null;
 	const scopeLabel = route.scope === "destination" ? "wisata · " + (targetName || "destinasi ini") : "pengalaman website TiLoc!";
 
 	async function submit(event: FormEvent<HTMLFormElement>) {

@@ -7,6 +7,8 @@ import { useTheme } from "@/src/components/theme-provider";
 import { SystemCampaignPrompt } from "@/src/components/system-campaign-prompt";
 import { trackVisitorEvent } from "@/src/features/visitor-insights/events";
 import { TiLocBrand, TiLocMark } from "@/src/components/tiloc-brand";
+import { CampaignCallToAction } from "@/src/components/campaign-form-experience";
+import { campaignTitleClass, type CampaignAppearance } from "@/src/features/campaigns/appearance";
 
 const MOODS = [
 	{ name: "Alam", icon: "🍃" },
@@ -198,12 +200,12 @@ const IconEnvelope = () => (
 );
 
 const STAR_TONES = ["#f5fcff", "#c9edff", "#a9dcff", "#d7e2ff"] as const;
-const STAR_POSITIONS = Array.from({ length: 30 }, (_, index) => {
+const STAR_POSITIONS = Array.from({ length: 24 }, (_, index) => {
 	const jitter = (seed: number) => {
 		const value = Math.sin((index + seed) * 127.1) * 43758.5453;
 		return value - Math.floor(value);
 	};
-	const flare = index === 4 || index === 17 || index === 27;
+	const flare = index === 4 || index === 17;
 	return {
 		left: 3 + jitter(4) * 94,
 		top: 4 + jitter(19) * 91,
@@ -1029,9 +1031,10 @@ type PublicCampaign = {
 	displayChance: number;
 	ctaLabel: string | null;
 	ctaUrl: string;
+	appearance: CampaignAppearance;
 };
 
-const PromotionalSection = () => {
+const PromotionalSection = ({ isDark }: { isDark: boolean }) => {
 	const [campaigns, setCampaigns] = useState<PublicCampaign[]>([]);
 	const [activeIndex, setActiveIndex] = useState(0);
 	const touchStartX = useRef<number | null>(null);
@@ -1094,15 +1097,15 @@ const PromotionalSection = () => {
 							<span className="inline-block bg-[var(--home-glass)]/20 backdrop-blur-sm text-white text-xs md:text-sm font-bold tracking-[.12em] px-4 py-2 rounded-full mb-6">
 								{campaign ? campaignType : "PREMIUM ACCESS · TiLoc!"}
 							</span>
-							<h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">
+							<h2 className={campaign ? `mb-4 leading-tight ${campaignTitleClass(campaign.appearance.titleStyle, isDark)}` : "mb-4 text-4xl font-black leading-tight md:text-5xl"}>
 								{campaign ? campaign.title : <>Boarding Pass <br />Digital-mu.</>}
 							</h2>
 							<p className="text-white/80 text-lg mb-8">
 								{campaign?.description?.trim() || "Scan QR di lokasi untuk membuka cerita destinasi, memulai sesi pengunjung, dan menemukan kejutan visual sepanjang perjalanan."}
 							</p>
-							{ctaUrl.startsWith("/") ? (
+							{campaign ? <CampaignCallToAction label={ctaLabel} style={campaign.appearance.buttonStyle} isDark={isDark} href={ctaUrl} onClick={trackCampaignClick} fullWidth={false} /> : ctaUrl.startsWith("/") ? (
 								<Link href={ctaUrl} onClick={trackCampaignClick} className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-7 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-[1.03]">
-									{campaign ? ctaLabel : "Aktifkan perjalanan"} <IconArrowRight />
+									Aktifkan perjalanan <IconArrowRight />
 								</Link>
 							) : (
 								<a href={ctaUrl} target="_blank" rel="noreferrer" onClick={trackCampaignClick} className="inline-flex items-center gap-3 bg-[var(--home-glass)] text-[var(--home-ink)] px-7 py-4 rounded-2xl font-bold hover:bg-[var(--home-accent)] transition-all transform hover:scale-[1.03]">
@@ -1345,7 +1348,7 @@ export default function TiLocApp() {
 						<Highlights destinations={visibleDestinations} loading={loadingDestinations} error={destinationError} hasActiveFilters={hasActiveFilters} incompleteCount={incompleteDestinationCount} onClearFilters={clearDiscoveryFilters} compact={compactDiscovery} selectedDestinationId={selectedMapSpot?.id ?? null} />
 						<DiscoveryMap searchQuery={searchQuery} onSearchChange={handleMapSearchChange} destinations={visibleDestinations} selectedDestinationId={selectedMapSpot?.id ?? null} selectedSpot={selectedMapSpot} onSpotSelected={handleMapSpotSelected} onClearSelectedSpot={clearDiscoveryFilters} compact={compactDiscovery} />
 					</div>
-					<PromotionalSection />
+					<PromotionalSection isDark={isDark} />
 					<SystemCampaignPrompt pageKey="home" />
 				</main>
 

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CampaignFormExperience } from "@/src/components/campaign-form-experience";
+import { CampaignPopupShell } from "@/src/components/campaign-popup-shell";
+import type { CampaignAppearance } from "@/src/features/campaigns/appearance";
 import { trackVisitorEvent } from "@/src/features/visitor-insights/events";
 import { useTheme } from "@/src/components/theme-provider";
 
-type Campaign = { id: string; title: string; description: string; imageUrl: string | null; placementMode: string; displayChance: number; ctaLabel: string | null; ctaUrl: string | null };
+type Campaign = { id: string; title: string; description: string; imageUrl: string | null; placementMode: string; displayChance: number; ctaLabel: string | null; ctaUrl: string | null; appearance: CampaignAppearance };
 
 export function SystemCampaignPrompt({ pageKey }: { pageKey: "home" | "scan" }) {
 	const { isDark } = useTheme();
@@ -39,7 +41,7 @@ export function SystemCampaignPrompt({ pageKey }: { pageKey: "home" | "scan" }) 
 			.catch(() => undefined);
 		return () => controller.abort();
 	}, [pageKey]);
-	function dismiss() {
+	const dismiss = useCallback(() => {
 		if (campaign) {
 			try {
 				const key = `mt_campaign_system_seen:${pageKey}`;
@@ -49,16 +51,9 @@ export function SystemCampaignPrompt({ pageKey }: { pageKey: "home" | "scan" }) 
 			} catch { /* The prompt can still be closed if storage is unavailable. */ }
 		}
 		setOpen(false);
-	}
+	}, [campaign, pageKey]);
 	if (!open || !campaign) return null;
-	return <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}>
-		<section role="dialog" aria-modal="true" aria-labelledby="system-campaign-title" className={`relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-[1.8rem] border p-5 shadow-2xl sm:p-7 ${isDark ? "border-sky-200/20 bg-gradient-to-br from-[#0e3554] to-[#071b30] text-sky-50" : "border-white/80 bg-[#F5EEDD] text-[#16587B]"}`}>
-			<button type="button" onClick={dismiss} aria-label="Tutup campaign" className={`absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-xl font-bold ${isDark ? "bg-white/10 text-sky-50" : "bg-white text-[#16587B]"}`}>×</button>
-			<p className={`text-[9px] font-black uppercase tracking-[.18em] ${isDark ? "text-sky-200/65" : "text-sky-700"}`}>{pageKey === "home" ? "Masukan untuk website TiLoc!" : "Info & pilihan dari TiLoc!"}</p>
-			{campaign.imageUrl && <img src={campaign.imageUrl} alt="" className="mt-3 max-h-44 w-full rounded-2xl object-cover"/>}
-			<h2 id="system-campaign-title" className="mt-3 pr-8 text-2xl font-black">{campaign.title}</h2>
-			{campaign.description && <p className={`mt-2 whitespace-pre-line text-sm leading-6 ${isDark ? "text-sky-100/75" : "text-[#16587B]/75"}`}>{campaign.description}</p>}
-			<div className="mt-5 space-y-2"><button type="button" onClick={dismiss} className={`min-h-11 w-full rounded-xl border px-3 text-xs font-bold ${isDark ? "border-sky-200/20 bg-white/10 text-sky-50" : "border-[#84B3CE]/40 bg-white text-[#16587B]"}`}>Nanti saja</button><CampaignFormExperience campaignId={campaign.id} pageKey={pageKey} destinationSlug="" fallbackHref={campaign.ctaUrl || "/"} fallbackLabel={campaign.ctaLabel || "Lihat informasi"} onNavigate={dismiss}/></div>
-		</section>
-	</div>;
+	return <CampaignPopupShell title={campaign.title} description={campaign.description} imageUrl={campaign.imageUrl} appearance={campaign.appearance} titleId="system-campaign-title" eyebrow={pageKey === "home" ? "Masukan untuk website TiLoc!" : "Info & pilihan dari TiLoc!"} onDismiss={dismiss}>
+		<div className="space-y-2"><button type="button" onClick={dismiss} className={`min-h-11 w-full rounded-xl border px-3 text-xs font-bold transition ${isDark ? "border-sky-200/15 bg-white/5 text-sky-100 hover:bg-white/10" : "border-[#84B3CE]/40 bg-white/80 text-[#16587B] hover:bg-white"}`}>Nanti saja</button><CampaignFormExperience campaignId={campaign.id} pageKey={pageKey} destinationSlug="" fallbackHref={campaign.ctaUrl || "/"} fallbackLabel={campaign.ctaLabel || "Lihat informasi"} onNavigate={dismiss} onAppearanceLoaded={(appearance) => setCampaign((current) => current ? { ...current, appearance } : current)}/></div>
+	</CampaignPopupShell>;
 }

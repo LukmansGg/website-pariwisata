@@ -25,5 +25,12 @@ export async function getCachedPublishedCampaigns() {
 		.limit(12);
 
 	if (error) throw new Error("Published campaigns could not be loaded");
-	return data ?? [];
+	const campaigns = data ?? [];
+	if (!campaigns.length) return [];
+	const { data: appearances } = await supabase
+		.from("promotion_campaigns")
+		.select("id,form_appearance")
+		.in("id", campaigns.map((campaign) => campaign.id));
+	const appearanceById = new Map((appearances ?? []).map((row) => [row.id, row.form_appearance]));
+	return campaigns.map((campaign) => ({ ...campaign, form_appearance: appearanceById.get(campaign.id) ?? null }));
 }

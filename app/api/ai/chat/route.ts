@@ -116,13 +116,13 @@ export async function POST(request: Request) {
 
 					let wikipediaSources = [] as Awaited<ReturnType<typeof searchWikipedia>>;
 					if (shouldSearchWikipedia(message)) {
-						emit("status", { message: "Mencari referensi sejarah dan budaya di Wikipedia…" });
+						emit("status", { message: "Mencari referensi yang relevan di Wikipedia…" });
 						wikipediaSources = await searchWikipedia(destination.name, message, abortController.signal);
 					}
 					if (wikipediaSources.length > 0) {
 						emit("status", { message: "Referensi ditemukan. Menyusun jawaban yang jelas…" });
 					} else {
-						emit("status", { message: "Menyusun jawaban dari info destinasi dan pengetahuan umum…" });
+						emit("status", { message: "Wikipedia belum menemukan rujukan yang cocok. Mengolah data pengelola…" });
 					}
 
 					await streamTourismQuestion({

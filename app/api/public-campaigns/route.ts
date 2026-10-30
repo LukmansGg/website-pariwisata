@@ -1,4 +1,5 @@
 import { getCachedPublishedCampaigns } from "@/src/server/campaigns/public";
+import { resolveCampaignAppearance } from "@/src/features/campaigns/appearance";
 
 function safeHttpUrl(value: unknown) {
 	if (typeof value !== "string" || !value.trim()) return null;
@@ -31,6 +32,7 @@ export async function GET() {
 				description: campaign.description,
 				imageUrl: safeHttpUrl(campaign.image_url),
 				experienceType: campaign.experience_type,
+				appearance: resolveCampaignAppearance(campaign.form_appearance, "promo"),
 				displayChance: campaign.exposure_mode === "always" ? 100 : campaign.display_chance,
 				ctaLabel: campaign.cta_label,
 				ctaUrl: safeCtaUrl(campaign.cta_url) ?? "/scan",

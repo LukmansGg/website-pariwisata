@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import { parseCampaignFormSchema } from "@/src/features/campaigns/form-schema";
+import { resolveCampaignAppearance } from "@/src/features/campaigns/appearance";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -20,7 +21,10 @@ export async function GET(_request: Request, { params }: RouteContext) {
 		}
 		const formSchema = parseCampaignFormSchema(data.form_schema);
 		if (!formSchema) return NextResponse.json({ error: "Form campaign belum valid." }, { status: 503 });
-		return NextResponse.json({ id: data.id, formSchema, ctaLabel: data.cta_label, ctaUrl: data.cta_url, placementMode: data.placement_mode }, { headers: { "Cache-Control": "no-store, max-age=0" } });
+		const { data: appearanceRow } = await supabase.from("promotion_campaigns").select("form_appearance").eq("id", campaignId).maybeSingle();
+		const isFeedback = data.placement_mode === "destination_feedback" || data.placement_mode === "website_feedback";
+		const appearance = resolveCampaignAppearance(appearanceRow?.form_appearance, isFeedback ? "rating" : "promo");
+		return NextResponse.json({ id: data.id, formSchema, appearance, ctaLabel: data.cta_label, ctaUrl: data.cta_url, placementMode: data.placement_mode }, { headers: { "Cache-Control": "no-store, max-age=0" } });
 	} catch {
 		return NextResponse.json({ error: "Campaign belum dapat dimuat. Pastikan migration form campaign sudah diterapkan." }, { status: 503 });
 	}

@@ -308,8 +308,8 @@ export default function StaffLoginPage() {
       <div className={`login-page theme-transition min-h-dvh flex items-center justify-center p-4 sm:p-6 md:p-8 relative overflow-hidden font-sans selection:bg-[var(--rock-blue)] selection:text-white${isDark ? ' theme-dark' : ' theme-light'}`} style={{ background: 'var(--bg-app)', perspective: '1200px' }}>
         
         <div className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-1000" style={{ opacity: 'var(--stars-opacity)' }} aria-hidden="true">
-          {Array.from({ length: 42 }, (_, index) => <span key={`star-${index}`} className="star-anim" style={{ left: `${(index * 37 + 13) % 100}%`, top: `${(index * 61 + 7) % 100}%`, width: `${index % 3 + 1}px`, height: `${index % 3 + 1}px`, animationDelay: `${index % 11 * 230}ms` }} />)}
-          {[0, 1, 2].map((index) => <span key={`shoot-${index}`} className="shooting-star-anim" style={{ left: `${78 - index * 19}%`, top: `${12 + index * 18}%`, animationDelay: `${index * 3.7}s` }} />)}
+		  {Array.from({ length: 28 }, (_, index) => <span key={`star-${index}`} className="star-anim" style={{ left: `${(index * 37 + 13) % 100}%`, top: `${(index * 61 + 7) % 100}%`, width: `${index % 3 + 1}px`, height: `${index % 3 + 1}px`, animationDelay: `${index % 11 * 310}ms` }} />)}
+		  <span className="shooting-star-anim" style={{ left: "78%", top: "14%", animationDelay: "1.8s" }} />
         </div>
         <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden transition-opacity duration-1000" style={{ opacity: 'var(--cloud-opacity)' }} aria-hidden="true">
           {[12, 32, 54, 75].map((top, index) => <span key={`cloud-${top}`} className="absolute text-white/70" style={{ top: `${top}%`, left: 0, animation: `drift-cloud ${100 + index * 13}s linear ${-index * 21}s infinite`, opacity: .35 + (index % 2) * .15 }}><SoftCloud className="h-auto w-44 sm:w-64 drop-shadow-xl" /></span>)}

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { createPromotionAction, type WorkspaceActionState } from "@/src/server/auth/actions";
 import { getCampaignFormPreset, type CampaignFormPreset } from "@/src/features/campaigns/form-presets";
 import type { CampaignFormBlock, CampaignInputType } from "@/src/features/campaigns/form-schema";
+import { campaignButtonClass, campaignTitleClass, getCampaignAppearance, type CampaignAppearance, type CampaignVisualPreset } from "@/src/features/campaigns/appearance";
+import { useTheme } from "@/src/components/theme-provider";
 import { MediaUploadField } from "./media-upload-field";
 
 type Mode = "nearby" | "find_friends" | "photobox" | "system" | "destination_feedback" | "website_feedback";
@@ -24,6 +26,19 @@ const presets: { id: CampaignFormPreset; label: string }[] = [
 	{ id: "interest", label: "Minat pengunjung" }, { id: "offer", label: "Pilihan promo" }, { id: "suggestion", label: "Saran singkat" },
 	{ id: "tourism_feedback", label: "Rating & saran wisata" }, { id: "website_feedback", label: "Rating & saran website" },
 ];
+const visualPresets: { id: CampaignVisualPreset; label: string; summary: string; icon: string }[] = [
+	{ id: "promo", label: "Promo & iklan", summary: "Sorot penawaran dengan tombol glossy.", icon: "🎟️" },
+	{ id: "event", label: "Acara wisata", summary: "Judul editorial untuk agenda dan event.", icon: "🎉" },
+	{ id: "rating", label: "Rating & masukan", summary: "Kartu ringkas untuk pengalaman dan saran.", icon: "⭐" },
+];
+const buttonStyles = [
+	{ id: "depth", label: "3D bertingkat", summary: "Tombol punya kedalaman saat ditekan." },
+	{ id: "flat", label: "2D bersih", summary: "Ringan, jelas, dan tanpa efek timbul." },
+	{ id: "gloss", label: "Glossy TiLoc", summary: "Kilau halus dengan warna langit." },
+] as const;
+const titleStyles = [
+	{ id: "bold", label: "Tegas" }, { id: "editorial", label: "Editorial" }, { id: "glow", label: "Gradasi langit" },
+] as const;
 const fieldClass = "mt-1.5 min-h-11 w-full rounded-xl border border-[#84B3CE]/40 bg-white px-3 py-2 text-sm text-[#16587B] outline-none focus:border-[#16587B] focus:ring-4 focus:ring-[#84B3CE]/15";
 const labelClass = "block text-xs font-bold text-[#16587B]/80";
 const emptyState: WorkspaceActionState = {};
@@ -33,6 +48,7 @@ export function CampaignBuilder({ partners, destinations, minigames, initialDest
 	initialDestinationId?: string; initialDestinationName?: string; initialDestinationSlug?: string;
 	destinationEventOnly?: boolean;
 }) {
+	const { isDark } = useTheme();
 	const [state, setState] = useState<WorkspaceActionState>(emptyState);
 	const [pending, setPending] = useState(false);
 	const [mode, setMode] = useState<Mode>(initialDestinationId ? "destination_feedback" : "nearby");
@@ -43,6 +59,7 @@ export function CampaignBuilder({ partners, destinations, minigames, initialDest
 	const [formOpen, setFormOpen] = useState(Boolean(initialDestinationId));
 	const [formPreset, setFormPreset] = useState<CampaignFormPreset>(initialDestinationId ? "tourism_feedback" : "none");
 	const [blocks, setBlocks] = useState<CampaignFormBlock[]>(() => initialDestinationId ? getCampaignFormPreset("tourism_feedback") : []);
+	const [appearance, setAppearance] = useState<CampaignAppearance>(() => getCampaignAppearance(initialDestinationId ? "rating" : destinationEventOnly ? "event" : "promo"));
 	const [frameUrl, setFrameUrl] = useState("");
 	const [frameLayout, setFrameLayout] = useState("single");
 	const [frameRatio, setFrameRatio] = useState("portrait");
@@ -57,6 +74,7 @@ export function CampaignBuilder({ partners, destinations, minigames, initialDest
 	function chooseMode(nextMode: Mode) {
 		setMode(nextMode); setAssignmentId("");
 		setDisplayChance(nextMode === "system" ? 10 : 35);
+		setAppearance(getCampaignAppearance(nextMode === "website_feedback" || nextMode === "destination_feedback" ? "rating" : destinationEventOnly ? "event" : "promo"));
 		if (nextMode === "website_feedback") {
 			setCampaignTitle("Masukan untuk website TiLoc!"); setCampaignDescription("Bantu kami membuat website TiLoc lebih nyaman.");
 			setFormOpen(true); setFormPreset("website_feedback"); setBlocks(getCampaignFormPreset("website_feedback"));
@@ -69,6 +87,25 @@ export function CampaignBuilder({ partners, destinations, minigames, initialDest
 	}
 	function applyPreset(preset: CampaignFormPreset) {
 		setFormPreset(preset); setBlocks(preset === "none" ? [] : getCampaignFormPreset(preset));
+		if (preset === "tourism_feedback" || preset === "website_feedback") setAppearance(getCampaignAppearance("rating"));
+	}
+	function chooseAppearance(preset: CampaignVisualPreset) {
+		setAppearance(getCampaignAppearance(preset));
+		if (mode === "website_feedback" || mode === "destination_feedback") {
+			if (preset === "rating") {
+				const feedbackPreset = mode === "website_feedback" ? "website_feedback" : "tourism_feedback";
+				setFormOpen(true); setFormPreset(feedbackPreset); setBlocks(getCampaignFormPreset(feedbackPreset));
+			}
+			return;
+		}
+		const formPresetForVisual: CampaignFormPreset = preset === "promo"
+			? "offer"
+			: preset === "event"
+				? "interest"
+				: "tourism_feedback";
+		setFormOpen(true);
+		setFormPreset(formPresetForVisual);
+		setBlocks(getCampaignFormPreset(formPresetForVisual));
 	}
 	function updateBlock(id: string, update: Partial<CampaignFormBlock>) {
 		setBlocks((current) => current.map((item) => item.id === id ? { ...item, ...update } as CampaignFormBlock : item));
@@ -84,6 +121,9 @@ export function CampaignBuilder({ partners, destinations, minigames, initialDest
 	async function submit(formData: FormData) {
 		setPending(true); setState({});
 		formData.set("form_schema", formJson);
+		formData.set("appearance_preset", appearance.preset);
+		formData.set("appearance_button", appearance.buttonStyle);
+		formData.set("appearance_title", appearance.titleStyle);
 		formData.set("placement_mode", mode);
 		formData.set("exposure_mode", exposureMode);
 		formData.set("frame_url", frameUrl);
@@ -107,6 +147,9 @@ export function CampaignBuilder({ partners, destinations, minigames, initialDest
 
 	return <form action={submit} className="space-y-6">
 		<input type="hidden" name="form_schema" value={formJson}/>
+		<input type="hidden" name="appearance_preset" value={appearance.preset}/>
+		<input type="hidden" name="appearance_button" value={appearance.buttonStyle}/>
+		<input type="hidden" name="appearance_title" value={appearance.titleStyle}/>
 		<input type="hidden" name="placement_mode" value={mode}/>
 		<input type="hidden" name="exposure_mode" value={exposureMode}/>
 		<input type="hidden" name="frame_url" value={frameUrl}/>
@@ -136,7 +179,17 @@ export function CampaignBuilder({ partners, destinations, minigames, initialDest
 			<div className="grid gap-4 sm:grid-cols-2"><label className={labelClass} htmlFor="promotion-title">Nama campaign *<input className={fieldClass} id="promotion-title" name="title" required maxLength={160} value={campaignTitle} onChange={(event) => setCampaignTitle(event.currentTarget.value)} placeholder="Contoh: Ceritakan pengalamanmu"/></label><label className={labelClass} htmlFor="promotion-chance">Peluang tayang · persen<input className={fieldClass} id="promotion-chance" name="display_chance" type="number" min="0" max="100" step="5" value={displayChance} onChange={(event) => setDisplayChance(Number(event.currentTarget.value))} disabled={exposureMode === "always"}/></label></div>
 			<div className="grid gap-4 sm:grid-cols-2"><label className={labelClass} htmlFor="promotion-description">Deskripsi singkat<textarea className={`${fieldClass} min-h-24 resize-y`} id="promotion-description" name="description" rows={3} maxLength={5000} value={campaignDescription} onChange={(event) => setCampaignDescription(event.currentTarget.value)} placeholder="Jelaskan manfaat atau alasan pengunjung membuka campaign ini."/></label><div className="space-y-3"><p className={labelClass}>Frekuensi tampil</p><label className="flex cursor-pointer items-start gap-2 rounded-xl border border-[#84B3CE]/25 bg-white p-3 text-xs text-[#16587B]"><input type="radio" name="exposure_mode_choice" checked={exposureMode === "chance"} onChange={() => setExposureMode("chance")} className="mt-0.5 accent-[#16587B]"/><span><strong className="block">Acak sesuai peluang</strong><span className="mt-1 block text-[11px] text-[#16587B]/60">Tidak mengganggu setiap kunjungan.</span></span></label><label className="flex cursor-pointer items-start gap-2 rounded-xl border border-[#84B3CE]/25 bg-white p-3 text-xs text-[#16587B]"><input type="radio" name="exposure_mode_choice" checked={exposureMode === "always"} onChange={() => setExposureMode("always")} className="mt-0.5 accent-[#16587B]"/><span><strong className="block">Selalu tersedia</strong><span className="mt-1 block text-[11px] text-[#16587B]/60">Selalu masuk pilihan yang sesuai target.</span></span></label></div></div>
 			{mode === "photobox" && <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4"><p className="text-xs font-black text-[#16587B]">Frame mitra · preset Photobox</p><p className="mt-1 text-[11px] leading-4 text-[#16587B]/60">Unggah PNG transparan. Frame akan muncul sebagai preset di program yang dipilih.</p><div className="mt-3"><MediaUploadField folder="photobox" name="campaign-frame-upload" label="Unggah frame PNG / WebP *" onUrlChange={setFrameUrl}/></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className={labelClass}>Layout<select className={fieldClass} value={frameLayout} onChange={(event) => setFrameLayout(event.currentTarget.value)}><option value="single">1 foto</option><option value="strip2">2 foto</option><option value="grid6">Kolase 2×3</option><option value="travel_strip">Strip perjalanan · 3 foto</option><option value="memory_triptych">Kolase memori · 3 foto</option></select></label><label className={labelClass}>Rasio<select className={fieldClass} value={frameRatio} onChange={(event) => setFrameRatio(event.currentTarget.value)}><option value="portrait">Portrait 4:5</option><option value="story">Story 9:16</option><option value="square">Kotak 1:1</option></select></label></div>{frameUrl && <div className="mt-3 flex items-center gap-3 rounded-xl bg-white p-3"><img src={frameUrl} alt="Pratinjau frame campaign" className="h-20 w-16 object-contain"/><div className="text-xs font-bold text-[#16587B]">Pratinjau frame siap<span className="mt-1 block text-[10px] font-normal text-[#16587B]/55">{exposureMode === "always" ? "Selalu tersedia" : "Dapat ditampilkan sesuai peluang campaign"}</span></div></div>}</div>}
-			<MediaUploadField folder="campaigns" name="image_url" label="Gambar promosi · opsional"/>
+			<MediaUploadField folder="campaigns" name="image_url" label="Gambar campaign · opsional"/>
+			<fieldset className="rounded-2xl border border-[#84B3CE]/30 bg-sky-50/55 p-4 dark:border-sky-200/15 dark:bg-slate-900/45 sm:p-5">
+				<legend className="px-1 text-xs font-black text-[#16587B] dark:text-sky-100">Tampilan popup & form pengunjung</legend>
+				<p className="text-[11px] leading-5 text-[#16587B]/60 dark:text-sky-100/60">Pilih susunan awal. Konten, gambar, dan komponen form tetap bisa kamu atur sendiri.</p>
+				<div className="mt-3 grid gap-2 md:grid-cols-3">{visualPresets.map((preset) => <label key={preset.id} className={`flex cursor-pointer gap-2 rounded-xl border p-3 transition ${appearance.preset === preset.id ? "border-[#16587B] bg-white ring-2 ring-sky-200/70 dark:border-sky-300 dark:bg-slate-800 dark:ring-sky-400/15" : "border-[#84B3CE]/25 bg-white/65 hover:bg-white dark:border-white/10 dark:bg-slate-800/45 dark:hover:bg-slate-800"}`}><input className="mt-1 accent-[#16587B]" type="radio" checked={appearance.preset === preset.id} onChange={() => chooseAppearance(preset.id)}/><span className="min-w-0"><span className="block text-lg" aria-hidden="true">{preset.icon}</span><strong className="mt-1 block text-xs text-[#16587B] dark:text-sky-100">{preset.label}</strong><span className="mt-1 block text-[10px] leading-4 text-[#16587B]/60 dark:text-sky-100/55">{preset.summary}</span></span></label>)}</div>
+				<div className="mt-4 grid gap-4 lg:grid-cols-[1.35fr_.65fr]">
+					<fieldset><legend className="text-[11px] font-black text-[#16587B]/75 dark:text-sky-100/75">Gaya tombol utama</legend><div className="mt-2 grid grid-cols-3 gap-2">{buttonStyles.map((style) => <label key={style.id} className={`cursor-pointer rounded-xl border p-2.5 transition ${appearance.buttonStyle === style.id ? "border-[#16587B] bg-white ring-2 ring-sky-200/70 dark:border-sky-300 dark:bg-slate-800 dark:ring-sky-400/15" : "border-[#84B3CE]/25 bg-white/60 dark:border-white/10 dark:bg-slate-800/45"}`}><input className="sr-only" type="radio" checked={appearance.buttonStyle === style.id} onChange={() => setAppearance((current) => ({ ...current, buttonStyle: style.id }))}/><span className={`flex min-h-10 items-center justify-center rounded-lg px-2 text-center text-[10px] font-black ${campaignButtonClass(style.id, false)}`}>Pilih</span><strong className="mt-2 block text-[10px] text-[#16587B] dark:text-sky-100">{style.label}</strong><span className="mt-1 block text-[9px] leading-4 text-[#16587B]/55 dark:text-sky-100/55">{style.summary}</span></label>)}</div></fieldset>
+					<label className={labelClass} htmlFor="campaign-title-style">Gaya judul<select id="campaign-title-style" className={fieldClass} value={appearance.titleStyle} onChange={(event) => setAppearance((current) => ({ ...current, titleStyle: event.currentTarget.value as CampaignAppearance["titleStyle"] }))}>{titleStyles.map((style) => <option key={style.id} value={style.id}>{style.label}</option>)}</select><span className="mt-1 block text-[10px] font-medium leading-4 text-[#16587B]/55 dark:text-sky-100/55">Bisa diganti kapan saja tanpa mengubah isi campaign.</span></label>
+				</div>
+			</fieldset>
+			<div className={`rounded-2xl border p-4 shadow-sm ${isDark ? "border-sky-200/10 bg-gradient-to-br from-slate-900 via-slate-900 to-[#0c2b46]" : "border-sky-200/60 bg-gradient-to-br from-white via-sky-50 to-[#E0F2FE]"}`}><p className={`text-[9px] font-black uppercase tracking-[.16em] ${isDark ? "text-sky-200/60" : "text-[#16587B]/55"}`}>Pratinjau gaya campaign · {isDark ? "tema malam" : "tema langit"}</p><h4 className={`mt-2 ${campaignTitleClass(appearance.titleStyle, isDark)} ${appearance.titleStyle === "glow" ? "" : isDark ? "text-sky-50" : "text-[#16587B]"}`}>{campaignTitle || "Judul campaign"}</h4>{campaignDescription && <p className={`mt-1 line-clamp-2 text-xs leading-5 ${isDark ? "text-sky-100/65" : "text-[#16587B]/65"}`}>{campaignDescription}</p>}<button type="button" className={`mt-3 min-h-11 rounded-xl px-4 text-xs font-black transition ${campaignButtonClass(appearance.buttonStyle, isDark)}`}>Lihat pratinjau <span aria-hidden="true">→</span></button></div>
 			<div className="grid gap-4 sm:grid-cols-2"><label className={labelClass} htmlFor="promotion-cta">Label tombol<input className={fieldClass} id="promotion-cta" name="cta_label" maxLength={60} placeholder="Lihat informasi"/></label><label className={labelClass} htmlFor="promotion-url">Tautan tombol<input className={fieldClass} id="promotion-url" name="cta_url" type="text" defaultValue={initialDestinationSlug ? `/wisata/${initialDestinationSlug}` : ""} placeholder="/wisata/nama-wisata atau https://…"/></label><label className={labelClass} htmlFor="promotion-start">Mulai tayang<input className={fieldClass} id="promotion-start" name="starts_at" type="date"/></label><label className={labelClass} htmlFor="promotion-end">Berakhir<input className={fieldClass} id="promotion-end" name="ends_at" type="date"/></label></div>
 		</section>
 

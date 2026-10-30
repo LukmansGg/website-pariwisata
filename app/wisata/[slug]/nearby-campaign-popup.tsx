@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trackVisitorEvent } from "@/src/features/visitor-insights/events";
 import { CampaignFormExperience } from "@/src/components/campaign-form-experience";
+import { CampaignPopupShell } from "@/src/components/campaign-popup-shell";
+import type { CampaignAppearance } from "@/src/features/campaigns/appearance";
 
 type Campaign = {
 	id: string; title: string; description: string; imageUrl: string | null; experienceType: "popup" | "minigame" | "photobox";
-	placementMode: "nearby" | "destination_feedback" | "website_feedback" | "system"; exposureMode: "chance" | "always"; displayChance: number; ctaLabel: string | null; ctaUrl: string | null;
+	placementMode: "nearby" | "destination_feedback" | "website_feedback" | "system"; exposureMode: "chance" | "always"; displayChance: number; ctaLabel: string | null; ctaUrl: string | null; appearance: CampaignAppearance;
 };
 type Props = { destinationSlug: string; active: boolean; dark?: boolean; systemPage?: "destination" | "minigame" | "photobox" };
 
@@ -62,7 +64,7 @@ export default function NearbyCampaignPopup({ destinationSlug, active, dark = fa
 		};
 	}, [active, loadCampaigns, maybeShowCampaign]);
 
-	function dismiss() {
+	const dismiss = useCallback(() => {
 		if (campaign) {
 			try {
 				const key = `mt_campaign_seen:${destinationSlug}`;
@@ -72,8 +74,10 @@ export default function NearbyCampaignPopup({ destinationSlug, active, dark = fa
 			} catch { /* The current page still remembers the campaign through shownRef. */ }
 		}
 		setCampaign(null);
-	}
+	}, [campaign, destinationSlug]);
 
 	if (!active || !campaigns.length && !campaign) return null;
-	return campaign ? <div className="fixed inset-0 z-[95] grid place-items-center bg-[#102F43]/65 p-3 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}><section role="dialog" aria-modal="true" aria-labelledby="nearby-campaign-title" className={`relative max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[1.7rem] border p-5 shadow-2xl sm:p-7 ${dark ? "border-sky-200/20 bg-gradient-to-br from-[#0e3554] to-[#071b30] text-sky-50" : "border-white/80 bg-[#F5EEDD] text-[#16587B]"}`}><button type="button" onClick={dismiss} aria-label="Tutup campaign" className={`absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full text-xl font-bold ${dark ? "bg-white/10 text-sky-50" : "bg-white/90 text-[#16587B]"}`}>×</button><p className={`text-[9px] font-black uppercase tracking-[.18em] ${dark ? "text-sky-200/65" : "text-[#16587B]/55"}`}>{campaign.placementMode === "destination_feedback" ? "BAGIKAN PENGALAMAN WISATA" : campaign.placementMode === "website_feedback" ? "MASUKAN UNTUK website TiLoc!" : campaign.placementMode === "system" ? "Info dari TiLoc!" : "CAMPAIGN UNTUK WISATA INI"}</p>{campaign.imageUrl && <img src={campaign.imageUrl} alt="" className="mt-3 max-h-48 w-full rounded-2xl object-cover"/>}<h2 id="nearby-campaign-title" className="mt-3 pr-8 text-2xl font-black">{campaign.title}</h2>{campaign.description && <p className={`mt-2 whitespace-pre-line text-sm leading-6 ${dark ? "text-sky-100/75" : "text-[#16587B]/75"}`}>{campaign.description}</p>}<div className="mt-5 space-y-2"><button type="button" onClick={dismiss} className={`min-h-11 w-full rounded-xl border px-3 text-xs font-bold ${dark ? "border-sky-200/20 bg-white/10 text-sky-50" : "border-[#84B3CE]/45 bg-white text-[#16587B]"}`}>Nanti saja</button><CampaignFormExperience campaignId={campaign.id} pageKey={systemPage} destinationSlug={destinationSlug} fallbackHref={campaign.ctaUrl || `/wisata/${encodeURIComponent(destinationSlug)}`} fallbackLabel={campaign.ctaLabel || (campaign.placementMode === "destination_feedback" || campaign.placementMode === "website_feedback" ? "Kirim ulasan" : "Lihat campaign")} onNavigate={dismiss}/></div></section></div> : null;
+	return campaign ? <CampaignPopupShell title={campaign.title} description={campaign.description} imageUrl={campaign.imageUrl} appearance={campaign.appearance} titleId="nearby-campaign-title" eyebrow={campaign.placementMode === "destination_feedback" ? "Bagikan pengalaman wisata" : campaign.placementMode === "website_feedback" ? "Masukan untuk website TiLoc!" : campaign.placementMode === "system" ? "Info dari TiLoc!" : "Campaign untuk wisata ini"} onDismiss={dismiss}>
+		<div className="space-y-2"><button type="button" onClick={dismiss} className={`min-h-11 w-full rounded-xl border px-3 text-xs font-bold transition ${dark ? "border-sky-200/15 bg-white/5 text-sky-100 hover:bg-white/10" : "border-[#84B3CE]/40 bg-white/80 text-[#16587B] hover:bg-white"}`}>Nanti saja</button><CampaignFormExperience campaignId={campaign.id} pageKey={systemPage} destinationSlug={destinationSlug} fallbackHref={campaign.ctaUrl || `/wisata/${encodeURIComponent(destinationSlug)}`} fallbackLabel={campaign.ctaLabel || (campaign.placementMode === "destination_feedback" || campaign.placementMode === "website_feedback" ? "Kirim ulasan" : "Lihat campaign")} onNavigate={dismiss} onAppearanceLoaded={(appearance) => setCampaign((current) => current ? { ...current, appearance } : current)}/></div>
+	</CampaignPopupShell> : null;
 }

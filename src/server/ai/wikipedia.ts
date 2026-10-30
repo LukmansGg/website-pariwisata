@@ -36,7 +36,10 @@ const STOP_WORDS = new Set([
 
 export function shouldSearchWikipedia(message: string) {
 	if (/\b(hari ini|sekarang|terkini|terbaru|saat ini|harga|tiket|jam buka|cuaca|event|acara minggu ini|promo|lalu lintas|macet)\b/i.test(message)) return false;
-	return /\b(sejarah|asal(?:-usul)?|budaya|kisah|cerita|legenda|makna|arti|filosofi|dibangun|diresmikan|pendiri|tokoh|arsitektur|warisan|heritage|monumen|terinspirasi|latar belakang|fakta menarik)\b/i.test(message);
+	if (/^(hai|halo|helo|apa kabar|makasih|terima kasih|dadah|sampai jumpa)\b/i.test(message.trim())) return false;
+	return /\b(sejarah|asal(?:-usul)?|budaya|kisah|cerita|legenda|makna|arti|filosofi|dibangun|diresmikan|pendiri|tokoh|arsitektur|warisan|heritage|monumen|terinspirasi|latar belakang|fakta menarik|fakta|informasi|keunikan|asal mula|referensi|sumber)\b/i.test(message)
+		|| (/\b(apa|apakah|bagaimana|mengapa|kenapa|siapa|di mana|dimana|jelaskan|ceritakan)\b/i.test(message)
+			&& /\b(wisata|destinasi|tempat|lokasi|spot|bangunan|patung|candi|monumen|objek|di sini|disini|di sana|disana)\b/i.test(message));
 }
 
 function buildSearchQuery(destinationName: string, message: string) {
@@ -109,14 +112,37 @@ export async function searchWikipedia(destinationName: string, message: string, 
 	if (!query) return [];
 
 	try {
-		const indonesianResults = await searchLanguage("id", query, signal);
-		if (indonesianResults.length > 0) return indonesianResults;
-		return await searchLanguage("en", query, signal);
+		const queries = [...new Set([query, destinationName.trim()].filter(Boolean))];
+		for (const language of ["id", "en"] as const) {
+			for (const candidate of queries) {
+				const results = await searchLanguage(language, candidate.slice(0, 180), signal);
+				if (results.length > 0) return results;
+			}
+		}
+		return [];
 	} catch (error) {
 		if (signal.aborted) throw error;
 		console.warn("Wikipedia reference search unavailable", {
 			reason: error instanceof Error ? error.message : "unknown",
 		});
+		return [];
+	}
+}
+
+export async function searchWikipediaForEnhancement(destinationName: string, address: string, signal: AbortSignal) {
+	const cleanAddress = address.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, " ").replace(/\b(?:\+?62|0)8[\d\s().-]{7,14}\b/g, " ").replace(/[^\p{L}\p{N}\s-]/gu, " ").trim();
+	const queries = [...new Set([destinationName.trim(), cleanAddress ? `${destinationName.trim()} ${cleanAddress}` : ""].filter(Boolean))];
+	try {
+		for (const language of ["id", "en"] as const) {
+			for (const query of queries) {
+				const results = await searchLanguage(language, query.slice(0, 180), signal);
+				if (results.length) return results;
+			}
+		}
+		return [];
+	} catch (error) {
+		if (signal.aborted) throw error;
+		console.warn("Wikipedia destination enhancement search unavailable", { reason: error instanceof Error ? error.message : "unknown" });
 		return [];
 	}
 }

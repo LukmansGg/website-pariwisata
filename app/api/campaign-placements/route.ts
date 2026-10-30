@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/src/infrastructure/supabase/server";
+import { resolveCampaignAppearance } from "@/src/features/campaigns/appearance";
 
 const systemPages = new Set(["home", "scan", "destination", "minigame", "photobox"]);
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -43,11 +44,14 @@ export async function GET(request: Request) {
 			.eq("status", "published").in("placement_mode", ["system", "website_feedback"]).contains("system_pages", [systemPage]);
 		if (globalError) throw globalError;
 		data = [...data, ...(globalCampaigns ?? [])];
+		const appearanceRows = data.length ? await supabase.from("promotion_campaigns").select("id,form_appearance").in("id", [...new Set(data.map((campaign) => campaign.id))]) : { data: [], error: null };
+		const appearanceById = new Map((appearanceRows.data ?? []).map((row) => [row.id, row.form_appearance]));
 		const now = Date.now();
 		const campaigns = [...new Map(data.filter((campaign) => (!campaign.starts_at || Date.parse(campaign.starts_at) <= now) && (!campaign.ends_at || Date.parse(campaign.ends_at) > now)).map((campaign) => [campaign.id, campaign])).values()]
 			.map((campaign) => ({
 				id: campaign.id, title: campaign.title, description: campaign.description, imageUrl: publicImage(campaign.image_url),
 				experienceType: campaign.experience_type, placementMode: campaign.placement_mode, exposureMode: campaign.exposure_mode,
+				appearance: resolveCampaignAppearance(appearanceById.get(campaign.id), campaign.placement_mode === "destination_feedback" || campaign.placement_mode === "website_feedback" ? "rating" : "promo"),
 				displayChance: campaign.exposure_mode === "always" ? 100 : campaign.display_chance,
 				ctaLabel: campaign.cta_label, ctaUrl: publicCta(campaign.cta_url),
 			}));

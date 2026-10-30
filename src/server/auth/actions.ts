@@ -8,6 +8,7 @@ import { createClient } from "@/src/infrastructure/supabase/server";
 import { checkLoginLimit } from "@/src/server/auth/rate-limit";
 import { isMinigameComponentKey, minigameComponentRegistry } from "@/src/features/minigames/registry";
 import { parseCampaignFormSchema } from "@/src/features/campaigns/form-schema";
+import { parseCampaignAppearance } from "@/src/features/campaigns/appearance";
 
 export type LoginState = {
 	error?: string;
@@ -204,7 +205,7 @@ function refreshWorkspace(options: { destinations?: boolean; campaigns?: boolean
 }
 
 function hasValidDescriptionLength(description: string) {
-	return description.trim() === "" || description.trim().split(/\s+/).length <= 300;
+	return description.trim() === "" || description.trim().split(/\s+/).length <= 1500;
 }
 
 export async function createDestinationAction(
@@ -213,7 +214,7 @@ export async function createDestinationAction(
 ): Promise<WorkspaceActionState> {
 	const slug = value(formData, "slug", 100).toLowerCase();
 	const name = value(formData, "name", 160);
-	const description = value(formData, "description", 10000);
+	const description = value(formData, "description", 30000);
 	const categories = [...new Set(formData.getAll("categories").map((item) => String(item).trim()).filter((item) => ["Alam", "Kuliner", "Spot Foto", "Sejarah & Budaya", "Petualangan & Aktivitas", "Rekreasi", "Religi", "Lainnya"].includes(item)))];
 	const shortDescription = value(formData, "short_description", 180);
 	const address = value(formData, "address", 500);
@@ -237,7 +238,7 @@ export async function createDestinationAction(
 		return { error: "Slug gunakan huruf kecil, angka, dan tanda hubung." };
 	}
 	if (!name || !hasValidDescriptionLength(description) || (hasCoordinateInput && coordinates === null) || !hasValidCoordinates || !qrCoordinates || qrCoordinates.latitude === null || qrCoordinates.longitude === null || !qrName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(qrCode) || (imageUrlRaw && !imageUrl) || (mascotImageUrlRaw && !mascotImageUrl) || (mascotMode === "custom" && !mascotImageUrl)) {
-		return { error: !hasValidDescriptionLength(description) ? "Deskripsi destinasi maksimal 300 kata." : "Lengkapi pin destinasi, nama dan kode QR, serta koordinat pemasangan QR yang valid." };
+		return { error: !hasValidDescriptionLength(description) ? "Deskripsi destinasi maksimal 1.500 kata." : "Lengkapi pin destinasi, nama dan kode QR, serta koordinat pemasangan QR yang valid." };
 	}
 
 	const staff = await requireStaff();
@@ -292,7 +293,7 @@ export async function updateDestinationAction(
 	const id = value(formData, "id", 64);
 	const slug = value(formData, "slug", 100).toLowerCase();
 	const name = value(formData, "name", 160);
-	const description = value(formData, "description", 10000);
+	const description = value(formData, "description", 30000);
 	const categories = [...new Set(formData.getAll("categories").map((item) => String(item).trim()).filter((item) => ["Alam", "Kuliner", "Spot Foto", "Sejarah & Budaya", "Petualangan & Aktivitas", "Rekreasi", "Religi", "Lainnya"].includes(item)))];
 	const shortDescription = value(formData, "short_description", 180);
 	const address = value(formData, "address", 500);
@@ -312,7 +313,7 @@ export async function updateDestinationAction(
 	const wantsPublication = formData.get("is_published") === "on";
 	const isPublished = wantsPublication && hasValidCoordinates && Boolean(imageUrl);
 	if (!id || !name || !hasValidDescriptionLength(description) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (hasCoordinateInput && coordinates === null) || !hasValidCoordinates || !qrCoordinates || qrCoordinates.latitude === null || qrCoordinates.longitude === null || !qrName || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(qrCode) || (imageUrlRaw && !imageUrl) || (mascotImageUrlRaw && !mascotImageUrl) || (mascotMode === "custom" && !mascotImageUrl)) {
-		return { error: !hasValidDescriptionLength(description) ? "Deskripsi destinasi maksimal 300 kata." : "Periksa nama, tautan, foto, serta koordinat destinasi dan QR." };
+		return { error: !hasValidDescriptionLength(description) ? "Deskripsi destinasi maksimal 1.500 kata." : "Periksa nama, tautan, foto, serta koordinat destinasi dan QR." };
 	}
 	const staff = await requireStaff();
 	if (!staff) return { error: "Akun ini tidak memiliki akses untuk mengedit data wisata." };
@@ -537,6 +538,12 @@ export async function createPromotionAction(
 	const frameUrl = optionalUrl(frameUrlRaw);
 	const frameLayout = value(formData, "frame_layout", 32);
 	const frameRatio = value(formData, "frame_ratio", 32);
+	let formAppearance = parseCampaignAppearance({
+		preset: value(formData, "appearance_preset", 16),
+		buttonStyle: value(formData, "appearance_button", 16),
+		titleStyle: value(formData, "appearance_title", 16),
+	});
+	if (!formAppearance) return { error: "Pilihan tampilan campaign tidak valid. Pilih ulang gaya popup dan tombol." };
 	const startsAtRaw = value(formData, "starts_at", 32);
 	const endsAtRaw = value(formData, "ends_at", 32);
 	const startsAt = startsAtRaw ? new Date(`${startsAtRaw}T00:00:00+07:00`) : null;
@@ -634,6 +641,7 @@ export async function createPromotionAction(
 		cta_label: ctaLabel || null,
 		cta_url: ctaUrl,
 		form_schema: formSchema,
+		form_appearance: formAppearance,
 		starts_at: startsAt?.toISOString() ?? null,
 		ends_at: endsAt?.toISOString() ?? null,
 		display_chance: displayChance,
@@ -643,7 +651,11 @@ export async function createPromotionAction(
 		submitted_for_review_at: petugasCampaign ? new Date().toISOString() : null,
 		created_by: staff.userId,
 	}).select("id").single();
-	if (campaignError || !campaign) return { error: campaignError?.code === "42703" || campaignError?.code === "PGRST204" ? "Skema campaign baru belum tersedia. Jalankan migration campaign placement redesign di Supabase." : "Campaign belum tersimpan. Periksa kembali data dan relasi yang dipilih." };
+	if (campaignError || !campaign) return { error: campaignError?.code === "42703" || campaignError?.code === "PGRST204"
+		? campaignError.message?.includes("form_appearance")
+			? "Pilihan desain belum bisa disimpan. Jalankan migration campaign_appearance_presets di Supabase."
+			: "Skema campaign baru belum tersedia. Jalankan migration campaign placement redesign di Supabase."
+		: "Campaign belum tersimpan. Periksa kembali data dan relasi yang dipilih." };
 
 	const rollbackSupabase = staff.supabase;
 	const createdCampaignId = campaign.id;
