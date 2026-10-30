@@ -133,6 +133,11 @@ export async function POST(request: Request) {
 						signal: abortController.signal,
 						onToken: (text) => emit("token", { text }),
 					});
+					const { error: missionProgressError } = await supabase.rpc("record_public_minigame_component", {
+						p_destination_slug: destinationSlug,
+						p_component: "chat_ai",
+					});
+					if (missionProgressError) console.warn("AI mission progress update failed", { code: missionProgressError.code });
 					emit("done", {
 						wikipediaSearched: wikipediaSources.length > 0,
 						sources: wikipediaSources.map(({ title, url, language }) => ({ title, url, language })),

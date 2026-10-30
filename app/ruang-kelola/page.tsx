@@ -54,12 +54,12 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 
 	const [destinationQuery, partnersResult, qrPointsResult, promotionsResult, driveResult, assignmentsResult, programsResult] = await Promise.all([
 		supabase.from("destinations").select("id, slug, name, description, category, categories, short_description, address, latitude, longitude, image_url, tags, additional_minigames, photobox_access_mode, mascot_mode, mascot_image_url, is_published, is_featured, created_by, created_at").order("created_at", { ascending: false }),
-		staff.role === "admin" ? supabase.from("tourism_partners").select("id, business_name, slug, destination_id, max_distance_meters, business_type, business_categories, latitude, longitude, allow_minigame_integration, address, status, created_at").order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
+		staff.role === "admin" ? supabase.from("tourism_partners").select("id, business_name, slug, destination_id, max_distance_meters, business_type, business_categories, latitude, longitude, allow_minigame_integration, address, description, logo_url, contact_name, contact_phone, contact_email, website_url, status, created_at").order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
 		supabase.from("qr_points").select("id, destination_id, name, code, address, latitude, longitude, is_active, created_at").order("created_at", { ascending: false }),
-		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, experience_type, placement_mode, exposure_mode, status, approval_status, approval_feedback, starts_at, ends_at, created_at, form_schema").order("created_at", { ascending: false }),
+		supabase.from("promotion_campaigns").select("id, partner_id, qr_point_id, title, description, image_url, cta_label, cta_url, experience_type, placement_mode, exposure_mode, display_chance, status, approval_status, approval_feedback, starts_at, ends_at, created_at, form_schema, created_by").order("created_at", { ascending: false }),
 		staff.role === "admin" ? supabase.from("google_drive_connections").select("id, connected_email, updated_at").eq("id", "primary").maybeSingle() : Promise.resolve({ data: null, error: null }),
-		supabase.from("tourism_minigame_destinations").select("id, destination_id, program_id, components, is_enabled").eq("is_enabled", true),
-		supabase.from("tourism_minigame_programs").select("id, name, slug, is_enabled").eq("is_enabled", true),
+		supabase.from("tourism_minigame_destinations").select("id,destination_id,program_id,components,required_components,is_enabled,is_selected"),
+		supabase.from("tourism_minigame_programs").select("id,name,slug,is_enabled,components,required_components,created_by,default_photobox_access_mode,photobox_templates,ai_is_mission,photobox_is_mission,completion_effect"),
 	]);
 
 	let destinationRows = destinationQuery.data as WorkspaceData["destinations"] | null;
@@ -95,17 +95,21 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 	const qrById = new Map(qrPoints.map((point) => [point.id, point]));
 	const programById = new Map((programsResult.data ?? []).map((program) => [program.id, program]));
 	const destinationByIdFull = new Map(destinations.map((destination) => [destination.id, destination]));
-	const minigames = (assignmentsResult.data ?? []).map((assignment) => {
+	const minigameAssignments = (assignmentsResult.data ?? []).map((assignment) => {
 		const program = programById.get(assignment.program_id);
 		const destination = destinationByIdFull.get(assignment.destination_id);
-		return program && destination ? { id: assignment.id, destination_id: destination.id, destination_name: destination.name, name: program.name, slug: program.slug, components: assignment.components, is_enabled: assignment.is_enabled } : null;
+		return program && destination ? { id: assignment.id, program_id: program.id, destination_id: destination.id, destination_name: destination.name, name: program.name, slug: program.slug, components: assignment.components, required_components: assignment.required_components, is_enabled: assignment.is_enabled, is_selected: assignment.is_selected } : null;
 	}).filter((item): item is NonNullable<typeof item> => item !== null);
+	const minigames = minigameAssignments.filter((assignment) => assignment.is_selected && assignment.is_enabled);
+	const assignedProgramIds = new Set(minigameAssignments.filter((assignment) => assignment.is_selected).map((assignment) => assignment.program_id));
 	const dataIssues = [
 		destinationError ? `destinations: ${databaseIssue(destinationError)}` : null,
 		staff.role === "admin" && accessResult.error ? `user_destination_access: ${databaseIssue(accessResult.error)} Jalankan migration 20261028000000_destination_manager_review.sql.` : null,
 		staff.role === "admin" && reviewResult.error ? `destination_review_requests: ${databaseIssue(reviewResult.error)} Jalankan migration 20261028000000_destination_manager_review.sql.` : null,
 		staff.role === "admin" && partnersResult.error ? `tourism_partners: ${databaseIssue(partnersResult.error)}` : null,
 		qrPointsResult.error ? `qr_points: ${databaseIssue(qrPointsResult.error)}` : null,
+		programsResult.error ? `tourism_minigame_programs: ${databaseIssue(programsResult.error)} Jalankan migration minigame terbaru.` : null,
+		assignmentsResult.error ? `tourism_minigame_destinations: ${databaseIssue(assignmentsResult.error)} Jalankan migration minigame terbaru.` : null,
 		!managerRole && promotionsResult.error ? `promotion_campaigns: ${databaseIssue(promotionsResult.error)}` : null,
 	].filter((issue): issue is string => issue !== null);
 
@@ -126,6 +130,8 @@ async function StaffDashboardContent({ searchParams }: DashboardProps) {
 			qr_label: campaign.qr_point_id ? qrById.get(campaign.qr_point_id)?.name ?? "QR campaign" : "Tanpa QR khusus",
 		})),
 		minigames,
+		minigameAssignments,
+		minigamePrograms: (programsResult.data ?? []).filter((program) => program.is_enabled || program.created_by === userId || assignedProgramIds.has(program.id)),
 		reviewRequests: (reviewResult.data ?? []).filter((request) => staff.role === "admin" || request.manager_user_id === userId).map((request) => ({
 			id: request.id,
 			destination_id: request.destination_id,

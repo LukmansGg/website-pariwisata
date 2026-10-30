@@ -13,7 +13,7 @@ import type { CampaignAppearance } from "@/src/features/campaigns/appearance";
 type Campaign = { id: string; title: string; description: string; imageUrl: string | null; ctaLabel: string | null; ctaUrl: string | null; displayChance: number; experienceType: "minigame" | "photobox"; appearance?: CampaignAppearance };
 type Point = { id: string; name: string; code: string; isRequired: boolean; friendName: string | null; requires: string[]; campaigns: Campaign[] };
 type PhotoboxTemplate = { id: string; name: string; frameUrl: string; ratio: string; layout: string; enabled: boolean; source?: "preset" | "custom" | "campaign"; displayChance?: number; alwaysShow?: boolean };
-type Program = { assignmentId: string; programId: string; programName: string; programSlug: string; components: string[]; requiredComponents: string[]; photoboxAccessMode: "standalone" | "mission_reward"; photoboxTemplates: PhotoboxTemplate[]; findPoints: Point[]; progress: { scannedQrPointIds: string[]; completedComponents: string[]; photosCreated: number; xp: number; completed: boolean } };
+type Program = { assignmentId: string; programId: string; programName: string; programSlug: string; components: string[]; requiredComponents: string[]; completionEffect?: "none" | "confetti" | "sparkles" | "fireworks"; aiIsMission?: boolean; photoboxIsMission?: boolean; photoboxAccessMode: "standalone" | "mission_reward"; photoboxTemplates: PhotoboxTemplate[]; findPoints: Point[]; progress: { scannedQrPointIds: string[]; completedComponents: string[]; photosCreated: number; xp: number; completed: boolean } };
 type Snapshot = { destinationName: string; programs: Program[] };
 type CampaignPopup = Campaign & { programSlug: string };
 
@@ -41,7 +41,7 @@ function PhotoboxPassCard({ program, destinationSlug, celebrating }: { program: 
 				<div className={`game-photobox-ticket mx-auto mb-4 inline-flex w-fit items-center gap-2 rounded-xl border-2 px-3 py-1.5 text-[9px] font-black uppercase tracking-[.15em] shadow-[3px_3px_0_rgba(22,88,123,.08)] sm:mx-0 ${reward ? "game-photobox-ticket--reward" : ""}`}><span aria-hidden="true">{reward ? "🎁" : "📸"}</span>{reward ? "Hadiah misi terbuka" : "Studio Photobox"}</div>
 				<p className="text-[9px] font-black uppercase tracking-[.17em] text-[#16587B]/55">{program.programName}</p>
 				<h3 className="mt-2 text-[2rem] font-black leading-[1.04] tracking-tight text-[#16587B] sm:text-[2.7rem]">Abadikan <span className="game-photobox-title-accent">Momenmu!</span> <span aria-hidden="true">📸</span></h3>
-				<p className="game-photobox-description mx-auto mt-4 max-w-md rounded-2xl border-2 border-white/80 bg-white/55 p-3 text-xs font-semibold leading-5 text-[#16587B]/70 sm:mx-0 sm:mt-5 sm:p-4 sm:text-sm">Pilih frame favorit, atur foto, lalu simpan atau bagikan hasil jepretanmu.</p>
+				<p className="game-photobox-description mx-auto mt-4 max-w-md rounded-2xl border-2 border-white/80 bg-white/55 p-3 text-xs font-semibold leading-5 text-[#16587B]/70 sm:mx-0 sm:mt-5 sm:p-4 sm:text-sm">{program.photoboxIsMission ? "Buat satu foto untuk menuntaskan misi, lalu simpan atau bagikan hasilnya." : "Pilih frame favorit, atur foto, lalu simpan atau bagikan hasil jepretanmu."}</p>
 		<Link href={studioHref} aria-busy={opening} onClick={(event) => { event.preventDefault(); if (opening || openingTimer.current !== null) return; if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { router.push(studioHref); return; } setOpening(true); openingTimer.current = window.setTimeout(() => { openingTimer.current = null; router.push(studioHref); }, 260); }} className="game-primary-action game-cta-idle mx-auto mt-4 inline-flex min-h-14 w-full max-w-sm items-center justify-center gap-3 rounded-2xl border-2 border-blue-950/50 bg-[linear-gradient(180deg,#438ff0,#1760c3)] px-4 py-3 text-sm font-black text-white shadow-[0_6px_0_#11488f,0_12px_20px_rgba(23,96,195,.2)] transition duration-200 hover:-translate-y-0.5 hover:saturate-125 active:translate-y-1 active:shadow-[0_2px_0_#11488f,0_5px_10px_rgba(23,96,195,.2)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-300/70 aria-busy:cursor-wait aria-busy:saturate-75 sm:mx-0"><span className="game-camera-icon text-xl" aria-hidden="true">{opening ? "✨" : "📷"}</span><span>{opening ? "Membuka studio…" : "Buka Studio Photobox"}</span><span className="game-cta-arrow" aria-hidden="true">→</span></Link>
 				<div className="game-camera-ready mx-auto mt-3 inline-flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-[.1em] text-[#16587B]/55 sm:mx-0"><span className="game-camera-ready-dot h-2 w-2 rounded-full" />{frames.length ? `${frames.length} frame siap dipilih` : "Frame sedang disiapkan"}<span aria-hidden="true">·</span>kamera tersedia di studio</div>
 			</div>
@@ -90,7 +90,7 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 			} catch { /* A missing or unavailable session cache should not interrupt mission progress. */ }
 		}
 		const justCompleted = next.programs.filter((program) => program.progress.completed && priorCompletion.get(program.assignmentId) === false).map((program) => program.assignmentId);
-		const newlyUnlockedPhotoboxes = next.programs.filter((program) => justCompleted.includes(program.assignmentId) && program.components.includes("find_friends") && program.components.includes("photobox") && program.photoboxAccessMode === "mission_reward").map((program) => program.assignmentId);
+		const newlyUnlockedPhotoboxes = next.programs.filter((program) => justCompleted.includes(program.assignmentId) && program.components.includes("photobox") && program.photoboxAccessMode === "mission_reward").map((program) => program.assignmentId);
 		snapshotRef.current = next;
 		setSnapshot(next);
 		try { sessionStorage.setItem(completionKey, JSON.stringify(Object.fromEntries(next.programs.map((program) => [program.assignmentId, program.progress.completed])))); } catch { /* The live card still works without tab storage. */ }
@@ -125,10 +125,13 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 	}, [destinationSlug, publishSnapshot]);
 	useEffect(() => {
 		void refreshSnapshot();
+		const refreshForGameAction = () => { void refreshSnapshot(); };
 		const refreshWhenVisible = () => { if (document.visibilityState === "visible") void refreshSnapshot(); };
+		window.addEventListener("tiloc:minigame-refresh", refreshForGameAction);
 		window.addEventListener("focus", refreshWhenVisible);
 		document.addEventListener("visibilitychange", refreshWhenVisible);
 		return () => {
+			window.removeEventListener("tiloc:minigame-refresh", refreshForGameAction);
 			window.removeEventListener("focus", refreshWhenVisible);
 			document.removeEventListener("visibilitychange", refreshWhenVisible);
 			if (celebrationTimer.current !== null) window.clearTimeout(celebrationTimer.current);
@@ -212,11 +215,16 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 		{snapshot && <div className={`relative z-10 grid gap-4 ${snapshot.programs.length > 1 ? "md:grid-cols-2" : "md:grid-cols-1"}`}>{snapshot.programs.map((program) => {
 			const mission = summarizeQrMissionProgress(program.findPoints, program.progress.scannedQrPointIds);
 			const hasMission = program.components.includes("find_friends");
+			const hasAiMission = Boolean(program.aiIsMission && program.components.includes("chat_ai"));
+			const hasPhotoboxMission = Boolean(program.photoboxIsMission && program.components.includes("photobox"));
+			const hasCompletionMission = program.requiredComponents.length > 0;
 			const hasPhotobox = program.components.includes("photobox");
 			const photoboxLocked = program.photoboxAccessMode === "mission_reward" && !program.progress.completed;
 			const celebrating = celebratingAssignments.includes(program.assignmentId);
 			const switchingToPhotobox = switchingAssignments.includes(program.assignmentId);
-			const showPhotoboxCard = hasPhotobox && ((!hasMission && !photoboxLocked) || (hasMission && program.photoboxAccessMode === "mission_reward" && program.progress.completed && !switchingToPhotobox));
+			const showPhotoboxCard = hasPhotobox && (program.photoboxAccessMode === "mission_reward"
+				? program.progress.completed && !switchingToPhotobox
+				: !hasCompletionMission && !photoboxLocked);
 			const missionStatus = mission.completed
 				? "Semua teman maskot sudah ditemukan!"
 				: mission.pendingRequiredCount > 0
@@ -229,15 +237,16 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 					: mission.foundRequiredCount > 0
 						? "game-quest-cta--progress-one"
 						: "";
-			const heroIcon = hasMission ? "🐾" : hasPhotobox ? "📸" : "✨";
+			const heroIcon = hasMission ? "🐾" : hasPhotoboxMission ? "📸" : "✨";
+			const completionParticles = program.completionEffect === "confetti" ? ["🎉", "🎊", "✨"] : program.completionEffect === "fireworks" ? ["✹", "✦", "✷"] : ["✧", "✦", "★"];
 			return <article key={program.assignmentId} className={`game-program-card game-quest-card-container group relative isolate flex min-w-0 flex-col overflow-hidden rounded-[1.8rem] border-[3px] border-white/90 bg-[linear-gradient(145deg,#fff_0%,#effaff_52%,#e5f6ff_100%)] p-4 text-[#16587B] shadow-[8px_9px_0_rgba(22,88,123,.08),0_20px_42px_-28px_rgba(22,88,123,.48)] transition duration-300 hover:-translate-y-1 hover:shadow-[9px_12px_0_rgba(22,88,123,.08),0_28px_48px_-27px_rgba(22,88,123,.5)] sm:rounded-[2rem] sm:p-5 ${program.progress.completed ? "game-card--complete" : ""} ${showPhotoboxCard ? "game-card--photobox" : ""} ${switchingToPhotobox ? "game-card--switching" : ""}`}>
 				<div aria-hidden="true" className="game-card-dots pointer-events-none absolute inset-0 opacity-40" />
 				<div aria-hidden="true" className="game-card-orb game-card-orb--one pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full" />
 				<div aria-hidden="true" className="game-card-orb game-card-orb--two pointer-events-none absolute -bottom-20 left-[34%] h-44 w-44 rounded-full" />
 				<div aria-hidden="true" className="game-quest-spark game-quest-spark--one pointer-events-none absolute right-5 top-5">✦</div>
 				<div aria-hidden="true" className="game-quest-spark game-quest-spark--two pointer-events-none absolute bottom-5 left-5">✧</div>
-				{celebrating && !showPhotoboxCard && <div className="game-completion-burst pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-hidden="true">{["7%", "18%", "30%", "43%", "56%", "68%", "80%", "92%"].map((left, index) => <span key={left} className="game-burst-particle" style={{ left, animationDelay: `${index * 65}ms` }}>{index % 3 === 0 ? "✦" : index % 3 === 1 ? "✧" : "★"}</span>)}</div>}
-				{showPhotoboxCard ? <PhotoboxPassCard program={program} destinationSlug={destinationSlug} celebrating={celebrating} /> : <div className={`game-quest-layout relative z-10 flex-1 ${switchingToPhotobox ? "game-quest-layout--switching" : ""}`}>
+				{celebrating && program.completionEffect !== "none" && !showPhotoboxCard && <div className="game-completion-burst pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-hidden="true">{["7%", "18%", "30%", "43%", "56%", "68%", "80%", "92%"].map((left, index) => <span key={left} className="game-burst-particle" style={{ left, animationDelay: `${index * 65}ms` }}>{completionParticles[index % completionParticles.length]}</span>)}</div>}
+				{showPhotoboxCard ? <PhotoboxPassCard program={program} destinationSlug={destinationSlug} celebrating={celebrating && program.completionEffect !== "none"} /> : <div className={`game-quest-layout relative z-10 flex-1 ${switchingToPhotobox ? "game-quest-layout--switching" : ""}`}>
 					<div className="game-quest-copy flex min-w-0 flex-col justify-center">
 						<div className={`game-quest-label mb-4 inline-flex w-fit items-center gap-2 rounded-xl border-2 px-3 py-1.5 text-[9px] font-black uppercase tracking-[.16em] shadow-[3px_3px_0_rgba(22,88,123,.08)] ${program.progress.completed ? "game-quest-label--complete" : ""}`}>
 							<span className={program.progress.completed ? "game-complete-check" : "game-label-fire"} aria-hidden="true">{program.progress.completed ? "✓" : "✦"}</span>
@@ -272,9 +281,11 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 							</div>
 						</> : <>
 							<div className="flex items-center gap-3"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border-2 border-white bg-sky-100 text-2xl shadow-md" aria-hidden="true">{hasPhotobox ? "📸" : "💬"}</span><div><p className="text-[8px] font-black uppercase tracking-[.15em] text-sky-800">{hasPhotobox ? "STUDIO KENANGAN" : "TEMAN JELAJAH"}</p><h4 className="mt-1 text-sm font-black text-[#16587B]">{hasPhotobox ? "Siap bikin foto seru?" : "Ada cerita untuk dijelajahi!"}</h4></div></div>
-							<p className="mt-3 text-[10px] font-semibold leading-4 text-[#16587B]/65">{program.requiredComponents.length === 0 ? "Aktivitas ini bisa dinikmati tanpa misi wajib." : "Mulai aktivitasmu dari sini."}</p>
+							<p className="mt-3 text-[10px] font-semibold leading-4 text-[#16587B]/65">{hasAiMission ? "Tanya pemandu satu kali untuk menuntaskan misi." : hasPhotoboxMission ? "Buat satu foto untuk menyelesaikan misi Photobox." : program.requiredComponents.length === 0 ? "Aktivitas ini bisa dinikmati tanpa misi wajib." : "Mulai aktivitasmu dari sini."}</p>
+							{(hasAiMission || hasPhotoboxMission) && <div className="mt-3 flex flex-wrap gap-2"><span className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-[10px] font-black text-violet-900">{program.progress.completedComponents.includes("chat_ai") && hasAiMission ? "✓" : "○"} Tanya AI {hasAiMission ? "· 1 kali" : ""}</span>{hasPhotoboxMission && <span className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] font-black text-rose-900">{program.progress.completedComponents.includes("photobox") ? "✓" : "○"} Buat 1 foto</span>}</div>}
 							<div className="mt-auto flex flex-wrap gap-2 pt-4">
 								{hasPhotobox && !photoboxLocked && <Link href={`/photobox/${encodeURIComponent(program.programSlug)}/${encodeURIComponent(destinationSlug)}`} className="game-primary-action game-cta-idle inline-flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-blue-950/50 bg-[linear-gradient(180deg,#438ff0,#1760c3)] px-4 py-3 text-xs font-black text-white shadow-[0_6px_0_#11488f,0_12px_20px_rgba(23,96,195,.2)] transition hover:-translate-y-0.5 active:translate-y-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-300/70"><span aria-hidden="true">📸</span>Buka Photobox<span className="game-cta-arrow" aria-hidden="true">→</span></Link>}
+								{hasAiMission && <button type="button" onClick={() => { document.getElementById("guide-chat-title")?.scrollIntoView({ behavior: "smooth", block: "center" }); document.getElementById("tourism-chat-input")?.focus({ preventScroll: true }); }} className="game-primary-action game-cta-idle inline-flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-blue-950/50 bg-[linear-gradient(180deg,#438ff0,#1760c3)] px-4 py-3 text-xs font-black text-white shadow-[0_6px_0_#11488f,0_12px_20px_rgba(23,96,195,.2)] transition hover:-translate-y-0.5 active:translate-y-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-300/70"><span aria-hidden="true">💬</span>{program.progress.completedComponents.includes("chat_ai") ? "Tanya lagi" : "Tanya pemandu"}<span className="game-cta-arrow" aria-hidden="true">→</span></button>}
 								{hasPhotobox && photoboxLocked && <span className="game-reward-hint inline-flex min-h-12 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-extrabold text-amber-900">🔒 Photobox menunggu misi</span>}
 								{!hasPhotobox && program.components.includes("chat_ai") && <button type="button" onClick={() => { document.getElementById("guide-chat-title")?.scrollIntoView({ behavior: "smooth", block: "center" }); document.getElementById("tourism-chat-input")?.focus({ preventScroll: true }); }} className="game-primary-action game-cta-idle inline-flex min-h-14 flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-blue-950/50 bg-[linear-gradient(180deg,#438ff0,#1760c3)] px-4 py-3 text-xs font-black text-white shadow-[0_6px_0_#11488f,0_12px_20px_rgba(23,96,195,.2)] transition hover:-translate-y-0.5 active:translate-y-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky-300/70"><span aria-hidden="true">💬</span>Tanya pemandu<span className="game-cta-arrow" aria-hidden="true">→</span></button>}
 							</div>

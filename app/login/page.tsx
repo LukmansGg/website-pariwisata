@@ -235,6 +235,13 @@ export default function StaffLoginPage() {
   });
 
   useEffect(() => {
+    if (!popup.isVisible && !isLocked) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [popup.isVisible, isLocked]);
+
+  useEffect(() => {
     if (state.success) {
       setPopup({
         isVisible: true,
@@ -499,10 +506,10 @@ export default function StaffLoginPage() {
 
       {/* 1. Pop-up Modal (Success & Error) */}
       {popup.isVisible && !isLocked && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 backdrop-blur-sm transition-opacity duration-300">
+        <div className="fixed inset-0 z-50 flex h-dvh w-full items-center justify-center overflow-hidden px-4 py-3 bg-slate-950/35 backdrop-blur-sm transition-opacity duration-300">
           <div 
             className={`
-              w-full max-w-sm bg-[var(--bg-card)] rounded-[2rem] p-8 shadow-[0_20px_60px_-15px_rgba(22,88,123,0.3)]
+              max-h-full w-full max-w-sm overflow-hidden bg-[var(--bg-card)] rounded-[2rem] p-5 sm:p-8 shadow-[0_20px_60px_-15px_rgba(22,88,123,0.3)]
               border border-[var(--border-main)] relative
               ${popup.isVisible ? 'modal-enter' : 'modal-exit'}
               ${popup.shouldShake ? 'modal-shake' : ''}
@@ -511,20 +518,20 @@ export default function StaffLoginPage() {
             <div className="flex flex-col items-center text-center">
               {/* Ikon Dinamis */}
               <div className={`
-                w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-inner
+                w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-4 sm:mb-6 shadow-inner
                 ${popup.type === 'success' ? 'bg-[var(--rock-blue)] text-white' : 'bg-[var(--venice-blue)] text-white'}
               `}>
                 {popup.type === 'success' ? <IconCheckCircle /> : <IconShieldAlert />}
               </div>
               
-              <h3 className="text-2xl font-black text-[var(--text-primary)] mb-2">{popup.title}</h3>
-              <p className="text-[var(--text-primary)]/70 font-medium text-sm mb-8 leading-relaxed">
+              <h3 className="text-xl sm:text-2xl font-black text-[var(--text-primary)] mb-2">{popup.title}</h3>
+              <p className="text-[var(--text-primary)]/70 font-medium text-sm mb-5 sm:mb-8 leading-relaxed">
                 {popup.message}
               </p>
               
               {/* Informasi Sisa Percobaan (Khusus Error) */}
               {popup.type === 'error' && (
-                <div className="mb-8 w-full bg-[var(--bg-stub)] rounded-xl py-3 px-4 border border-[var(--border-dashed)] flex items-center justify-between">
+                <div className="mb-5 sm:mb-8 w-full bg-[var(--bg-stub)] rounded-xl py-2.5 sm:py-3 px-4 border border-[var(--border-dashed)] flex items-center justify-between">
                   <span className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">Sisa Percobaan</span>
                   <span className="text-lg font-black text-[var(--text-primary)]">{Math.max(0, MAX_ATTEMPTS - attempts)}</span>
                 </div>
@@ -534,12 +541,12 @@ export default function StaffLoginPage() {
               {popup.type === 'error' ? (
                 <button 
                   onClick={closePopup}
-                  className="w-full bg-[var(--venice-blue)] text-white font-bold py-3.5 px-6 rounded-xl btn-smooth-hover shadow-md"
+                  className="w-full bg-[var(--venice-blue)] text-white font-bold py-3 sm:py-3.5 px-6 rounded-xl btn-smooth-hover shadow-md"
                 >
                   Coba Lagi
                 </button>
               ) : (
-                <div className="w-full bg-[var(--bg-stub)] text-[var(--text-primary)] font-bold py-3.5 px-6 rounded-xl border border-[var(--border-main)] flex justify-center">
+                <div className="w-full bg-[var(--bg-stub)] text-[var(--text-primary)] font-bold py-3 sm:py-3.5 px-6 rounded-xl border border-[var(--border-main)] flex justify-center">
                   <span className="animate-pulse">Memuat...</span>
                 </div>
               )}
@@ -550,7 +557,7 @@ export default function StaffLoginPage() {
 
       {/* 2. Lock Screen Overlay (Setelah 3x gagal) */}
       {isLocked && (
-        <div className="fixed inset-0 z-[100] bg-[var(--venice-blue)]/95 flex items-center justify-center p-6 lock-overlay-enter">
+        <div className="fixed inset-0 z-[100] h-dvh overflow-hidden bg-[var(--venice-blue)]/95 flex items-center justify-center p-4 sm:p-6 lock-overlay-enter">
           
           {/* Background Ambient Animasi di Lock Screen */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
@@ -558,26 +565,26 @@ export default function StaffLoginPage() {
             <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-[var(--bg-card)] rounded-full mix-blend-screen filter blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
           </div>
 
-          <div className="relative z-10 max-w-md w-full flex flex-col items-center text-center lock-content-enter">
+          <div className="relative z-10 max-h-full max-w-md w-full flex flex-col items-center justify-center py-2 text-center lock-content-enter">
             
-            <div className="w-32 h-32 rounded-full border-4 border-dashed border-[var(--border-dashed)] flex items-center justify-center mb-8 relative">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-dashed border-[var(--border-dashed)] flex items-center justify-center mb-5 sm:mb-8 relative">
                 <div className="absolute inset-0 rounded-full border-4 border-[var(--rock-blue)] border-t-transparent animate-spin" style={{ animationDuration: '3s' }}></div>
               <div className="text-white">
                 <IconLock />
               </div>
             </div>
             
-            <div className="bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20 mb-6">
+            <div className="bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20 mb-4 sm:mb-6">
               <span className="text-xs font-black text-white tracking-[0.3em] uppercase">Security Protocol</span>
             </div>
             
-            <h1 className="text-4xl sm:text-5xl font-black text-white mb-4 tracking-tight">Terminal Locked</h1>
+            <h1 className="text-3xl sm:text-5xl font-black text-white mb-3 sm:mb-4 tracking-tight">Terminal Locked</h1>
             
-            <p className="text-[var(--rock-blue)] font-medium text-base sm:text-lg mb-8 leading-relaxed">
+            <p className="text-[var(--rock-blue)] font-medium text-sm sm:text-lg mb-5 sm:mb-8 leading-relaxed">
               Batas {MAX_ATTEMPTS} percobaan login tercapai. Form login dikunci sementara untuk melindungi akun. Coba kembali setelah penghitung waktu berakhir.
             </p>
 
-            <div className="w-full bg-[var(--venice-blue)] border border-[var(--border-dashed)] p-6 rounded-2xl">
+            <div className="w-full bg-[var(--venice-blue)] border border-[var(--border-dashed)] p-4 sm:p-6 rounded-2xl">
               <p className="text-white/60 text-xs font-medium uppercase tracking-widest mb-1">Silakan Hubungi</p>
               <p className="text-white font-bold text-lg">System Administrator</p>
               <p className="mt-2 text-sm font-semibold text-[var(--rock-blue)]">{lockRemaining ? `Coba lagi dalam ${lockRemaining}` : 'Penguncian sementara'}</p>

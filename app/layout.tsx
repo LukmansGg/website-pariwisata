@@ -5,8 +5,8 @@ import { ThemeProvider } from "@/src/components/theme-provider";
 import { VisitorExperienceInsights } from "@/src/components/visitor-experience-insights";
 
 export const metadata: Metadata = {
-	title: "TiLoc! (Titik Lokasi) — Jelajah Pariwisata Madiun",
-	description: "TiLoc! adalah Titik Lokasi untuk menemukan destinasi, cerita, dan pengalaman wisata di Madiun.",
+	title: "TiLoc! (Titik Lokasi) — Jelajah Pariwisata",
+	description: "TiLoc! adalah Titik Lokasi untuk menemukan destinasi, cerita, dan pengalaman wisata di berbagai daerah.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

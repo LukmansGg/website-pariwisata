@@ -57,13 +57,23 @@ type DestinationCard = {
 	longitude: number;
 };
 
-type MapArea = { id: "county" | "city"; name: string; latitude: number; longitude: number };
-type MapBoundaries = { countyPath: string; cityPath: string; areas: MapArea[] };
-const MADIUN_MAP_BOUNDS = { minX: 111.18, maxX: 111.88, minY: -7.91, maxY: -7.32 };
-function projectMapPoint(longitude: number, latitude: number) {
+type MapBounds = { minX: number; maxX: number; minY: number; maxY: number };
+const INDONESIA_MAP_BOUNDS: MapBounds = { minX: 94.5, maxX: 141, minY: -11.5, maxY: 6.5 };
+function getDestinationMapBounds(destinations: DestinationCard[]): MapBounds {
+	const located = destinations.filter((destination) => Number.isFinite(destination.longitude) && Number.isFinite(destination.latitude) && Math.abs(destination.longitude) <= 180 && Math.abs(destination.latitude) <= 90);
+	if (!located.length) return INDONESIA_MAP_BOUNDS;
+	const longitudes = located.map((destination) => destination.longitude);
+	const latitudes = located.map((destination) => destination.latitude);
+	const rawMinX = Math.min(...longitudes); const rawMaxX = Math.max(...longitudes);
+	const rawMinY = Math.min(...latitudes); const rawMaxY = Math.max(...latitudes);
+	const paddingX = Math.max((rawMaxX - rawMinX) * .14, located.length === 1 ? .06 : .025);
+	const paddingY = Math.max((rawMaxY - rawMinY) * .14, located.length === 1 ? .06 : .025);
+	return { minX: Math.max(-180, rawMinX - paddingX), maxX: Math.min(180, rawMaxX + paddingX), minY: Math.max(-90, rawMinY - paddingY), maxY: Math.min(90, rawMaxY + paddingY) };
+}
+function projectMapPoint(longitude: number, latitude: number, bounds: MapBounds) {
 	return {
-		x: ((longitude - MADIUN_MAP_BOUNDS.minX) / (MADIUN_MAP_BOUNDS.maxX - MADIUN_MAP_BOUNDS.minX)) * 1000,
-		y: (1 - (latitude - MADIUN_MAP_BOUNDS.minY) / (MADIUN_MAP_BOUNDS.maxY - MADIUN_MAP_BOUNDS.minY)) * 560,
+		x: ((longitude - bounds.minX) / (bounds.maxX - bounds.minX)) * 1000,
+		y: (1 - (latitude - bounds.minY) / (bounds.maxY - bounds.minY)) * 560,
 	};
 }
 function tourismMarkerStyle(destination: DestinationCard) {
@@ -83,7 +93,7 @@ function toDestinationCard(row: DestinationRow): DestinationCard {
 		slug: row.slug,
 		title: row.name,
 		description: row.description ?? "",
-		category: (Array.isArray(row.categories) && row.categories.length ? row.categories.join(" · ") : row.category) ?? "Wisata Madiun",
+		category: (Array.isArray(row.categories) && row.categories.length ? row.categories.join(" · ") : row.category) ?? "Wisata",
 		categories: Array.isArray(row.categories) && row.categories.length ? row.categories : (row.category ? row.category.split(", ") : []),
 		shortDescription: row.short_description ?? "",
 		...(image ? { image } : {}),
@@ -313,8 +323,8 @@ const GlobalStyles = () => (
     .home-page .matrix-cell.is-fixed { animation: none; opacity: 1; }
     .home-page .matrix-qr-stage::after { content: ""; position: absolute; left: 8%; right: 8%; top: 10%; height: 2px; background: var(--home-accent); box-shadow: 0 0 14px var(--home-accent); opacity: .8; animation: qrScan 3.4s ease-in-out infinite; pointer-events: none; }
     .home-page .mood-float { animation: moodFloat 4.6s ease-in-out infinite; }
-    .home-page .madiun-marker { transform-box: fill-box; transform-origin: center; animation: markerIdle 2.8s ease-in-out infinite; }
-    .home-page .madiun-marker:hover { animation: markerBoing 520ms cubic-bezier(.2,.9,.25,1.25) both; }
+    .home-page .destination-marker { transform-box: fill-box; transform-origin: center; animation: markerIdle 2.8s ease-in-out infinite; }
+    .home-page .destination-marker:hover { animation: markerBoing 520ms cubic-bezier(.2,.9,.25,1.25) both; }
     .home-page .marker-visibility { opacity: 1; visibility: visible; transition: opacity 180ms ease, visibility 180ms; }
     .home-page .markers-hidden { opacity: 0; visibility: hidden; }
     .home-page .map-explore-button { box-shadow: 0 8px 24px rgba(47, 116, 159, .13), inset 0 1px 0 rgba(255,255,255,.95); transition: transform 220ms cubic-bezier(.2,.8,.2,1), box-shadow 220ms ease, background-color 220ms ease; }
@@ -553,7 +563,7 @@ const HeroSection = () => {
 
 				<p className="text-lg md:text-xl text-[var(--home-ink)]/80 max-w-2xl mb-12 animate-fade-up delay-200">
 					Temukan spot rahasia, kuliner legendaris, dan petualangan epik di
-					Madiun.
+					Indonesia.
 				</p>
 
 				{/* The Main Feature: Interactive QR Scanner Concept */}
@@ -625,10 +635,6 @@ const DiscoveryMap = ({
 	onClearSelectedSpot: () => void;
 	compact?: boolean;
 }) => {
-	const [boundaryPaths, setBoundaryPaths] = useState<MapBoundaries | null>(null);
-	const [mapAreas, setMapAreas] = useState<MapArea[]>([]);
-	const [boundaryFailed, setBoundaryFailed] = useState(false);
-	const [selectedArea, setSelectedArea] = useState<MapArea | null>(null);
 	const [mapActive, setMapActive] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [mapScale, setMapScale] = useState(1);
@@ -640,21 +646,6 @@ const DiscoveryMap = ({
 	const mapViewportRef = useRef<HTMLDivElement | null>(null);
 	const dragRef = useRef<{ pointerId: number; x: number; y: number; originX: number; originY: number; moved: boolean } | null>(null);
 	const suppressMapClickRef = useRef(false);
-
-	useEffect(() => {
-		let active = true;
-		fetch("/api/map-boundaries", { cache: "no-store" }).then(async (response) => {
-			if (!response.ok) throw new Error("Batas wilayah tidak tersedia");
-			return response.json() as Promise<MapBoundaries>;
-		}).then((data) => {
-			if (!data.countyPath || !data.cityPath || !Array.isArray(data.areas)) throw new Error("Geometri batas kosong");
-			if (active) {
-				setBoundaryPaths(data);
-				setMapAreas(data.areas);
-			}
-		}).catch(() => { if (active) setBoundaryFailed(true); });
-		return () => { active = false; };
-	}, []);
 
 	useEffect(() => {
 		if (!mapActive) return;
@@ -702,44 +693,19 @@ const DiscoveryMap = ({
 		return () => viewport.removeEventListener("wheel", handleWheel);
 	}, [mapActive, mapScale, setZoomAround]);
 
-	const markers = useMemo(() => destinations.filter((destination) => destination.longitude >= MADIUN_MAP_BOUNDS.minX && destination.longitude <= MADIUN_MAP_BOUNDS.maxX && destination.latitude >= MADIUN_MAP_BOUNDS.minY && destination.latitude <= MADIUN_MAP_BOUNDS.maxY).map((destination) => ({ destination, point: projectMapPoint(destination.longitude, destination.latitude) })), [destinations]);
-	const googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=Madiun";
+	const mapBounds = useMemo(() => getDestinationMapBounds(destinations), [destinations]);
+	const markers = useMemo(() => destinations.filter((destination) => Number.isFinite(destination.longitude) && Number.isFinite(destination.latitude) && Math.abs(destination.longitude) <= 180 && Math.abs(destination.latitude) <= 90).map((destination) => ({ destination, point: projectMapPoint(destination.longitude, destination.latitude, mapBounds) })), [destinations, mapBounds]);
+	const mapCenter = `${((mapBounds.minY + mapBounds.maxY) / 2).toFixed(5)},${((mapBounds.minX + mapBounds.maxX) / 2).toFixed(5)}`;
+	const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedSpot ? `${selectedSpot.title} ${selectedSpot.latitude},${selectedSpot.longitude}` : mapCenter)}`;
+	const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${mapBounds.minX}%2C${mapBounds.minY}%2C${mapBounds.maxX}%2C${mapBounds.maxY}&layer=mapnik`;
 	const zoom = (delta: number) => setZoomAround(mapScale + delta);
-	const areaSuggestions = mapAreas.filter((area) => !searchQuery.trim() || area.name.toLocaleLowerCase("id").includes(searchQuery.trim().toLocaleLowerCase("id")) || searchQuery.trim().toLocaleLowerCase("id").split(/\s+/).every((term) => area.name.toLocaleLowerCase("id").includes(term)));
-	const moveToArea = (area: MapArea) => {
-		const point = projectMapPoint(area.longitude, area.latitude);
-		const viewport = mapViewportRef.current;
-		const scale = area.id === "city" ? 1.32 : 1.12;
-		setSelectedArea(area);
-		onSpotSelected(null);
-		setMapActive(false);
-		setMapScale(scale);
-		if (viewport) {
-			const width = viewport.clientWidth;
-			const height = viewport.clientHeight;
-			const maxX = width * (1.2 * scale - 1) / 2;
-			const maxY = height * (1.2 * scale - 1) / 2;
-			const desiredX = -((point.x / 1000 - .5) * width * 1.2 * scale);
-			const desiredY = -((point.y / 560 - .5) * height * 1.2 * scale);
-			const offset = { x: Math.max(-maxX, Math.min(maxX, desiredX)), y: Math.max(-maxY, Math.min(maxY, desiredY)) };
-			mapOffsetRef.current = offset;
-			setMapOffset(offset);
-		}
-		setSearchOpen(false);
-		onSearchChange("");
-		window.requestAnimationFrame(() => document.getElementById("peta")?.scrollIntoView({ behavior: "smooth", block: "start" }));
-	};
 	const destinationSuggestions = searchQuery.trim()
-		? destinations.filter((destination) => {
-			const inBounds = destination.longitude >= MADIUN_MAP_BOUNDS.minX && destination.longitude <= MADIUN_MAP_BOUNDS.maxX && destination.latitude >= MADIUN_MAP_BOUNDS.minY && destination.latitude <= MADIUN_MAP_BOUNDS.maxY;
-			return inBounds && `${destination.title} ${destination.category}`.toLocaleLowerCase("id").includes(searchQuery.trim().toLocaleLowerCase("id"));
-		}).slice(0, 5)
+		? destinations.filter((destination) => Number.isFinite(destination.longitude) && Number.isFinite(destination.latitude) && `${destination.title} ${destination.category}`.toLocaleLowerCase("id").includes(searchQuery.trim().toLocaleLowerCase("id"))).slice(0, 5)
 		: [];
 	const focusDestination = (destination: DestinationCard) => {
-		const point = projectMapPoint(destination.longitude, destination.latitude);
+		const point = projectMapPoint(destination.longitude, destination.latitude, mapBounds);
 		const viewport = mapViewportRef.current;
 		const scale = 1.35;
-		setSelectedArea(null);
 		onSearchChange(destination.title);
 		onSpotSelected(destination);
 		setMapScale(scale);
@@ -789,7 +755,6 @@ const DiscoveryMap = ({
 		setIsMapDragging(false);
 	};
 	const clearMapSelection = () => {
-		setSelectedArea(null);
 		setMapActive(false);
 		setMapScale(1);
 		mapOffsetRef.current = { x: 0, y: 0 };
@@ -802,20 +767,20 @@ const DiscoveryMap = ({
 			<div className="animate-fade-up delay-400">
 				<div className="mb-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
 					<div className="min-w-0">
-						<p className="mb-2 text-[10px] font-black uppercase tracking-[.2em] text-[var(--home-primary)]">PETA INTERAKTIF · MADIUN</p>
+						<p className="mb-2 text-[10px] font-black uppercase tracking-[.2em] text-[var(--home-primary)]">PETA INTERAKTIF</p>
 						<h2 className="text-2xl font-black tracking-tight text-[var(--home-ink)] sm:text-3xl">Jelajahi sekitar</h2>
 						<p className="mt-1 max-w-xl text-sm leading-6 text-[var(--home-ink)]/65">Cari destinasi, lihat posisinya, lalu buka profil tempat yang ingin kamu kunjungi.</p>
 					</div>
 					<div className="relative z-30 w-full lg:max-w-[min(48vw,620px)]">
 						<div className="glass-panel flex items-center rounded-2xl border border-[var(--home-glass-border)] p-1.5 shadow-[0_10px_40px_-10px_var(--home-bloom)] sm:rounded-full">
 							<div className="pl-3 text-[var(--home-accent)] sm:pl-4"><IconSearch /></div>
-							<input type="text" aria-label="Cari wisata atau area Madiun" placeholder="Cari wisata atau area Madiun..." className="w-full min-w-0 border-none bg-transparent px-3 py-3 font-medium text-[var(--home-ink)] outline-none placeholder:text-[var(--home-ink)]/40 sm:px-4" value={selectedArea ? selectedArea.name : searchQuery} onFocus={() => setSearchOpen(true)} onBlur={() => window.setTimeout(() => setSearchOpen(false), 140)} onChange={(event) => { setSelectedArea(null); onSearchChange(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Enter" && areaSuggestions.length + destinationSuggestions.length === 1) { event.preventDefault(); if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } }} />
-							{(searchQuery || selectedArea || selectedSpot) && <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearMapSelection} aria-label="Tutup pencarian dan tampilkan semua destinasi" title="Tutup pencarian" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--home-ink)]/55 transition hover:bg-[var(--home-soft)] hover:text-[var(--home-ink)]"><IconX /></button>}
-							<button type="button" onClick={() => { if (areaSuggestions.length + destinationSuggestions.length === 1) { if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else moveToArea(areaSuggestions[0]); } else setSearchOpen(true); }} className="shrink-0 rounded-xl bg-[var(--home-accent)] px-4 py-3 font-bold text-[var(--home-on-accent)] shadow-sm transition-colors hover:bg-[var(--home-primary)] hover:text-white sm:rounded-full sm:px-6">Cari</button>
+							<input type="text" aria-label="Cari wisata" placeholder="Cari destinasi wisata..." className="w-full min-w-0 border-none bg-transparent px-3 py-3 font-medium text-[var(--home-ink)] outline-none placeholder:text-[var(--home-ink)]/40 sm:px-4" value={searchQuery} onFocus={() => setSearchOpen(true)} onBlur={() => window.setTimeout(() => setSearchOpen(false), 140)} onChange={(event) => { onSearchChange(event.target.value); setSearchOpen(true); }} onKeyDown={(event) => { if (event.key === "Enter" && destinationSuggestions.length === 1) { event.preventDefault(); focusDestination(destinationSuggestions[0]); } }} />
+							{(searchQuery || selectedSpot) && <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearMapSelection} aria-label="Tutup pencarian dan tampilkan semua destinasi" title="Tutup pencarian" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[var(--home-ink)]/55 transition hover:bg-[var(--home-soft)] hover:text-[var(--home-ink)]"><IconX /></button>}
+							<button type="button" onClick={() => { if (destinationSuggestions.length === 1) focusDestination(destinationSuggestions[0]); else setSearchOpen(true); }} className="shrink-0 rounded-xl bg-[var(--home-accent)] px-4 py-3 font-bold text-[var(--home-on-accent)] shadow-sm transition-colors hover:bg-[var(--home-primary)] hover:text-white sm:rounded-full sm:px-6">Cari</button>
 						</div>
-						{searchOpen && (areaSuggestions.length > 0 || destinationSuggestions.length > 0) && <div className="absolute left-0 right-0 top-full mt-2 max-h-[min(55vh,360px)] overflow-y-auto rounded-2xl border border-sky-100 bg-white/95 p-2 shadow-xl backdrop-blur-xl">
-							{areaSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Wilayah</p>{areaSuggestions.map((area) => <button key={area.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => moveToArea(area)} className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold text-slate-800 transition hover:bg-sky-50"><span>{area.name}</span><span className="text-xs font-semibold text-sky-700">Tampilkan →</span></button>)}</>}
+						{searchOpen && searchQuery.trim() && <div className="absolute left-0 right-0 top-full mt-2 max-h-[min(55vh,360px)] overflow-y-auto rounded-2xl border border-sky-100 bg-white/95 p-2 shadow-xl backdrop-blur-xl">
 							{destinationSuggestions.length > 0 && <><p className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-[.16em] text-sky-700">Destinasi terdaftar</p>{destinationSuggestions.map((destination) => <button key={destination.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => focusDestination(destination)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-sky-50"><span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-800">{destination.title}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{destination.category}</span></span><span className="shrink-0 text-xs font-semibold text-sky-700">Lihat peta →</span></button>)}</>}
+							{destinationSuggestions.length === 0 && <p className="px-3 py-4 text-sm text-slate-600">Belum ada destinasi yang cocok.</p>}
 							<button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setSearchOpen(false)} className="mt-1 min-h-10 w-full rounded-xl border-t border-sky-100 px-3 text-left text-xs font-bold text-sky-800 transition hover:bg-sky-50">Tutup hasil pencarian</button>
 						</div>}
 					</div>
@@ -823,33 +788,29 @@ const DiscoveryMap = ({
 
 				<div className="rounded-[1.75rem] border border-[var(--home-glass-border)] bg-[var(--home-glass)] p-3 shadow-[0_18px_55px_-36px_var(--home-bloom)] backdrop-blur-xl sm:rounded-[2rem] sm:p-5">
 					<div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1">
-						<div><p className="text-sm font-extrabold text-[var(--home-ink)]">Wilayah Madiun</p><p className="mt-0.5 text-xs text-[var(--home-ink)]/55">{markers.length} destinasi dengan titik lokasi</p></div>
+						<div><p className="text-sm font-extrabold text-[var(--home-ink)]">Peta destinasi</p><p className="mt-0.5 text-xs text-[var(--home-ink)]/55">{markers.length} destinasi dengan titik lokasi</p></div>
 					</div>
 					<div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
 						<div className={`min-w-0 ${selectedSpot ? "order-2 lg:order-1" : "order-1"}`}>
 							<div ref={mapViewportRef} className={`map-surface relative h-[min(64vh,620px)] min-h-[420px] w-full overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-[#f5f9fc] shadow-[inset_0_1px_0_rgba(255,255,255,.9),0_8px_28px_rgba(50,112,145,.08)] sm:h-[clamp(560px,68vh,760px)] sm:min-h-0 lg:h-[clamp(620px,72vh,840px)] ${mapActive ? "touch-none cursor-grab active:cursor-grabbing" : "touch-pan-y cursor-default"}`} aria-label={mapActive ? "Peta interaktif. Geser atau scroll untuk navigasi." : "Peta pratinjau. Aktifkan jelajah untuk menggeser atau zoom."} onClick={() => { if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } if (!mapActive) setMapActive(true); }} onPointerDown={handleMapPointerDown} onPointerMove={handleMapPointerMove} onPointerUp={handleMapPointerUp} onPointerCancel={handleMapPointerCancel}>
 								<div ref={mapLayerRef} className="absolute -inset-[10%] origin-center will-change-transform" style={{ transform: `translate3d(${mapOffset.x}px, ${mapOffset.y}px, 0) scale(${mapScale})`, transition: isMapDragging ? "none" : "transform 480ms cubic-bezier(.22,.8,.22,1)" }}>
-									<iframe className="pointer-events-none absolute inset-0 h-full w-full border-0" loading="lazy" scrolling="no" title="Peta OpenStreetMap Madiun" src="https://www.openstreetmap.org/export/embed.html?bbox=111.18%2C-7.91%2C111.88%2C-7.32&amp;layer=mapnik" />
+									<iframe className="pointer-events-none absolute inset-0 h-full w-full border-0" loading="lazy" scrolling="no" title="Peta OpenStreetMap destinasi terdaftar" src={mapEmbedUrl} />
 									<div className="pointer-events-none absolute inset-0 bg-sky-50/20" />
-									<svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label="Batas wilayah Madiun">
-										{boundaryPaths?.countyPath && <path d={boundaryPaths.countyPath} fill="none" fillRule="evenodd" stroke="#0284c7" strokeWidth="2.4" strokeDasharray="6 6" vectorEffect="non-scaling-stroke" />}
-										{boundaryPaths?.cityPath && <path d={boundaryPaths.cityPath} fill="none" fillRule="evenodd" stroke="#7c3aed" strokeWidth="2.8" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
-										{selectedArea && (() => { const point = projectMapPoint(selectedArea.longitude, selectedArea.latitude); return <g data-marker className="madiun-marker" aria-label={`Area ${selectedArea.name}`}><circle cx={point.x} cy={point.y} r="12" fill="#f97316" stroke="white" strokeWidth="3"/><circle cx={point.x} cy={point.y} r="4" fill="white"/><text x={point.x + 16} y={point.y - 12} fill="#7c2d12" stroke="white" strokeWidth="4" paintOrder="stroke" fontSize="18" fontWeight="800">{selectedArea.name}</text></g>; })()}
-										<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); const isSelected = destination.id === selectedDestinationId; return <g key={destination.id} data-marker role="button" tabIndex={0} aria-pressed={isSelected} aria-label={`Pilih wisata ${destination.title}`} onClick={(event) => { event.stopPropagation(); if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } focusDestination(destination); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusDestination(destination); } }} className={`madiun-marker cursor-pointer${isSelected ? " selected-map-marker" : ""}`}>
+									<svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label="Pin destinasi wisata">
+										<g className={`marker-visibility${showMarkers ? "" : " markers-hidden"}`}>{markers.map(({ destination, point }) => { const marker = tourismMarkerStyle(destination); const isSelected = destination.id === selectedDestinationId; return <g key={destination.id} data-marker role="button" tabIndex={0} aria-pressed={isSelected} aria-label={`Pilih wisata ${destination.title}`} onClick={(event) => { event.stopPropagation(); if (suppressMapClickRef.current) { suppressMapClickRef.current = false; return; } focusDestination(destination); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusDestination(destination); } }} className={`destination-marker cursor-pointer${isSelected ? " selected-map-marker" : ""}`}>
 											<title>{destination.title} · {destination.category}</title>
 											{isSelected && <><circle cx={point.x} cy={point.y} r="23" fill="rgba(14,165,233,.18)" stroke="#38bdf8" strokeWidth="2" className="map-marker-halo"/><text x={point.x} y={point.y - 27} textAnchor="middle" fill="#082f49" stroke="white" strokeWidth="5" paintOrder="stroke" fontSize="15" fontWeight="900">{destination.title}</text></>}
 											{marker.shape === "pin" ? <><path d={`M${point.x} ${point.y + 11}S${point.x - 8} ${point.y + 2} ${point.x - 8} ${point.y - 3}a8 8 0 1 1 16 0c0 5-8 14-8 14Z`} fill={marker.color} stroke="white" strokeWidth="2"/><circle cx={point.x} cy={point.y - 3} r="2.5" fill="white"/></> : marker.shape === "star" ? <path d={`m${point.x} ${point.y - 9} 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2-4.5-4.4 6.2-.9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "diamond" ? <path d={`m${point.x} ${point.y - 9} 8 9-8 9-8-9Z`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : marker.shape === "leaf" ? <path d={`M${point.x} ${point.y + 8}C${point.x - 12} ${point.y + 1} ${point.x - 3} ${point.y - 10} ${point.x + 8} ${point.y - 8}C${point.x + 9} ${point.y + 2} ${point.x + 3} ${point.y + 8} ${point.x} ${point.y + 8}M${point.x} ${point.y + 7}l5-8`} fill={marker.color} stroke="white" strokeWidth="1.5"/> : <circle cx={point.x} cy={point.y} r="7" fill={marker.color} stroke="white" strokeWidth="2"/>}
 										</g>; })}</g>
 									</svg>
 								</div>
-								<div className="absolute left-3 top-3 z-10 flex max-w-[45%] items-center gap-2 rounded-xl border border-white/75 bg-white/90 px-3 py-2 text-[10px] font-bold text-slate-700 shadow-sm backdrop-blur-md sm:left-4 sm:top-4 sm:max-w-[62%] sm:text-xs"><span className="h-2 w-2 shrink-0 rounded-full bg-sky-500"/>{selectedSpot ? "Destinasi terpilih" : selectedArea ? "Wilayah terpilih" : "Madiun · Jawa Timur"}</div>
+								<div className="absolute left-3 top-3 z-10 flex max-w-[45%] items-center gap-2 rounded-xl border border-white/75 bg-white/90 px-3 py-2 text-[10px] font-bold text-slate-700 shadow-sm backdrop-blur-md sm:left-4 sm:top-4 sm:max-w-[62%] sm:text-xs"><span className="h-2 w-2 shrink-0 rounded-full bg-sky-500"/>{selectedSpot ? "Destinasi terpilih" : "Destinasi terdaftar"}</div>
 								{mapActive && <div className="absolute right-3 top-3 z-10 flex gap-2 sm:right-4 sm:top-4"><div className="map-control-bar flex overflow-hidden rounded-xl border border-white/90 bg-white/95 text-slate-700 shadow-lg backdrop-blur-md"><button data-map-control type="button" onClick={() => zoom(.2)} className="px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perbesar peta">+</button><button data-map-control type="button" onClick={() => zoom(-.2)} className="border-l border-slate-100 px-3 py-2 text-lg font-semibold transition hover:bg-sky-50 hover:text-sky-700" aria-label="Perkecil peta">−</button><button data-map-control type="button" onClick={() => { setMapScale(1); mapOffsetRef.current = { x: 0, y: 0 }; setMapOffset({ x: 0, y: 0 }); }} className="border-l border-slate-100 px-3 py-2 text-xs font-bold transition hover:bg-sky-50 hover:text-sky-700">Reset</button></div><button data-map-control type="button" onClick={() => setMapActive(false)} className="map-control-bar rounded-xl border border-white/90 bg-white/95 px-3 py-2 text-xs font-bold text-slate-700 shadow-lg backdrop-blur-md transition hover:bg-sky-50 hover:text-sky-700">Selesai <span aria-hidden="true">×</span></button></div>}
 								<div className="absolute bottom-3 left-3 rounded-xl border border-white/70 bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-sm backdrop-blur-md sm:bottom-4 sm:left-4 sm:text-[11px]">{markers.length} wisata ditandai</div>
 								<div className="absolute bottom-3 right-3 rounded-md bg-white/90 px-2 py-1 text-[9px] font-semibold text-slate-600 shadow-sm backdrop-blur sm:bottom-4 sm:right-4 sm:text-[10px]">© OpenStreetMap</div>
-								{!boundaryPaths && <div className="absolute left-3 top-14 z-10 rounded-xl bg-white/90 px-3 py-2 text-[10px] font-semibold text-slate-600 shadow-sm sm:left-4 sm:top-16 sm:text-xs">{boundaryFailed ? "Garis batas belum termuat." : "Memuat garis batas…"}</div>}
 							</div>
 							<div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-								<div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-semibold text-[var(--home-ink)]/65 sm:text-xs" aria-label="Legenda peta"><span className="inline-flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-sky-600"/>Kabupaten</span><span className="inline-flex items-center gap-2"><i className="h-0 w-5 border-t-2 border-dashed border-violet-600"/>Kota</span><span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-sky-600"/>Wisata</span></div>
+								<div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-semibold text-[var(--home-ink)]/65 sm:text-xs" aria-label="Legenda peta"><span className="inline-flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-sky-600"/>Destinasi wisata</span></div>
 								<a href={googleMapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold text-[var(--home-ink)] transition hover:bg-[var(--home-soft)]">Buka di Google Maps <IconArrowRight/></a>
 							</div>
 							<div className="mt-3 flex flex-wrap items-center gap-3 border-t border-[var(--home-glass-border)] pt-3">
@@ -862,14 +823,13 @@ const DiscoveryMap = ({
 						</div>
 
 						<aside className={`min-w-0 overflow-hidden rounded-[1.35rem] border border-[var(--home-glass-border)] bg-white/60 p-4 dark:bg-slate-950/25 sm:p-5 lg:flex lg:min-h-[clamp(620px,72vh,840px)] lg:flex-col ${selectedSpot ? "order-1 lg:order-2" : "order-2"}`}>
-							<div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.17em] text-[var(--home-primary)]">{selectedSpot ? "PROFIL DESTINASI" : selectedArea ? "WILAYAH TERPILIH" : searchQuery ? "HASIL PENCARIAN" : "PILIHAN WISATA"}</p><h3 className="mt-1 break-words text-lg font-black text-[var(--home-ink)]">{selectedSpot ? selectedSpot.title : selectedArea ? selectedArea.name : searchQuery ? "Destinasi yang cocok" : "Spot wisata"}</h3></div><div className="flex shrink-0 items-center gap-2">{selectedSpot?.featured && <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">Unggulan</span>}{(selectedSpot || selectedArea || searchQuery) && <button type="button" onClick={clearMapSelection} aria-label="Tutup pilihan dan tampilkan semua destinasi" title="Tutup pilihan" className="grid h-10 w-10 place-items-center rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-ink)]/65 transition hover:bg-[var(--home-soft)] hover:text-[var(--home-ink)]"><IconX /></button>}</div></div>
+							<div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[.17em] text-[var(--home-primary)]">{selectedSpot ? "PROFIL DESTINASI" : searchQuery ? "HASIL PENCARIAN" : "PILIHAN WISATA"}</p><h3 className="mt-1 break-words text-lg font-black text-[var(--home-ink)]">{selectedSpot ? selectedSpot.title : searchQuery ? "Destinasi yang cocok" : "Spot wisata"}</h3></div><div className="flex shrink-0 items-center gap-2">{selectedSpot?.featured && <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">Unggulan</span>}{(selectedSpot || searchQuery) && <button type="button" onClick={clearMapSelection} aria-label="Tutup pilihan dan tampilkan semua destinasi" title="Tutup pilihan" className="grid h-10 w-10 place-items-center rounded-full border border-[var(--home-glass-border)] bg-[var(--home-glass)] text-[var(--home-ink)]/65 transition hover:bg-[var(--home-soft)] hover:text-[var(--home-ink)]"><IconX /></button>}</div></div>
 							{selectedSpot ? <>
 								<div className="relative mt-4 aspect-[16/10] overflow-hidden rounded-2xl bg-sky-100 dark:bg-slate-800">{selectedSpot.image ? <Image src={selectedSpot.image} alt={selectedSpot.title} fill sizes="(min-width: 1024px) 380px, 100vw" className="object-cover"/> : <div className="grid h-full place-items-center text-3xl">📍</div>}<span className="absolute bottom-3 left-3 max-w-[85%] truncate rounded-full border border-white/40 bg-white/90 px-3 py-1.5 text-[10px] font-extrabold text-slate-900 shadow-sm backdrop-blur">{selectedSpot.category}</span></div>
 								<p className="mt-4 line-clamp-4 text-sm leading-6 text-[var(--home-ink)]/70">{selectedSpot.shortDescription || selectedSpot.description || "Buka profil destinasi untuk melihat cerita dan informasi lengkap tempat ini."}</p>
 								{selectedSpot.tags.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{selectedSpot.tags.slice(0, 4).map((tag) => <span key={tag} className="rounded-full bg-sky-500/10 px-2.5 py-1 text-[10px] font-bold text-sky-800 dark:text-sky-200">#{tag}</span>)}</div>}
 								<div className="mt-auto flex flex-col gap-2 pt-5"><Link href={`/wisata/${encodeURIComponent(selectedSpot.slug)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--home-primary)] px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-sky-900/10 transition hover:-translate-y-0.5">Buka profil wisata <IconArrowRight/></Link><button type="button" onClick={clearMapSelection} className="min-h-10 rounded-xl px-3 py-2 text-xs font-bold text-[var(--home-ink)]/65 transition hover:bg-[var(--home-soft)]">Tampilkan semua destinasi</button></div>
 							</> : <>
-								{selectedArea && <div className="mt-3 rounded-xl border border-sky-200/60 bg-sky-500/5 px-3 py-2 text-xs text-[var(--home-ink)]/70 dark:border-sky-300/10">Wilayah ditandai di peta. <button type="button" onClick={clearMapSelection} className="font-extrabold text-sky-800 underline underline-offset-2 dark:text-sky-200">Lihat semua</button></div>}
 								{destinations.length > 0 && <div className="mt-4 min-h-0 lg:flex-1"><p className="mb-2 text-[10px] font-black uppercase tracking-[.15em] text-[var(--home-ink)]/55">{searchQuery ? "Hasil pencarian" : "Spot tersedia"}</p><div className="space-y-1.5 lg:max-h-[min(34vh,340px)] lg:overflow-y-auto lg:pr-1">{destinations.slice(0, 6).map((destination) => <button key={destination.id} type="button" onClick={() => focusDestination(destination)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-sky-500/10"><span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-sky-100 dark:bg-slate-800">{destination.image ? <Image src={destination.image} alt="" fill sizes="44px" className="object-cover"/> : <span className="grid h-full place-items-center">📍</span>}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[var(--home-ink)]">{destination.title}</span><span className="mt-0.5 block truncate text-[10px] text-[var(--home-ink)]/55">{destination.category}</span></span><span className="text-sm text-sky-700 dark:text-sky-300">→</span></button>)}</div></div>}
 							</>}
 						</aside>
@@ -939,7 +899,7 @@ const Highlights = ({
 					Spot pilihan
 				</h2>
 				<p className="text-[var(--home-ink)]/70">
-					Tempat seru di Madiun.
+					Tempat seru untuk dijelajahi.
 				</p>
 			</div>
 			{destinations.length > 0 && (
@@ -1171,7 +1131,7 @@ const Footer = () => {
 				<div className="mb-6"><TiLocBrand markClassName="h-10 w-10" wordmarkClassName="text-2xl font-extrabold tracking-tight text-[var(--home-ink)]" accentClassName="text-[var(--home-accent)]" tagline="Titik Lokasi" taglineClassName="mt-0.5 block text-[10px] font-bold uppercase tracking-[.18em] text-[var(--home-ink)]/55"/></div>
 				<p className="text-[var(--home-ink)]/70 max-w-sm mb-6 leading-relaxed">
 					Platform penemuan wisata premium untuk mengeksplorasi keindahan alam,
-					budaya, dan kuliner Madiun.
+					budaya, dan kuliner dari berbagai daerah.
 				</p>
 			</div>
 			<div>
