@@ -5,7 +5,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { createClient } from "@/src/infrastructure/supabase/server";
-import { checkLoginLimit } from "@/src/server/auth/rate-limit";
+import { checkLoginLimit, clearLoginFailures, recordFailedLogin } from "@/src/server/auth/rate-limit";
 import { isMinigameComponentKey, minigameComponentRegistry } from "@/src/features/minigames/registry";
 import { parseCampaignFormSchema } from "@/src/features/campaigns/form-schema";
 import { parseCampaignAppearance } from "@/src/features/campaigns/appearance";
@@ -78,14 +78,36 @@ export async function loginAction(
 	});
 
 	if (error || !data.user) {
+		const isWrongCredentials = Boolean(error && (
+			error.code === "invalid_credentials" ||
+			/invalid login credentials/i.test(error.message)
+		));
+		if (!isWrongCredentials) {
+			return { error: "Layanan login sedang bermasalah. Coba lagi sebentar." };
+		}
+
+		let failedLimit: Awaited<ReturnType<typeof recordFailedLogin>>;
+		try {
+			failedLimit = await recordFailedLogin(email, trustedIp);
+		} catch {
+			return { error: "Login sementara tidak tersedia. Coba lagi nanti." };
+		}
 		return {
-			error: limit.attemptsRemaining === 0
+			error: !failedLimit.allowed
 				? "Batas tiga percobaan tercapai. Akses login dikunci sementara."
 				: "Email atau password tidak valid.",
-			locked: limit.attemptsRemaining === 0,
-			attemptsRemaining: limit.attemptsRemaining,
-			resetAt: limit.resetAt,
+			locked: !failedLimit.allowed,
+			attemptsRemaining: failedLimit.attemptsRemaining,
+			resetAt: failedLimit.resetAt,
 		};
+	}
+
+	// A valid password must never consume a failed-login attempt. Clear previous
+	// email failures before checking the account's staff role.
+	try {
+		await clearLoginFailures(email);
+	} catch {
+		// The active session can still proceed; the short-lived counter expires on its own.
 	}
 
 	// Jangan menganggap semua akun Supabase adalah staf.

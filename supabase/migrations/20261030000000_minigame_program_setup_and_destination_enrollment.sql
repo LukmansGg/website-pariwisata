@@ -4,8 +4,23 @@ alter table public.tourism_minigame_destinations
 
 -- Preserve one destination-level selection when migrating older multi-assignment data.
 do $$
+declare
+  v_scope_trigger_state "char";
 begin
   if to_regclass('public.tourism_minigame_one_selected_per_destination') is null then
+    -- This is a one-time, database-wide backfill. The row-level scope trigger
+    -- is meant to protect staff edits, but the SQL migration may run without
+    -- an authenticated admin JWT, so suspend that trigger only for this update.
+    select tgenabled into v_scope_trigger_state
+    from pg_trigger
+    where tgrelid = 'public.tourism_minigame_destinations'::regclass
+      and tgname = 'minigame_destination_scope_assignments'
+      and not tgisinternal;
+
+    if v_scope_trigger_state is not null and v_scope_trigger_state <> 'D' then
+      execute 'alter table public.tourism_minigame_destinations disable trigger minigame_destination_scope_assignments';
+    end if;
+
     with ranked_assignments as (
       select id, row_number() over (
         partition by destination_id order by is_selected desc, is_enabled desc, updated_at desc, created_at desc, id
@@ -18,6 +33,14 @@ begin
       where ranked_assignments.id = assignment.id;
 
     execute 'create unique index tourism_minigame_one_selected_per_destination on public.tourism_minigame_destinations(destination_id) where is_selected';
+
+    if v_scope_trigger_state = 'O' then
+      execute 'alter table public.tourism_minigame_destinations enable trigger minigame_destination_scope_assignments';
+    elsif v_scope_trigger_state = 'R' then
+      execute 'alter table public.tourism_minigame_destinations enable replica trigger minigame_destination_scope_assignments';
+    elsif v_scope_trigger_state = 'A' then
+      execute 'alter table public.tourism_minigame_destinations enable always trigger minigame_destination_scope_assignments';
+    end if;
   end if;
 end;
 $$;

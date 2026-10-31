@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { MediaUploadField } from "@/app/ruang-kelola/media-upload-field";
 import {
 	configureTourismMinigameAssignmentAction,
@@ -60,6 +60,41 @@ function Feedback({ state }: { state: WorkspaceActionState }) {
 		: state.success ? <p role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{state.success}</p> : null;
 }
 
+function CompletionEffectPreview({ effect, onClose }: { effect: NonNullable<Program["completion_effect"]>; onClose: () => void }) {
+	useEffect(() => {
+		const previousOverflow = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		function closeOnEscape(event: KeyboardEvent) {
+			if (event.key === "Escape") onClose();
+		}
+		window.addEventListener("keydown", closeOnEscape);
+		return () => {
+			window.removeEventListener("keydown", closeOnEscape);
+			document.body.style.overflow = previousOverflow;
+		};
+	}, [onClose]);
+
+	const particles = effect === "confetti"
+		? ["🎉", "🎊", "✨", "💙", "🎈", "🌟"]
+		: effect === "fireworks" ? ["✹", "✦", "✷", "✺", "★"] : ["✧", "✦", "★", "✨", "💫"];
+	const effectLabel = effect === "confetti" ? "Confetti" : effect === "fireworks" ? "Kembang api" : "Kilau bintang";
+
+	return <div role="dialog" aria-modal="true" aria-label={`Pratinjau efek ${effectLabel}`} className="fixed inset-0 z-[100] grid min-h-dvh place-items-center overflow-hidden bg-[#06152e] px-5 py-8 text-white">
+		<style>{`@keyframes minigame-preview-fall{0%{transform:translate3d(0,-12vh,0) rotate(0deg) scale(.65);opacity:0}12%{opacity:1}100%{transform:translate3d(26px,112vh,0) rotate(540deg) scale(1.08);opacity:0}}@keyframes minigame-preview-glow{0%,100%{transform:scale(.82);opacity:.55}50%{transform:scale(1.14);opacity:1}}@keyframes minigame-preview-burst{0%{transform:scale(.12);opacity:0}30%{opacity:1}100%{transform:scale(1.7);opacity:0}}.minigame-preview-particle{position:absolute;top:-8vh;animation:minigame-preview-fall 3.6s cubic-bezier(.16,.72,.34,1) both;filter:drop-shadow(0 0 12px rgba(125,211,252,.7));will-change:transform,opacity}.minigame-preview-burst{animation:minigame-preview-burst 1.8s ease-out infinite}.minigame-preview-glow{animation:minigame-preview-glow 2.4s ease-in-out infinite}@media(prefers-reduced-motion:reduce){.minigame-preview-particle,.minigame-preview-burst,.minigame-preview-glow{animation-duration:1ms!important;animation-iteration-count:1!important}}`}</style>
+		<div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,rgba(14,165,233,.32),transparent_45%),radial-gradient(ellipse_at_16%_16%,rgba(99,102,241,.18),transparent_38%),linear-gradient(180deg,#06152e,#0a2850_52%,#07182f)]" />
+		{Array.from({ length: 30 }, (_, index) => <span key={index} aria-hidden="true" className="minigame-preview-particle" style={{ left: `${(index * 37 + 5) % 100}%`, animationDelay: `${(index % 10) * 115}ms`, animationDuration: `${2.7 + (index % 6) * 0.24}s`, fontSize: `${16 + (index % 4) * 5}px` }}>{particles[index % particles.length]}</span>)}
+		{effect === "fireworks" && <div aria-hidden="true" className="pointer-events-none absolute inset-0">{[["18%", "32%"], ["76%", "26%"], ["68%", "65%"], ["29%", "70%"]].map(([left, top], index) => <span key={left} className="minigame-preview-burst absolute h-24 w-24 rounded-full border border-cyan-100/70 shadow-[0_0_55px_14px_rgba(56,189,248,.5)]" style={{ left, top, animationDelay: `${index * 260}ms` }} />)}</div>}
+		<button type="button" onClick={onClose} className="absolute right-5 top-5 z-20 inline-flex min-h-11 items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 text-sm font-black text-white backdrop-blur-xl transition hover:scale-105 hover:bg-white/20" aria-label="Tutup pratinjau">✕ <span>Tutup</span></button>
+		<div className="relative z-10 mx-auto max-w-xl text-center">
+			<div className="minigame-preview-glow mx-auto grid h-28 w-28 place-items-center rounded-full border border-cyan-100/60 bg-cyan-100/10 text-6xl shadow-[0_0_90px_rgba(56,189,248,.42)]">🏆</div>
+			<p className="mt-8 text-[11px] font-black uppercase tracking-[.25em] text-cyan-200">PRATINJAU LAYAR · {effectLabel.toUpperCase()}</p>
+			<h2 className="mt-3 text-4xl font-black tracking-tight sm:text-6xl">Minigame selesai!</h2>
+			<p className="mx-auto mt-4 max-w-md text-sm leading-6 text-sky-100/75">Efek ini akan memenuhi layar pengunjung saat semua misi wajib berhasil dituntaskan.</p>
+			<button type="button" onClick={onClose} className="mt-8 min-h-12 rounded-full bg-white px-7 py-3 text-sm font-black text-[#0b3156] shadow-[0_12px_45px_rgba(56,189,248,.28)] transition hover:-translate-y-1">Kembali ke pengaturan</button>
+		</div>
+	</div>;
+}
+
 function ProgramForm({ program, isPetugas = false }: { program?: Program; isPetugas?: boolean }) {
 	const [state, action, pending] = useActionState(saveTourismMinigameProgramAction, initialActionState);
 	const router = useRouter();
@@ -74,6 +109,8 @@ function ProgramForm({ program, isPetugas = false }: { program?: Program; isPetu
 	const [photoboxIsMission, setPhotoboxIsMission] = useState(program?.photobox_is_mission ?? false);
 	const [accessMode, setAccessMode] = useState<"standalone" | "mission_reward">(program?.default_photobox_access_mode ?? "standalone");
 	const [completionEffect, setCompletionEffect] = useState<NonNullable<Program["completion_effect"]>>(program?.completion_effect ?? "none");
+	const [isPreviewingCompletion, setIsPreviewingCompletion] = useState(false);
+	const closeCompletionPreview = useCallback(() => setIsPreviewingCompletion(false), []);
 	const [enabled, setEnabled] = useState(program?.is_enabled ?? false);
 	const canGiftPhotobox = components.includes("photobox") && !photoboxIsMission && (required.includes("find_friends") || aiIsMission);
 	const hasWinCondition = required.includes("find_friends") || aiIsMission || photoboxIsMission;
@@ -124,8 +161,9 @@ function ProgramForm({ program, isPetugas = false }: { program?: Program; isPetu
 			<div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{visibleTemplates.map((template) => <article key={template.id} className={`overflow-hidden rounded-2xl border bg-white dark:bg-slate-900 ${template.enabled ? "border-rose-300" : "border-sky-200/50 opacity-75 dark:border-sky-100/10"}`}><div className="relative flex h-32 items-center justify-center bg-gradient-to-br from-sky-50 to-rose-50 p-3 dark:from-slate-800 dark:to-rose-950/30">{template.frameUrl ? <img src={template.frameUrl} alt={`Pratinjau ${template.name}`} className="h-full max-w-full object-contain" /> : <span className="text-xs text-sky-900/55 dark:text-sky-100/55">Unggah frame untuk melihat pratinjau</span>}<span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-black uppercase text-sky-900 dark:bg-slate-950/85 dark:text-sky-100">{template.source === "custom" ? "Kustom · Drive" : "Preset web"}</span></div><div className="space-y-3 p-3">{template.source === "custom" ? <><label className="block text-[10px] font-bold text-sky-900 dark:text-sky-100">Nama frame<input value={template.name} maxLength={80} onChange={(event) => changeTemplate(template.id, { name: event.currentTarget.value })} className="form-input mt-1 w-full" /></label><MediaUploadField folder="photobox" name={`program-frame-${template.id}`} label="Upload ke Google Drive" defaultUrl={template.frameUrl} onUrlChange={(url) => changeTemplate(template.id, { frameUrl: url })} /></> : <strong className="block text-xs text-sky-950 dark:text-sky-100">{template.name}</strong>}<label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-sky-950 dark:text-sky-100"><input type="checkbox" checked={template.enabled} onChange={(event) => changeTemplate(template.id, { enabled: event.currentTarget.checked })} className="h-4 w-4 accent-emerald-600" />Aktifkan frame ini</label>{template.source === "custom" && <button type="button" onClick={() => setTemplates((current) => current.filter((item) => item.id !== template.id))} className="text-xs font-bold text-rose-700">Hapus frame kustom</button>}</div></article>)}</div>
 			<div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="block text-xs font-bold text-sky-950 dark:text-sky-100">Hadiah saat tuntas<select value={canGiftPhotobox && accessMode === "mission_reward" ? "photobox" : "none"} onChange={(event) => { const gift = event.currentTarget.value === "photobox"; setAccessMode(gift ? "mission_reward" : "standalone"); if (gift) setPhotoboxIsMission(false); }} className="form-input mt-1 w-full"><option value="none">Tidak ada hadiah Photobox</option><option value="photobox" disabled={!canGiftPhotobox}>Photobox setelah misi selesai</option></select><span className="mt-1 block font-normal text-sky-900/55 dark:text-sky-100/55">Photobox hadiah tidak dihitung sebagai misi. Pilih misi wajib lain terlebih dahulu.</span></label><label className={`flex cursor-pointer items-start gap-2 rounded-xl border border-rose-200/60 bg-rose-50/50 p-3 text-xs font-bold text-rose-950 dark:border-rose-100/10 dark:bg-rose-950/20 dark:text-rose-100 ${accessMode === "mission_reward" ? "opacity-50" : ""}`}><input className="mt-0.5 h-4 w-4 accent-rose-700" type="checkbox" name="photobox_is_mission" value="on" checked={photoboxIsMission} disabled={accessMode === "mission_reward"} onChange={(event) => setPhotoboxIsMission(event.currentTarget.checked)} />Photobox jadi misi · buat satu foto untuk menuntaskan</label></div>
 		</section>}
-		<section className="border-t border-sky-200/70 pt-5 dark:border-sky-200/10"><div className="grid gap-3 sm:grid-cols-2"><label className="block text-xs font-bold text-sky-950 dark:text-sky-100">Efek saat minigame selesai<select name="completion_effect" value={hasWinCondition ? completionEffect : "none"} disabled={!hasWinCondition} onChange={(event) => setCompletionEffect(event.currentTarget.value as NonNullable<Program["completion_effect"]>)} className="form-input mt-1 w-full"><option value="none">Tanpa efek</option><option value="confetti">Confetti</option><option value="sparkles">Kilau bintang</option><option value="fireworks">Kembang api</option></select><span className="mt-1 block font-normal text-sky-900/55 dark:text-sky-100/55">{hasWinCondition ? "Efek muncul setelah semua misi wajib selesai." : "Pilih misi wajib agar minigame punya kondisi selesai."}</span></label>{!isPetugas && <label className="flex items-center gap-2 self-center text-sm font-bold text-sky-950 dark:text-sky-100"><input type="checkbox" name="is_enabled" checked={enabled} onChange={(event) => setEnabled(event.currentTarget.checked)} className="h-4 w-4 accent-emerald-600" />Aktifkan minigame</label>}{isPetugas && <p className="self-center rounded-xl bg-sky-50 p-3 text-xs font-bold text-sky-900 dark:bg-sky-950/40 dark:text-sky-100">Pengajuan menunggu persetujuan admin.</p>}</div></section>
+		<section className="border-t border-sky-200/70 pt-5 dark:border-sky-200/10"><div className="grid gap-3 sm:grid-cols-2"><div className="text-xs font-bold text-sky-950 dark:text-sky-100"><label className="block">Efek saat minigame selesai<select name="completion_effect" value={hasWinCondition ? completionEffect : "none"} disabled={!hasWinCondition} onChange={(event) => setCompletionEffect(event.currentTarget.value as NonNullable<Program["completion_effect"]>)} className="form-input mt-1 w-full"><option value="none">Tanpa efek</option><option value="confetti">Confetti</option><option value="sparkles">Kilau bintang</option><option value="fireworks">Kembang api</option></select></label><span className="mt-1 block font-normal text-sky-900/55 dark:text-sky-100/55">{hasWinCondition ? "Efek muncul setelah semua misi wajib selesai." : "Pilih misi wajib agar minigame punya kondisi selesai."}</span><button type="button" disabled={!hasWinCondition || completionEffect === "none"} onClick={() => setIsPreviewingCompletion(true)} className="mt-3 min-h-10 rounded-xl border border-sky-300 bg-sky-50 px-4 text-xs font-black text-sky-900 transition hover:-translate-y-0.5 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-200/20 dark:bg-sky-950/50 dark:text-sky-100 dark:hover:bg-sky-900/60">▶ Pratinjau di layar</button></div>{!isPetugas && <label className="flex items-center gap-2 self-center text-sm font-bold text-sky-950 dark:text-sky-100"><input type="checkbox" name="is_enabled" checked={enabled} onChange={(event) => setEnabled(event.currentTarget.checked)} className="h-4 w-4 accent-emerald-600" />Aktifkan minigame</label>}{isPetugas && <p className="self-center rounded-xl bg-sky-50 p-3 text-xs font-bold text-sky-900 dark:bg-sky-950/40 dark:text-sky-100">Pengajuan menunggu persetujuan admin.</p>}</div></section>
 		<Feedback state={state} /><button type="submit" disabled={pending} className="min-h-12 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-800 px-6 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:opacity-60">{pending ? "Menyimpan…" : isPetugas ? "Ajukan minigame" : program ? "Simpan minigame" : "Tambahkan minigame"}</button>
+		{isPreviewingCompletion && <CompletionEffectPreview effect={completionEffect} onClose={closeCompletionPreview} />}
 	</form>;
 }
 

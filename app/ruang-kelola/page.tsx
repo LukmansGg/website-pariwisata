@@ -163,9 +163,14 @@ function databaseIssue(error: { code?: string; message: string }) {
 	if (error.code === "42501" || error.code === "PGRST301") return "akses ditolak oleh privilege/RLS. Periksa policy dan role akun petugas di Supabase.";
 	if (error.code === "42703") {
 		const missingColumn = error.message.match(/column [\"']?([\w.]+)[\"']? does not exist/i)?.[1];
+		const migration = missingColumn?.startsWith("tourism_minigame_")
+			? "20261030000000_minigame_program_setup_and_destination_enrollment.sql"
+			: missingColumn?.startsWith("tourism_visitor_") || missingColumn?.startsWith("tourism_survey_") || missingColumn?.startsWith("tourism_campaign_response")
+				? "20261026000000_visitor_insights_and_campaign_forms.sql"
+				: "20261010000001_admin_workspace.sql";
 		return missingColumn
-			? `kolom ${missingColumn} belum ada. Jalankan migration admin workspace; jika masih muncul, tambahkan kolom itu sesuai skema. (42703)`
-			: "kolom yang diminta belum ada. Jalankan migration admin workspace dan periksa skema tabel destinations. (42703)";
+			? `kolom ${missingColumn} belum ada. Jalankan migration ${migration} sampai selesai, lalu muat ulang halaman. (42703)`
+			: "kolom yang diminta belum ada. Jalankan migration 20261010000001_admin_workspace.sql dan periksa skema tabel destinations. (42703)";
 	}
 	return `query gagal (${error.code ?? "tanpa kode"}). Periksa skema dan policy Supabase.`;
 }

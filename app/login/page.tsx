@@ -243,6 +243,9 @@ export default function StaffLoginPage() {
 
   useEffect(() => {
     if (state.success) {
+      setAttempts(0);
+      setIsLocked(false);
+      setLockRemaining('');
       setPopup({
         isVisible: true,
         type: 'success',
@@ -297,7 +300,10 @@ export default function StaffLoginPage() {
     const updateLockTimer = () => {
       const seconds = Math.max(0, Math.ceil((state.resetAt! - Date.now()) / 1000));
       setLockRemaining(`${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`);
-      if (seconds === 0) setIsLocked(false);
+      if (seconds === 0) {
+        setIsLocked(false);
+        setAttempts(0);
+      }
     };
     updateLockTimer();
     const timer = window.setInterval(updateLockTimer, 1000);
