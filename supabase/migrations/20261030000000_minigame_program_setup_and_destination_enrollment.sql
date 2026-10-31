@@ -83,10 +83,38 @@ declare
   v_manager boolean := exists (select 1 from public.user_roles where user_id = (select auth.uid()) and role = 'destination_manager');
   v_is_admin boolean := (select public.has_staff_role('admin'));
   v_is_enabled boolean;
+  v_templates_invalid boolean := false;
+  v_has_usable_template boolean := false;
 begin
   if auth.uid() is null or not public.has_staff_role('editor') and not v_manager then
     return jsonb_build_object('error', 'STAFF_REQUIRED');
   end if;
+
+  if jsonb_typeof(coalesce(p_photobox_templates, '[]'::jsonb)) <> 'array' then
+    v_templates_invalid := true;
+  else
+    v_templates_invalid := jsonb_array_length(coalesce(p_photobox_templates, '[]'::jsonb)) > 12;
+    if not v_templates_invalid then
+      select exists (
+        select 1 from jsonb_array_elements(coalesce(p_photobox_templates, '[]'::jsonb)) as configured_frame(frame)
+        where jsonb_typeof(configured_frame.frame) <> 'object'
+          or coalesce(configured_frame.frame->>'id', '') !~ '^[a-zA-Z0-9_-]{1,80}$'
+          or length(trim(coalesce(configured_frame.frame->>'name', ''))) not between 1 and 80
+          or coalesce(configured_frame.frame->>'layout', '') not in ('single', 'strip2', 'grid6', 'travel_strip', 'memory_triptych')
+          or coalesce(configured_frame.frame->>'ratio', '') not in ('portrait', 'story', 'square')
+          or coalesce(configured_frame.frame->>'source', '') not in ('preset', 'custom')
+          or coalesce(configured_frame.frame->>'enabled', '') not in ('true', 'false')
+          or configured_frame.frame->>'enabled' = 'true' and length(coalesce(configured_frame.frame->>'frameUrl', '')) = 0
+      ) into v_templates_invalid;
+
+      select exists (
+        select 1 from jsonb_array_elements(coalesce(p_photobox_templates, '[]'::jsonb)) as configured_frame(frame)
+        where configured_frame.frame->>'enabled' = 'true'
+          and length(coalesce(configured_frame.frame->>'frameUrl', '')) > 0
+      ) into v_has_usable_template;
+    end if;
+  end if;
+
   if length(trim(coalesce(p_name, ''))) not between 2 and 120
     or coalesce(p_slug, '') !~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'
     or coalesce(p_components, '{}') = '{}'
@@ -100,24 +128,8 @@ begin
       and (not ('photobox' = any(coalesce(p_components, '{}')))
         or coalesce(p_photobox_is_mission, false)
         or (cardinality(coalesce(p_required_components, '{}')) = 0 and not coalesce(p_ai_is_mission, false))))
-    or case when jsonb_typeof(coalesce(p_photobox_templates, '[]'::jsonb)) = 'array'
-      then jsonb_array_length(coalesce(p_photobox_templates, '[]'::jsonb)) > 12 else true end
-    or case when jsonb_typeof(coalesce(p_photobox_templates, '[]'::jsonb)) = 'array' then exists (
-      select 1 from jsonb_array_elements(coalesce(p_photobox_templates, '[]'::jsonb)) as configured_frame(frame)
-      where jsonb_typeof(configured_frame.frame) <> 'object'
-        or coalesce(configured_frame.frame->>'id', '') !~ '^[a-zA-Z0-9_-]{1,80}$'
-        or length(trim(coalesce(configured_frame.frame->>'name', ''))) not between 1 and 80
-        or coalesce(configured_frame.frame->>'layout', '') not in ('single', 'strip2', 'grid6', 'travel_strip', 'memory_triptych')
-        or coalesce(configured_frame.frame->>'ratio', '') not in ('portrait', 'story', 'square')
-        or coalesce(configured_frame.frame->>'source', '') not in ('preset', 'custom')
-        or coalesce(configured_frame.frame->>'enabled', '') not in ('true', 'false')
-        or configured_frame.frame->>'enabled' = 'true' and length(coalesce(configured_frame.frame->>'frameUrl', '')) = 0
-    ) else false end
-    or ('photobox' = any(coalesce(p_components, '{}')) and not case
-      when jsonb_typeof(coalesce(p_photobox_templates, '[]'::jsonb)) = 'array' then exists (
-        select 1 from jsonb_array_elements(coalesce(p_photobox_templates, '[]'::jsonb)) frame
-        where frame->>'enabled' = 'true' and length(coalesce(frame->>'frameUrl', '')) > 0
-      ) else false end) then
+    or v_templates_invalid
+    or ('photobox' = any(coalesce(p_components, '{}')) and not v_has_usable_template) then
     return jsonb_build_object('error', 'INVALID_PROGRAM');
   end if;
   if coalesce(p_completion_effect, 'none') not in ('none', 'confetti', 'sparkles', 'fireworks') then

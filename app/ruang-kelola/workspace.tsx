@@ -7,9 +7,8 @@ import { DestinationForm, PartnerForm, PartnerProximityForm, QrDownloadCard, QrP
 import { CampaignBuilder } from "./campaign-builder";
 import { useTheme } from "@/src/components/theme-provider";
 import { TiLocBrand, TiLocMark } from "@/src/components/tiloc-brand";
-import { VisitorAnalyticsSection } from "./visitor-analytics-section";
 import { MediaUploadField } from "./media-upload-field";
-import { deleteDestinationAction, inviteDestinationManagerAction, reviewManagedDestinationAction, reviewPetugasCampaignAction, revokeDestinationManagerAction, setPromotionCampaignStatusAction, takeDownManagedDestinationAction, updatePromotionCampaignAction, type WorkspaceActionState } from "@/src/server/auth/actions";
+import { deleteDestinationAction, deletePromotionCampaignAction, inviteDestinationManagerAction, reviewManagedDestinationAction, reviewPetugasCampaignAction, revokeDestinationManagerAction, setPromotionCampaignStatusAction, takeDownManagedDestinationAction, updatePromotionCampaignAction, type WorkspaceActionState } from "@/src/server/auth/actions";
 
 type Destination = {
 	id: string; slug: string; name: string; category: string | null; categories: string[]; short_description: string; address: string | null; created_by: string | null;
@@ -55,7 +54,6 @@ export type WorkspaceData = {
 };
 
 type Section = "overview" | "destinations" | "qr" | "review" | "partners" | "promotions" | "analytics" | "sessions" | "guide" | "staff";
-type CampaignIdea = { id: string; slug: string; name: string; views: number; visitors: number };
 const navigation: { id: Section; label: string; group: string; marker: string }[] = [
 	{ id: "overview", label: "Ringkasan", group: "WORKSPACE", marker: "01" },
 	{ id: "destinations", label: "Daftarkan wisata", group: "KONTEN", marker: "02" },
@@ -64,7 +62,6 @@ const navigation: { id: Section; label: string; group: string; marker: string }[
 	{ id: "partners", label: "Mitra lokal", group: "KEMITRAAN", marker: "05" },
 	{ id: "promotions", label: "Kampanye promosi", group: "KEMITRAAN", marker: "06" },
 	{ id: "sessions", label: "Sesi Aktif", group: "LIVE DATA", marker: "07" },
-	{ id: "analytics", label: "Analitik & masukan", group: "LIVE DATA", marker: "08" },
 	{ id: "guide", label: "Panduan & Akses", group: "SISTEM", marker: "09" },
 	{ id: "staff", label: "Petugas & Akses", group: "SISTEM", marker: "10" },
 ];
@@ -137,14 +134,12 @@ function DestinationList({ items }: { items: Destination[] }) {
 
 export function DashboardWorkspace({ data, logoutAction }: { data: WorkspaceData; logoutAction: () => Promise<void> }) {
 	const [section, setSection] = useState<Section>("overview");
-	const [campaignIdea, setCampaignIdea] = useState<CampaignIdea | null>(null);
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const { isDark, toggleTheme } = useTheme();
 	const mainRef = useRef<HTMLElement>(null);
 	const copy = sectionCopy[section];
 	const selectSection = (nextSection: Section) => {
 		setSection(nextSection);
-		if (nextSection !== "promotions") setCampaignIdea(null);
 		setIsMobileMenuOpen(false);
 		mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
 	};
@@ -196,7 +191,7 @@ export function DashboardWorkspace({ data, logoutAction }: { data: WorkspaceData
 
 				<main ref={mainRef} className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 pb-24 sm:px-8 sm:py-10"><div className="mx-auto min-w-0 w-full max-w-[1200px]" id="main-content-area"><div className="mb-8 animate-[fade-in_0.4s_ease-out] sm:mb-10"><p className="text-[10px] font-black tracking-[0.25em] text-sky-600 drop-shadow-sm dark:text-sky-400 sm:text-xs">{copy.eyebrow}</p><h1 className="mt-1 text-3xl font-black tracking-tight drop-shadow-md dark:text-white sm:mt-2 sm:text-5xl">{copy.title}</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-madiun-blue/80 dark:text-slate-300 sm:mt-3 sm:text-base">{copy.description}</p></div>
 					{data.dataIssues.length > 0 && <div role="alert" className="glass-panel mb-6 rounded-2xl border-amber-300 bg-amber-50/90 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-100"><strong>Data workspace belum bisa dibaca dari Supabase.</strong><p className="mt-1">Login petugas berhasil, tetapi akses ke tabel konten belum lengkap. Angka yang kosong di bawah belum tentu berarti datanya tidak ada.</p><ul className="mt-3 list-disc space-y-1 pl-5">{data.dataIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}
-					<div id={`section-${section === "sessions" ? "live-sessions" : section}`} key={section} data-active-section={section} className="section-container animate-[fade-in_0.4s_ease-out] space-y-6 sm:space-y-8">{section === "overview" && <Overview data={data} onNavigate={selectSection} />}{section === "destinations" && <DestinationsSection items={data.destinations} points={data.qrPoints} role={data.role} userId={data.userId} reviewRequests={data.reviewRequests} minigamePrograms={data.minigamePrograms} minigameAssignments={data.minigameAssignments} />}{section === "qr" && <QrSection destinations={data.destinations} points={data.qrPoints} />}{section === "review" && <ReviewSection data={data} />}{section === "partners" && <PartnersSection partners={data.partners} destinations={data.destinations} />}{section === "promotions" && <PromotionsSection campaigns={data.promotions} partners={data.partners} destinations={data.destinations} minigames={data.minigames} campaignIdea={campaignIdea} role={data.role} />}{section === "analytics" && <VisitorAnalyticsSection onCreateCampaign={(idea) => { setCampaignIdea(idea); selectSection("promotions"); }} />}{section === "sessions" && <SessionsSection />}{section === "guide" && <GuideSection data={data} onNavigate={selectSection} />}{section === "staff" && data.role === "admin" && <StaffAccessSection data={data} />}</div>
+					<div id={`section-${section === "sessions" ? "live-sessions" : section}`} key={section} data-active-section={section} className="section-container animate-[fade-in_0.4s_ease-out] space-y-6 sm:space-y-8">{section === "overview" && <Overview data={data} onNavigate={selectSection} />}{section === "destinations" && <DestinationsSection items={data.destinations} points={data.qrPoints} role={data.role} userId={data.userId} reviewRequests={data.reviewRequests} minigamePrograms={data.minigamePrograms} minigameAssignments={data.minigameAssignments} />}{section === "qr" && <QrSection destinations={data.destinations} points={data.qrPoints} />}{section === "review" && <ReviewSection data={data} />}{section === "partners" && <PartnersSection partners={data.partners} destinations={data.destinations} />}{section === "promotions" && <PromotionsSection campaigns={data.promotions} partners={data.partners} destinations={data.destinations} minigames={data.minigames} role={data.role} userId={data.userId} />}{section === "sessions" && <SessionsSection />}{section === "guide" && <GuideSection data={data} onNavigate={selectSection} />}{section === "staff" && data.role === "admin" && <StaffAccessSection data={data} />}</div>
 					<footer className="mt-10 flex flex-col items-center justify-between gap-2 border-t-2 border-madiun-blue/10 pt-6 pb-10 text-center text-[10px] font-bold text-madiun-blue/50 dark:border-white/10 dark:text-slate-500 sm:mt-16 sm:flex-row sm:text-left sm:text-xs"><span>TiLoc! · Ruang Pengelola</span><span>{data.role === "destination_manager" ? "Perubahan wisata menunggu persetujuan admin." : data.role === "editor" ? "Petugas Wisata mengelola data miliknya; publikasi dan campaign melalui review admin." : "Admin mengelola seluruh data dan persetujuan."}</span></footer>
 				</div></main>
 			</div>
@@ -362,6 +357,21 @@ function CampaignStatusControl({ campaign }: { campaign: Promotion }) {
 	</form>;
 }
 
+function CampaignDeleteControl({ campaignId }: { campaignId: string }) {
+	const [state, action, pending] = useActionState(deletePromotionCampaignAction, {} as WorkspaceActionState);
+	const [confirming, setConfirming] = useState(false);
+	return <form action={action} className="mt-3 flex flex-wrap items-center gap-2">
+		<input type="hidden" name="campaign_id" value={campaignId}/>
+		{confirming ? <>
+			<span className="text-[10px] font-bold text-rose-800 dark:text-rose-200">Hapus campaign ini?</span>
+			<button type="button" onClick={() => setConfirming(false)} disabled={pending} className="min-h-9 rounded-lg border border-slate-200 px-3 text-[10px] font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/5">Batal</button>
+			<button type="submit" disabled={pending} className="min-h-9 rounded-lg bg-rose-700 px-3 text-[10px] font-black text-white transition hover:bg-rose-800 disabled:opacity-50 dark:bg-rose-500 dark:text-slate-950">{pending ? "Menghapus…" : "Ya, hapus"}</button>
+		</> : <button type="button" onClick={() => setConfirming(true)} className="min-h-9 rounded-lg border border-rose-200 bg-rose-50 px-3 text-[10px] font-black text-rose-800 transition hover:bg-rose-100 dark:border-rose-300/15 dark:bg-rose-950/30 dark:text-rose-200 dark:hover:bg-rose-900/40">Hapus campaign</button>}
+		{state.error && <p role="alert" className="w-full text-[10px] font-semibold text-rose-700 dark:text-rose-300">{state.error}</p>}
+		{state.success && <p role="status" className="w-full text-[10px] font-semibold text-emerald-800 dark:text-emerald-300">{state.success}</p>}
+	</form>;
+}
+
 function PromotionEditForm({ campaign }: { campaign: Promotion }) {
 	const [state, action, pending] = useActionState(updatePromotionCampaignAction, {} as WorkspaceActionState);
 	return <details className="mt-4 border-t border-sky-100 pt-3 dark:border-white/10">
@@ -398,20 +408,38 @@ function campaignStatusLabel(status: string) {
 	return ({ published: "Aktif", paused: "Dijeda", ended: "Berakhir", draft: "Draft" } as Record<string, string>)[status] ?? status;
 }
 
-function PromotionsSection({ campaigns, partners, destinations, minigames, campaignIdea, role }: { campaigns: Promotion[]; partners: Partner[]; destinations: Destination[]; minigames: CampaignMinigame[]; campaignIdea: CampaignIdea | null; role: WorkspaceData["role"] }) {
+function PromotionsSection({ campaigns, partners, destinations, minigames, role, userId }: { campaigns: Promotion[]; partners: Partner[]; destinations: Destination[]; minigames: CampaignMinigame[]; role: WorkspaceData["role"]; userId: string }) {
 	const [createOpen, setCreateOpen] = useState(false);
 	return <div className="space-y-6 sm:space-y-8">
 		<div className="flex flex-col justify-between gap-4 rounded-3xl bg-gradient-to-r from-sky-600 via-blue-700 to-indigo-800 p-5 text-white shadow-xl sm:flex-row sm:items-center sm:p-7"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-100">PROMOSI · PILIH TITIK TAYANG</p><h2 className="mt-1 text-2xl font-black">Kampanye promosi</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-white/80 sm:text-sm">{role === "editor" ? "Ajukan pengumuman event untuk destinasi milikmu. Admin akan meninjau sebelum campaign tayang." : "Tentukan tempat campaign muncul, lalu susun materi atau form pengunjung."}</p></div><button type="button" aria-expanded={createOpen} onClick={() => setCreateOpen((open) => !open)} className="min-h-12 shrink-0 rounded-2xl bg-white px-5 py-3 text-sm font-black text-blue-950 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl">{createOpen ? "Tutup formulir ↑" : "＋ Campaign baru"}</button></div>
-		{campaignIdea && <div className="rounded-2xl border border-sky-300/50 bg-sky-50/80 p-4 dark:border-sky-300/15 dark:bg-sky-950/25"><p className="text-[9px] font-black uppercase tracking-[.15em] text-sky-800 dark:text-sky-200">IDE DARI DATA PENGUNJUNG</p><p className="mt-1 text-sm font-black text-madiun-blue dark:text-white">{campaignIdea.name} · {campaignIdea.visitors} pengunjung unik</p><p className="mt-1 text-[10px] leading-5 text-madiun-blue/70 dark:text-slate-300">Wisata ini sudah dipilih di formulir campaign. Mitra tetap opsional kecuali pengalaman membutuhkan aset atau lokasi usaha.</p></div>}
 		<CollapsiblePanel id="campaign-form" title="Rancang campaign" description={role === "editor" ? "Campaign event wisata akan tersimpan sebagai draft untuk diperiksa admin." : "Pilih titik tayang, susun materi, dan atur form pengunjung."} open={createOpen} onToggle={() => setCreateOpen((open) => !open)} accent="violet">
-			{campaignIdea && <div className="mb-5 rounded-2xl border border-sky-300/50 bg-sky-50/80 p-4 dark:border-sky-300/15 dark:bg-sky-950/25"><p className="text-[9px] font-black uppercase tracking-[.15em] text-sky-800 dark:text-sky-200">DARI ANALITIK</p><p className="mt-1 text-sm font-black text-madiun-blue dark:text-white">{campaignIdea.name} · {campaignIdea.visitors} pengunjung unik</p></div>}
-			<CampaignBuilder partners={partners.map(({ id, business_name, destination_id, latitude, longitude, allow_minigame_integration }) => ({ id, business_name, destination_id, latitude, longitude, allow_minigame_integration }))} destinations={destinations.map(({ id, name, slug, latitude, longitude }) => ({ id, name, slug, latitude, longitude }))} minigames={minigames} initialDestinationId={campaignIdea?.id} initialDestinationName={campaignIdea?.name} initialDestinationSlug={campaignIdea?.slug} destinationEventOnly={role === "editor"}/>
+			<CampaignBuilder partners={partners.map(({ id, business_name, destination_id, latitude, longitude, allow_minigame_integration }) => ({ id, business_name, destination_id, latitude, longitude, allow_minigame_integration }))} destinations={destinations.map(({ id, name, slug, latitude, longitude }) => ({ id, name, slug, latitude, longitude }))} minigames={minigames} destinationEventOnly={role === "editor"}/>
 		</CollapsiblePanel>
-		<Panel><SectionTitle title={role === "admin" ? "Campaign & antrean review" : "Campaign yang kamu ajukan"} description={campaigns.length + " campaign · status dan keputusan admin terlihat di sini."}/>{campaigns.length ? <div className="grid gap-3 xl:grid-cols-2">{campaigns.map((campaign) => <article key={campaign.id} className="min-w-0 rounded-2xl border border-sky-100 bg-white/75 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/50"><div className="flex min-w-0 items-start justify-between gap-3"><div className="min-w-0 flex-1"><h3 className="break-words text-base font-black text-madiun-blue dark:text-white [overflow-wrap:anywhere]">{campaign.title}</h3><p className="mt-1 break-words text-xs text-madiun-blue/65 dark:text-slate-400">{campaign.partner_name} · {campaign.qr_label}</p><div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full bg-sky-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">{{ nearby: "Wisata terpilih", find_friends: "Titik bonus Find Our Friends", photobox: "Frame Photobox", system: "Umum · sistem", destination_feedback: "Ulasan wisata", website_feedback: "Ulasan website" }[campaign.placement_mode]}</span>{campaign.exposure_mode === "always" && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black text-amber-900">Selalu tampil</span>}{campaign.has_form && <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-violet-900 dark:bg-violet-950/40 dark:text-violet-200">Form pengunjung</span>}</div>
-					{role === "admin" && campaign.approval_status !== "approved" && (campaign.approval_status === "pending" || campaign.approval_status === "changes_requested") && <CampaignReviewControl campaign={campaign}/>}
-					{role === "admin" && campaign.approval_status === "approved" && <CampaignStatusControl campaign={campaign}/>}
-					{role === "editor" && campaign.approval_feedback && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Catatan admin: {campaign.approval_feedback}</p>}
-					</div><div className="flex shrink-0 flex-col items-end gap-2"><StatusPill muted={campaign.status !== "published"}>{campaign.approval_status === "pending" ? "Menunggu review" : campaign.approval_status === "changes_requested" ? "Perlu revisi" : campaign.approval_status === "rejected" ? "Ditolak" : campaignStatusLabel(campaign.status)}</StatusPill>{role === "admin" && campaign.approval_status === "approved" && <span className="text-[9px] font-bold text-emerald-700">✓ Disetujui</span>}</div></div>{role !== "destination_manager" && <PromotionEditForm campaign={campaign} />}</article>)}</div> : <EmptyRow>Belum ada campaign. Buat event wisata, promosi, pengalaman minigame, Photobox, atau survei.</EmptyRow>}</Panel>
+		<Panel>
+			<SectionTitle title={role === "admin" ? "Campaign & antrean review" : "Campaign yang kamu ajukan"} description={campaigns.length + " campaign · status dan keputusan admin terlihat di sini."}/>
+			{campaigns.length ? <div className="grid gap-3 xl:grid-cols-2">{campaigns.map((campaign) => {
+				const canDelete = role === "admin" || (role === "editor" && campaign.created_by === userId && campaign.placement_mode === "nearby" && !campaign.partner_id && ["pending", "changes_requested"].includes(campaign.approval_status));
+				return <article key={campaign.id} className="min-w-0 rounded-2xl border border-sky-100 bg-white/75 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/50">
+					<div className="flex min-w-0 items-start justify-between gap-3">
+						<div className="min-w-0 flex-1">
+							<h3 className="break-words text-base font-black text-madiun-blue dark:text-white [overflow-wrap:anywhere]">{campaign.title}</h3>
+							<p className="mt-1 break-words text-xs text-madiun-blue/65 dark:text-slate-400">{campaign.partner_name} · {campaign.qr_label}</p>
+							<div className="mt-3 flex flex-wrap gap-2">
+								<span className="rounded-full bg-sky-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">{{ nearby: "Wisata terpilih", find_friends: "Titik bonus Find Our Friends", photobox: "Frame Photobox", system: "Umum · sistem", destination_feedback: "Ulasan wisata", website_feedback: "Ulasan website" }[campaign.placement_mode]}</span>
+								{campaign.exposure_mode === "always" && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black text-amber-900">Selalu tampil</span>}
+								{campaign.has_form && <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-violet-900 dark:bg-violet-950/40 dark:text-violet-200">Form pengunjung</span>}
+							</div>
+							{role === "admin" && campaign.approval_status !== "approved" && (campaign.approval_status === "pending" || campaign.approval_status === "changes_requested") && <CampaignReviewControl campaign={campaign}/>}
+							{role === "admin" && campaign.approval_status === "approved" && <CampaignStatusControl campaign={campaign}/>}
+							{role === "editor" && campaign.approval_feedback && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">Catatan admin: {campaign.approval_feedback}</p>}
+						</div>
+						<div className="flex shrink-0 flex-col items-end gap-2"><StatusPill muted={campaign.status !== "published"}>{campaign.approval_status === "pending" ? "Menunggu review" : campaign.approval_status === "changes_requested" ? "Perlu revisi" : campaign.approval_status === "rejected" ? "Ditolak" : campaignStatusLabel(campaign.status)}</StatusPill>{role === "admin" && campaign.approval_status === "approved" && <span className="text-[9px] font-bold text-emerald-700">✓ Disetujui</span>}</div>
+					</div>
+					{role !== "destination_manager" && <PromotionEditForm campaign={campaign}/>}
+					{canDelete && <CampaignDeleteControl campaignId={campaign.id}/>}
+				</article>;
+			})}</div> : <EmptyRow>Belum ada campaign. Buat event wisata, promosi, pengalaman minigame, Photobox, atau survei.</EmptyRow>}
+		</Panel>
 	</div>;
 }
 function SessionsSection() {

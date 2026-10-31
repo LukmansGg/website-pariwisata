@@ -958,6 +958,85 @@ export async function setPromotionCampaignStatusAction(
 	return { success: nextStatus === "published" ? "Campaign berhasil diaktifkan." : "Campaign dijeda." };
 }
 
+export async function deletePromotionCampaignAction(
+	_previousState: WorkspaceActionState,
+	formData: FormData,
+): Promise<WorkspaceActionState> {
+	const campaignId = value(formData, "campaign_id", 64);
+	if (!/^[0-9a-f-]{36}$/i.test(campaignId)) return { error: "Campaign yang dipilih tidak valid." };
+	const staff = await requireStaff();
+	if (!staff) return { error: "Akun ini tidak memiliki akses untuk menghapus campaign." };
+	const { data: campaign, error: readError } = await staff.supabase.from("promotion_campaigns")
+		.select("id,placement_mode,qr_point_id,created_by,partner_id,status,approval_status").eq("id", campaignId).maybeSingle();
+	if (readError || !campaign) return { error: "Campaign tidak ditemukan atau belum dapat diperiksa." };
+	const isAdmin = staff.role === "admin";
+	const isOwnPendingCampaign = campaign.created_by === staff.userId
+		&& ["editor", "destination_manager"].includes(staff.role)
+		&& campaign.placement_mode === "nearby"
+		&& !campaign.partner_id
+		&& ["pending", "changes_requested"].includes(campaign.approval_status);
+	if (!isAdmin && !isOwnPendingCampaign) return { error: "Petugas hanya dapat menghapus campaign event miliknya yang masih menunggu review." };
+
+	const changedAssignments: { id: string; templates: unknown }[] = [];
+	if (isAdmin && campaign.placement_mode === "photobox") {
+		const { data: links, error: linksError } = await staff.supabase.from("promotion_campaign_minigames")
+			.select("assignment_id").eq("campaign_id", campaignId);
+		if (linksError) return { error: "Frame Photobox campaign belum dapat diperiksa; penghapusan dibatalkan." };
+		for (const link of links ?? []) {
+			const { data: assignment, error: assignmentError } = await staff.supabase.from("tourism_minigame_destinations")
+				.select("id,photobox_templates").eq("id", link.assignment_id).maybeSingle();
+			if (assignmentError || !assignment) {
+				for (const previous of changedAssignments) await staff.supabase.from("tourism_minigame_destinations").update({ photobox_templates: previous.templates }).eq("id", previous.id);
+				return { error: "Frame Photobox belum dapat diputus dari minigame; penghapusan dibatalkan." };
+			}
+			const templates = Array.isArray(assignment.photobox_templates) ? assignment.photobox_templates as Record<string, unknown>[] : [];
+			const remaining = templates.filter((template) => template.campaignId !== campaignId && template.id !== `campaign-${campaignId}`);
+			const { error: updateError } = await staff.supabase.from("tourism_minigame_destinations")
+				.update({ photobox_templates: remaining }).eq("id", assignment.id);
+			if (updateError) {
+				for (const previous of changedAssignments) await staff.supabase.from("tourism_minigame_destinations").update({ photobox_templates: previous.templates }).eq("id", previous.id);
+				return { error: "Frame Photobox belum dapat dibersihkan; campaign tidak dihapus." };
+			}
+			changedAssignments.push({ id: assignment.id, templates: assignment.photobox_templates });
+		}
+	}
+
+	const { data: deleted, error: deleteError } = await staff.supabase.from("promotion_campaigns")
+		.delete().eq("id", campaignId).select("id").maybeSingle();
+	if (deleteError || !deleted) {
+		for (const previous of changedAssignments) await staff.supabase.from("tourism_minigame_destinations").update({ photobox_templates: previous.templates }).eq("id", previous.id);
+		return { error: "Campaign belum berhasil dihapus. Perubahan frame sudah dipulihkan; coba lagi." };
+	}
+
+	let qrCleanupNote = "";
+	if (isAdmin && campaign.placement_mode === "find_friends" && campaign.qr_point_id) {
+		const { data: point } = await staff.supabase.from("qr_points").select("id,code").eq("id", campaign.qr_point_id).maybeSingle();
+		const { data: otherCampaigns, error: otherCampaignsError } = await staff.supabase.from("promotion_campaigns")
+			.select("id").eq("qr_point_id", campaign.qr_point_id).limit(1);
+		const campaignCodeSuffix = campaignId.replaceAll("-", "").slice(0, 8);
+		const isCampaignOwnedPoint = Boolean(point?.code?.endsWith(`-${campaignCodeSuffix}`));
+		if (otherCampaignsError) {
+			qrCleanupNote = " QR bonus tetap ada karena tautan pemakaian ulang belum dapat diperiksa.";
+		} else if (!otherCampaigns?.length && isCampaignOwnedPoint) {
+			const { error: membershipError } = await staff.supabase.from("tourism_minigame_qr_points").delete().eq("qr_point_id", campaign.qr_point_id);
+			if (membershipError) {
+				await staff.supabase.from("qr_points").update({ is_active: false }).eq("id", campaign.qr_point_id);
+				qrCleanupNote = " QR bonus dinonaktifkan karena tautan misinya belum dapat dibersihkan.";
+			} else {
+				const { error: pointError } = await staff.supabase.from("qr_points").delete().eq("id", campaign.qr_point_id);
+				if (pointError) {
+					await staff.supabase.from("qr_points").update({ is_active: false }).eq("id", campaign.qr_point_id);
+					qrCleanupNote = " QR bonus dinonaktifkan setelah campaign dihapus.";
+				}
+			}
+		} else if (!isCampaignOwnedPoint) {
+			qrCleanupNote = " Titik QR yang bukan milik campaign dibiarkan tetap utuh.";
+		}
+	}
+	refreshWorkspace({ campaigns: true });
+	return { success: `Campaign berhasil dihapus.${qrCleanupNote}` };
+}
+
 export async function reviewPetugasCampaignAction(_previousState: WorkspaceActionState, formData: FormData): Promise<WorkspaceActionState> {
 	const campaignId = value(formData, "campaign_id", 64);
 	const decision = value(formData, "decision", 32);

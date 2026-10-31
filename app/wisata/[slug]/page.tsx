@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { createClient } from "@/src/infrastructure/supabase/server";
 import DestinationDashboard from "./destination-dashboard";
+import type { Snapshot } from "./minigame-hub";
 
 type PageProps = {
 	params: Promise<{ slug: string }>;
@@ -74,6 +75,7 @@ async function DestinationContent({ params, searchParams }: PageProps) {
 	const initialQrSource = sourceParam === "camera" ? "camera" : "qr_link";
 	const { data: gameState } = await supabase.rpc("get_public_minigame_state", { p_destination_slug: slug });
 	const programs = Array.isArray(gameState?.programs) ? gameState.programs as { components?: string[] }[] : [];
+	const initialMinigameSnapshot = Array.isArray(gameState?.programs) ? gameState as Snapshot : null;
 	const chatAiEnabled = programs.length ? programs.some((program) => program.components?.includes("chat_ai")) : true;
-	return <DestinationDashboard destination={{ ...destination, mascot_mode: destination.mascot_mode === "custom" ? "custom" : "tiloc", mascot_image_url: destination.mascot_image_url ?? null }} initialQrCode={initialQrCode} initialQrSource={initialQrSource} chatAiEnabled={chatAiEnabled} />;
+	return <DestinationDashboard destination={{ ...destination, mascot_mode: destination.mascot_mode === "custom" ? "custom" : "tiloc", mascot_image_url: destination.mascot_image_url ?? null }} initialQrCode={initialQrCode} initialQrSource={initialQrSource} chatAiEnabled={chatAiEnabled} initialMinigameSnapshot={initialMinigameSnapshot} />;
 }

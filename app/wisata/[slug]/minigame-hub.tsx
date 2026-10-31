@@ -14,7 +14,7 @@ type Campaign = { id: string; title: string; description: string; imageUrl: stri
 type Point = { id: string; name: string; code: string; isRequired: boolean; friendName: string | null; requires: string[]; campaigns: Campaign[] };
 type PhotoboxTemplate = { id: string; name: string; frameUrl: string; ratio: string; layout: string; enabled: boolean; source?: "preset" | "custom" | "campaign"; displayChance?: number; alwaysShow?: boolean };
 type Program = { assignmentId: string; programId: string; programName: string; programSlug: string; components: string[]; requiredComponents: string[]; completionEffect?: "none" | "confetti" | "sparkles" | "fireworks"; aiIsMission?: boolean; photoboxIsMission?: boolean; photoboxAccessMode: "standalone" | "mission_reward"; photoboxTemplates: PhotoboxTemplate[]; findPoints: Point[]; progress: { scannedQrPointIds: string[]; completedComponents: string[]; photosCreated: number; xp: number; completed: boolean } };
-type Snapshot = { destinationName: string; programs: Program[] };
+export type Snapshot = { destinationName: string; programs: Program[] };
 type CampaignPopup = Campaign & { programSlug: string };
 
 function PhotoboxPassCard({ program, destinationSlug, celebrating }: { program: Program; destinationSlug: string; celebrating: boolean }) {
@@ -62,9 +62,9 @@ function PhotoboxPassCard({ program, destinationSlug, celebrating }: { program: 
 	</div>;
 }
 
-export default function MinigameHub({ destinationSlug, initialQrCode, source = "qr_link" }: { destinationSlug: string; initialQrCode?: string; source?: "qr_link" | "camera" }) {
+export default function MinigameHub({ destinationSlug, initialQrCode, source = "qr_link", initialSnapshot = null }: { destinationSlug: string; initialQrCode?: string; source?: "qr_link" | "camera"; initialSnapshot?: Snapshot | null }) {
 	const pathname = usePathname();
-	const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+	const [snapshot, setSnapshot] = useState<Snapshot | null>(initialSnapshot?.programs?.length ? initialSnapshot : null);
 	const [error, setError] = useState("");
 	const [notice, setNotice] = useState("");
 	const [campaign, setCampaign] = useState<CampaignPopup | null>(null);
@@ -72,7 +72,7 @@ export default function MinigameHub({ destinationSlug, initialQrCode, source = "
 	const [switchingAssignments, setSwitchingAssignments] = useState<string[]>([]);
 	const requestKey = useRef("");
 	const lastPathname = useRef(pathname);
-	const snapshotRef = useRef<Snapshot | null>(null);
+	const snapshotRef = useRef<Snapshot | null>(initialSnapshot?.programs?.length ? initialSnapshot : null);
 	const celebrationTimer = useRef<number | null>(null);
 	const photoboxSwitchTimers = useRef(new Map<string, number>());
 	const publishSnapshot = useCallback((next: Snapshot) => {

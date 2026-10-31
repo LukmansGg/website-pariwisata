@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useTheme } from "@/src/components/theme-provider";
 import { TiLocBrand } from "@/src/components/tiloc-brand";
-import MinigameHub from "./minigame-hub";
+import MinigameHub, { type Snapshot } from "./minigame-hub";
 import NearbyCampaignPopup from "./nearby-campaign-popup";
 
 type Destination = {
@@ -171,7 +171,7 @@ function Icon({ name, className = "" }: { name: "back" | "sun" | "moon" | "pin" 
 	return <svg aria-hidden="true" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-export default function DestinationDashboard({ destination, initialQrCode, initialQrSource = "qr_link", chatAiEnabled = true }: { destination: Destination; initialQrCode?: string; initialQrSource?: "qr_link" | "camera"; chatAiEnabled?: boolean }) {
+export default function DestinationDashboard({ destination, initialQrCode, initialQrSource = "qr_link", chatAiEnabled = true, initialMinigameSnapshot = null }: { destination: Destination; initialQrCode?: string; initialQrSource?: "qr_link" | "camera"; chatAiEnabled?: boolean; initialMinigameSnapshot?: Snapshot | null }) {
 	const { isDark: dark, toggleTheme } = useTheme();
 	const [visitorName, setVisitorName] = useState(DEFAULT_VISITOR_NICKNAME);
 	const [nameInput, setNameInput] = useState("");
@@ -722,7 +722,7 @@ export default function DestinationDashboard({ destination, initialQrCode, initi
 				</div>
 			</section>}
 
-			<MinigameHub destinationSlug={destination.slug} initialQrCode={initialQrCode} source={initialQrSource} />
+			<MinigameHub destinationSlug={destination.slug} initialQrCode={initialQrCode} source={initialQrSource} initialSnapshot={initialMinigameSnapshot} />
 			<footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#84B3CE]/25 pb-2 pt-5 text-[11px] font-semibold text-[#16587B]/55"><span>© TiLoc! · Jelajah dengan nyaman, simpan kenangan indah.</span><button type="button" onClick={() => setShowGuideModal(true)} className="rounded-full px-3 py-1.5 font-bold text-[#16587B] transition hover:bg-white/60">Lihat panduan lagi ↗</button></footer>
 		</main>
 
